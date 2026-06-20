@@ -1,6 +1,6 @@
 # Internal Agentic AI Platform Blueprint
 
-> **Status:** Final pre-implementation blueprint  
+> **Status:** Final pre-implementation blueprint
 > **Audience:** founders, engineering leadership, platform team, implementation engineers
 
 Build a private, company-owned AI development and knowledge platform: a controlled internal alternative
@@ -26,17 +26,34 @@ The implementation blueprint is intentionally limited to five documents:
 | Gateway | Self-hosted Bifrost OSS on Railway for provider access, virtual keys, budgets, routing, fallback, load balancing, semantic caching, Prometheus, and OpenTelemetry. |
 | External MCP | The Platform Tool Broker serves the external MCP endpoint. Bifrost is not exposed as a raw tool-policy surface to IDEs. |
 | Agent runtime | Build a small Postgres-backed durable workflow runtime for the first internal release, with mandatory migration triggers to Hatchet OSS or Temporal OSS if scope or reliability thresholds are exceeded. |
-| Retrieval | Start with Postgres full-text search, pgvector, typed graph tables, and object storage snapshots. Keep Neo4j out of the first production release to preserve ACL simplicity and reduce stateful operations. |
-| Identity | Microsoft Entra ID OIDC is the human identity provider. GitHub App permission sync supplies repository ACLs and CODEOWNER context. |
+| Retrieval | Start with Postgres full-text search, pgvector, **self-hosted Neo4j Community**, and object storage snapshots. Postgres remains the source of truth for ACLs/metadata; Neo4j handles multi-hop graph traversal for GraphRAG. |
+| Identity | Better Auth OSS is the first-release human authentication layer, backed by Railway Postgres and invite-only internal accounts. GitHub App permission sync supplies repository ACLs and CODEOWNER context. |
 | Provider policy | Every outbound model call is checked against project data class, provider terms, region, DPA/ZDR status, and prompt/trace storage policy. |
 | IDE protocols | Expose OpenAI-compatible Chat Completions, Anthropic-compatible Messages, and MCP Streamable HTTP/SSE compatibility. |
 | Async IDE tasks | Durable IDE tasks use exactly five MCP tools: `start_background_task`, `check_task_status`, `get_task_result`, `cancel_task`, and `list_task_artifacts`. |
 | UI | React, TanStack Router, TanStack Query, TanStack Table, and TanStack Virtual. TanStack Start is not part of the first release. |
-| Deployment | Railway-first for gateway, portal, APIs, workers, Postgres, Redis, and Bifrost. Move latency-sensitive stateless services to Fly.io Mumbai when measured India p95 gateway overhead exceeds the SLO. |
-| Secrets | Provider keys and break-glass credentials are stored in GCP Secret Manager with Cloud KMS encryption. Railway variables hold only bootstrap references. |
+| Deployment | Railway-first for gateway, portal, APIs, workers, Postgres, Redis, object storage, and Bifrost. Any non-Railway hosting migration requires explicit manual approval after measured SLO evidence. |
+| Secrets | Railway variables hold bootstrap and runtime secrets for the first release. Provider keys and break-glass credentials use application-level encryption, access audit, TTL, and rotation; Azure, AWS, or GCP secret services require explicit manual approval. |
 | Observability | OpenTelemetry, Prometheus, Grafana dashboards, platform trace/eval/cost tables, and immutable audit events. |
 | Self-hosted GPU models | Runtime is deferred. The model registry includes a vLLM-compatible provider shape from day one so the route can be activated without API redesign. |
 | Validation | Evals are mandatory gates before production enablement of model aliases, routing changes, retrieval strategies, prompts, tools, and skills. |
+
+## Resolved immediate validation decisions
+
+The previously open validation decisions are now resolved as follows:
+
+| Decision | Resolution |
+|---|---|
+| Bifrost HA posture | Use **self-hosted Bifrost OSS single-node** on Railway first. Do not pay for Enterprise now. Mitigate with monitoring, config backups, and audited break-glass direct-provider access. |
+| Bifrost disadvantage | Main risk is availability/operations: one gateway node can block model traffic; OSS HA/RBAC/audit/guardrails are limited; we own restarts/upgrades/support. Proceed because it fits the gateway need and keeps cost low. |
+| Workflow engine | Do **not** use Temporal Cloud. Build a minimal Postgres-backed durable workflow runtime first; keep self-hosted Hatchet OSS / Temporal OSS as migration targets. |
+| Eval control plane | Build the minimal eval runner/result store/regression gates before enabling production models, routing, tools, prompts, skills, or retrieval changes. |
+| Deployment | **Railway-first**. Do not move gateway/stateless services to Fly.io, Azure, AWS, GCP, or another managed platform without explicit approval after measured latency or reliability evidence. |
+| Cloud/provider approval | Railway is the approved first-release platform. Non-Railway managed services, hosted auth layers, and Azure/AWS/GCP services are approval-gated before they can become committed dependencies. |
+| Graph stack | Use **self-hosted Neo4j Community** for GraphRAG traversal. Keep Postgres for metadata, ACL source of truth, and simple relations. |
+| Embeddings/reranker | Start with `BAAI/bge-m3` embeddings and `BAAI/bge-reranker-v2-m3`; evaluate `Qwen3-Embedding-4B` or a verified Nomic code embedding model for code-heavy retrieval. |
+| Embedding migration | Use versioned collections, dual-write, background backfill, shadow eval, per-project alias cutover, 14-30 day rollback, then garbage collection. |
+| Initial language coverage | TypeScript/JavaScript, React/TSX, TanStack Router/Query, Python, Node.js/TypeScript, Markdown, OpenAPI, JSON/YAML/TOML, package manifests, and environment examples. |
 
 ## Architecture overview
 
@@ -162,8 +179,8 @@ flowchart TB
 |---|---|
 | Reliability | First internal rollout target is 99.5% simple gateway availability; workflow state must survive process restart. |
 | Latency | Gateway p95 internal overhead for India developers must stay at or below 250 ms after provider latency is removed. |
-| Security | Least-privilege provider keys, OIDC identity, project ACLs, tool allowlists, sandboxing, secret scanning, signed webhooks, and audit logs. |
-| Operability | A small platform team can operate the stack with Railway, managed secrets, managed object storage, and limited stateful services. |
+| Security | Least-privilege provider keys, Better Auth-backed human sessions, project ACLs, tool allowlists, sandboxing, secret scanning, signed webhooks, and audit logs. |
+| Operability | A small platform team can operate the stack with Railway, application-managed secrets, Railway object storage, and limited stateful services. |
 | Portability | Use containers, Postgres, Redis protocol, OpenTelemetry, and S3-compatible storage. |
 | Auditability | Every model call, route, tool call, sub-agent delegation, approval, retrieved source, policy change, and break-glass action is traceable. |
 | Cost governance | Costs are attributable by org, team, project, user, virtual key, workflow, sub-agent, model, provider, and tool class. |

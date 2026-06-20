@@ -13,7 +13,7 @@
 | Service | Owns | Does not own |
 |---|---|---|
 | Bifrost Gateway | Provider API calls, virtual keys, budgets, rate limits, provider routing/fallback/load balancing, semantic cache hooks, Prometheus, OpenTelemetry. | Durable workflows, external MCP policy, human approvals, side-effecting tools, repository retrieval, long-term memory, portal UX. |
-| API Gateway / Control API | OIDC session, portal APIs, admin APIs, model registry, policy registry, project configuration. | Raw provider calls except through Bifrost. |
+| API Gateway / Control API | Better Auth-backed human sessions, portal APIs, admin APIs, model registry, policy registry, project configuration. | Raw provider calls except through Bifrost. |
 | Platform Tool Broker / MCP | External MCP endpoint, tool registry, skill registry, MCP server registry, schema validation, risk tier, approvals, sandbox routing, durable tool-call state. | Trusting model-selected policies or bypassing platform approvals. |
 | Agent Orchestrator | Parent agent runs, sub-agent delegation, task planning, result synthesis, trace and artifact linking. | Provider routing internals. |
 | Durable Workflow Runtime | Persisted workflow state, retries, timeouts, cancellation, approvals, worker leases, event outbox. | LLM reasoning or tool policy decisions. |
@@ -70,7 +70,7 @@ This path cannot wait for human approvals, long-running tools, or multi-step dur
 | Admin | `/api/admin/models`, `/api/admin/providers`, `/api/admin/policies`, `/api/admin/budgets`, `/api/admin/audit`. |
 | Webhooks | GitHub push/PR/merge, provider status updates, eval completion, workflow event callbacks. |
 
-All JSON APIs use OIDC session auth or service tokens, return typed error codes, support cursor pagination for list endpoints, and emit audit events for mutations.
+All JSON APIs use Better Auth-backed session auth or service tokens, return typed error codes, support cursor pagination for list endpoints, and emit audit events for mutations.
 
 ## External endpoint shape
 
@@ -153,7 +153,7 @@ These tools are the only IDE contract for durable workflows. They bridge IDEs to
 
 ## Security boundaries
 
-- Microsoft Entra ID OIDC authenticates humans; service principals use signed service tokens.
+- Better Auth OSS authenticates humans for the first release; service principals use signed service tokens.
 - Bifrost enforces ingress virtual-key policy; platform policy service owns project/team/tool/data rules.
 - Virtual keys are one-to-one with a human or service principal. Shared anonymous team keys are not allowed.
 - GitHub App sync is the source for repository permissions, teams, collaborators, CODEOWNERS, and repo visibility.

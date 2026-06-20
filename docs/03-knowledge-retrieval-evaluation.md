@@ -13,12 +13,13 @@ stakeholder views with citations and permission checks.
 | Knowledge metadata | Postgres | Shared transactional model, ACL joins, migrations, and operational simplicity. |
 | Lexical retrieval | Postgres full-text search plus symbol/path tables | Enough for the first release and keeps ACL filtering in SQL. |
 | Dense retrieval | pgvector in Knowledge Postgres | Avoids a separate vector service for the first release. |
-| GraphRAG | Typed Postgres graph tables with recursive queries | Keeps node/edge ACLs enforceable with SQL and row-level checks. |
+| GraphRAG | **Self-hosted Neo4j Community** | Better fit for multi-hop traversal, dependency exploration, and knowledge graph queries. Postgres remains ACL/metadata source of truth. |
 | Object snapshots | S3-compatible object storage | Stores source snapshots, artifacts, exports, and trace bundles. |
 | Cache helper | Redis | Short-lived locks, queue helpers, and cache metadata. |
 
-Neo4j, Qdrant, Zoekt, Tantivy, and OpenSearch are migration targets, not first-release dependencies.
-Migration requires the thresholds in `docs\04-technology-roadmap-operations.md`.
+Qdrant, Zoekt, Tantivy, and OpenSearch are migration targets, not first-release dependencies.
+Neo4j is included from the first production graph stack, but only for graph traversal. ACL joins,
+permission sync, chunk metadata, and transactional source-of-truth data remain in Postgres.
 
 ## Source connectors
 
@@ -43,7 +44,7 @@ GitHub is the only SCM in the first production release.
 7. Run LLM entity/relation extraction only on unstructured text: Markdown docs, ADRs, tickets, PR descriptions, incidents, and conversation summaries.
 8. Update Postgres full-text index and symbol/path tables.
 9. Generate embeddings with the approved embedding model and update pgvector collections.
-10. Update typed graph tables.
+10. Update Neo4j graph nodes/edges and Postgres graph metadata tables.
 11. Run quality checks and mark index version active after eval pass.
 
 ## ACL provenance chain
@@ -147,17 +148,20 @@ Ranking signals:
 
 ## GraphRAG design
 
-GraphRAG is implemented from the beginning through typed Postgres graph tables:
+GraphRAG is implemented from the beginning through Neo4j plus Postgres metadata:
 
-- `graph_node` stores node type, source reference, project, ACL scope, index version, and metadata.
-- `graph_edge` stores relation type, source reference, confidence, project, ACL scope, and index version.
+- Neo4j stores graph nodes/edges for traversal and multi-hop expansion.
+- Postgres stores authoritative ACL scope, source reference, project, index version, and metadata for
+  every graph node/edge ID.
+- Neo4j node/edge properties include `project_id`, `acl_scope_hash`, `source_ref`, and `index_version`
+  so traversal can be prefiltered and post-validated.
 - Deterministic code edges come from parsers and indexers.
 - LLM-extracted edges are limited to unstructured docs, tickets, incidents, and conversation summaries.
 - Graph expansion is used only when it improves eval scores for multi-hop questions.
 - Every graph answer preserves provenance to source chunks and graph edges.
 
-Migration to Neo4j is allowed only when graph traversal latency exceeds 500 ms p95 on approved workloads
-or graph query complexity cannot be maintained in SQL without reducing answer quality.
+Fallback to typed Postgres graph tables is allowed only if Neo4j self-hosting on Railway proves too
+heavy operationally. Otherwise Neo4j Community is the first graph traversal engine.
 
 ## Embeddings and reranking
 
@@ -244,4 +248,3 @@ Severity rules:
 - Any ACL leak, provider-policy violation, secret exposure, approval bypass, or lost workflow state blocks release.
 - Any regression above 5% in recall, faithfulness, task success, or cost-per-accepted-task requires owner approval.
 - Eval datasets are owned by platform engineering with named reviewers from engineering, product, and support.
-
