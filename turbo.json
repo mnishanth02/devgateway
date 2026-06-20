@@ -1,0 +1,46 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [
+    "package.json",
+    "pnpm-workspace.yaml",
+    "tsconfig.base.json",
+    ".npmrc"
+  ],
+  "tasks": {
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
+    "lint": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "build/**", ".next/**", "!.next/cache/**"]
+    },
+    "eval:smoke": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
+    "db:check": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "registry:validate": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "policy:validate": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    }
+  }
+}

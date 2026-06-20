@@ -1,0 +1,60 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "acl-safety-cross-principal-deny",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_retrieval_behavior": false,
+  "principals": [
+    {
+      "principal_id": "principal-alpha-reader",
+      "grants": [
+        {
+          "project_id": "project-alpha",
+          "acl_scope_hash": "acl-alpha-read",
+          "codeowner": false
+        }
+      ]
+    },
+    {
+      "principal_id": "principal-alpha-owner",
+      "grants": [
+        {
+          "project_id": "project-alpha",
+          "acl_scope_hash": "acl-alpha-codeowner",
+          "codeowner": true
+        }
+      ]
+    }
+  ],
+  "permission_sync_state": {
+    "sync_state_ref": "sync-fresh-alpha",
+    "permission_sync_version": "sync-run-alpha-current",
+    "sync_staleness_ms": 4500,
+    "permission_sync_slo_ms": 300000,
+    "fresh": true
+  },
+  "retrieval_candidates": [
+    {
+      "candidate_id": "chunk-alpha-owner-note",
+      "project_id": "project-alpha",
+      "repo_ref": "repo-alpha-private",
+      "required_acl_scope_hash": "acl-alpha-codeowner",
+      "content_marker": "SYNTHETIC_ALPHA_CODEOWNER_ONLY_DECISION",
+      "authorized_for_request": false
+    }
+  ],
+  "expected_engine_decision": {
+    "decision": "deny",
+    "denial_reason": "principal_not_authorized",
+    "reject_candidate_ids": ["chunk-alpha-owner-note"],
+    "prompt_context_forbidden_markers": ["SYNTHETIC_ALPHA_CODEOWNER_ONLY_DECISION"]
+  },
+  "audit_expectations": [
+    "trace_id",
+    "principal_id",
+    "project_id",
+    "decision",
+    "acl_scope_hash",
+    "index_version"
+  ]
+}

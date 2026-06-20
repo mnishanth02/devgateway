@@ -1,0 +1,26 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "cost-latency-gateway-overhead-shape",
+  "category": "gateway_overhead",
+  "measurement_fixture": {
+    "client_to_gateway_ms": 4,
+    "policy_eval_ms": 2,
+    "provider_round_trip_ms": 35,
+    "gateway_overhead_ms": 6
+  },
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "Latency artifact separates client_to_gateway_ms, policy_eval_ms, provider_round_trip_ms, stream_overhead_ms, and total_ms.",
+    "Gateway overhead excludes synthetic provider latency and includes routing/fallback overhead.",
+    "P95/P99 fields exist as placeholders without production SLO claims."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/cost-latency/cost-latency-gateway-overhead-shape/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/cost-latency/cost-latency-gateway-overhead-shape/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/cost-latency/cost-latency-gateway-overhead-shape/audit-event.json"
+  }
+}

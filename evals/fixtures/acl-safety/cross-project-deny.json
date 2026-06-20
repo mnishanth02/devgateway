@@ -1,0 +1,68 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "acl-safety-cross-project-deny",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_retrieval_behavior": false,
+  "principals": [
+    {
+      "principal_id": "principal-alpha-reader",
+      "grants": [
+        {
+          "project_id": "project-alpha",
+          "acl_scope_hash": "acl-alpha-read"
+        }
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "project_id": "project-alpha",
+      "repos": ["repo-alpha-private"]
+    },
+    {
+      "project_id": "project-beta",
+      "repos": ["repo-beta-private"]
+    }
+  ],
+  "permission_sync_state": {
+    "sync_state_ref": "sync-fresh-alpha",
+    "permission_sync_version": "sync-run-alpha-current",
+    "sync_staleness_ms": 5000,
+    "permission_sync_slo_ms": 300000,
+    "fresh": true
+  },
+  "retrieval_candidates": [
+    {
+      "candidate_id": "chunk-alpha-public-note",
+      "project_id": "project-alpha",
+      "repo_ref": "repo-alpha-private",
+      "acl_scope_hash": "acl-alpha-read",
+      "content_marker": "SYNTHETIC_ALPHA_PUBLIC_NOTE",
+      "authorized_for_request": true
+    },
+    {
+      "candidate_id": "chunk-beta-deploy-note",
+      "project_id": "project-beta",
+      "repo_ref": "repo-beta-private",
+      "acl_scope_hash": "acl-beta-read",
+      "content_marker": "SYNTHETIC_BETA_SECRET_DEPLOYMENT_NOTE",
+      "authorized_for_request": false
+    }
+  ],
+  "expected_engine_decision": {
+    "decision": "deny",
+    "denial_reason": "project_mismatch",
+    "reject_candidate_ids": ["chunk-beta-deploy-note"],
+    "prompt_context_allowed_markers": ["SYNTHETIC_ALPHA_PUBLIC_NOTE"],
+    "prompt_context_forbidden_markers": ["SYNTHETIC_BETA_SECRET_DEPLOYMENT_NOTE"]
+  },
+  "audit_expectations": [
+    "trace_id",
+    "principal_id",
+    "project_id",
+    "decision",
+    "acl_scope_hash",
+    "index_version"
+  ]
+}

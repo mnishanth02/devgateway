@@ -1,0 +1,32 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "persona-answers-architecture-contract",
+  "category": "architecture",
+  "answer_contract": {
+    "audience": "architecture",
+    "required_sections": [
+      "constraints",
+      "tradeoffs",
+      "dependencies",
+      "adr_refs"
+    ]
+  },
+  "synthetic_source_refs": [
+    "doc-synthetic-architecture-brief"
+  ],
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "Answer includes constraints, tradeoffs, dependencies, and ADR refs.",
+    "Unsupported design claims are explicitly marked unknown.",
+    "Citations point to synthetic architecture note fixture."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/persona-answers/persona-answers-architecture-contract/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/persona-answers/persona-answers-architecture-contract/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/persona-answers/persona-answers-architecture-contract/audit-event.json"
+  }
+}

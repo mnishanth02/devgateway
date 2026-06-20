@@ -1,0 +1,9 @@
+[project]
+name = "devgateway-agent-runtime"
+version = "0.0.0"
+description = "Placeholder Python worker for orchestration, retrieval, and agent tasks."
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv]
+package = false

@@ -1,0 +1,23 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "provider-data-policy-public-deterministic-tooling",
+  "data_class": "public",
+  "provider_class": "deterministic_tooling",
+  "provider_refs": [
+    "deterministic-tooling-track0"
+  ],
+  "policy_matrix_ref": "packages/policy/policies/provider-data-class-matrix.v0.1.json",
+  "expected_decision": "allow",
+  "expected_denial_reason": null,
+  "manual_approval_required_before_production": false,
+  "notes": "Deterministic non-model tooling route with no external model call.",
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-public-deterministic-tooling/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-public-deterministic-tooling/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-public-deterministic-tooling/audit-event.json"
+  }
+}

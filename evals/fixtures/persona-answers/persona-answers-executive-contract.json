@@ -1,0 +1,33 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "persona-answers-executive-contract",
+  "category": "executive",
+  "answer_contract": {
+    "audience": "executive",
+    "required_sections": [
+      "recommendation",
+      "impact",
+      "risk",
+      "cost_latency",
+      "next_milestone"
+    ]
+  },
+  "synthetic_source_refs": [
+    "doc-synthetic-executive-brief"
+  ],
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "Answer starts with concise recommendation and impact summary.",
+    "Includes decision, risk, cost/latency impact, and next milestone.",
+    "Details remain high-level and cite synthetic summary fixture."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/persona-answers/persona-answers-executive-contract/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/persona-answers/persona-answers-executive-contract/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/persona-answers/persona-answers-executive-contract/audit-event.json"
+  }
+}

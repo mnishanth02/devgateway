@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/shared/gate-result.v0.1.schema.json",
+  "title": "DevGateway Shared Gate Result Contracts v0.1",
+  "$defs": {
+    "artifactRef": {
+      "type": "object",
+      "required": ["artifact_id", "uri", "type"],
+      "properties": {
+        "artifact_id": { "type": "string", "minLength": 1 },
+        "uri": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "sensitivity_label": {
+          "type": "string",
+          "enum": ["public", "internal", "confidential", "restricted"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "gateResult": {
+      "type": "object",
+      "required": [
+        "contract_version",
+        "gate_result_id",
+        "change_id",
+        "dataset_version",
+        "eval_suite_version",
+        "runner_version",
+        "target",
+        "metrics",
+        "thresholds",
+        "pass",
+        "blocking_severity",
+        "artifact_refs",
+        "audit_event_id",
+        "created_at"
+      ],
+      "properties": {
+        "contract_version": { "const": "0.1.0" },
+        "gate_result_id": { "type": "string", "minLength": 1 },
+        "change_id": { "type": "string", "minLength": 1 },
+        "dataset_version": { "type": "string", "minLength": 1 },
+        "eval_suite_version": { "type": "string", "minLength": 1 },
+        "runner_version": { "type": "string", "minLength": 1 },
+        "target": {
+          "type": "object",
+          "required": ["kind", "artifact_version"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "model_alias",
+                "fallback_route",
+                "tool",
+                "prompt_template",
+                "retrieval_strategy",
+                "skill",
+                "index_version"
+              ]
+            },
+            "artifact_version": { "type": "string", "minLength": 1 },
+            "model_alias": { "type": "string" },
+            "provider": { "type": "string" },
+            "tool_name": { "type": "string" },
+            "prompt_template_id": { "type": "string" },
+            "retrieval_strategy_id": { "type": "string" },
+            "skill_id": { "type": "string" },
+            "index_id": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "metrics": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "number" }
+        },
+        "thresholds": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "number" }
+        },
+        "pass": { "type": "boolean" },
+        "blocking_severity": {
+          "type": "string",
+          "enum": ["none", "low", "medium", "high", "critical"]
+        },
+        "owner_approval_required": { "type": "boolean" },
+        "reviewer": {
+          "type": "object",
+          "required": ["principal_id", "reviewed_at"],
+          "properties": {
+            "principal_id": { "type": "string", "minLength": 1 },
+            "reviewed_at": { "type": "string", "format": "date-time" }
+          },
+          "additionalProperties": false
+        },
+        "approver": {
+          "type": "object",
+          "required": ["principal_id", "approved_at"],
+          "properties": {
+            "principal_id": { "type": "string", "minLength": 1 },
+            "approved_at": { "type": "string", "format": "date-time" },
+            "approval_reason": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "artifact_refs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifactRef" }
+        },
+        "audit_event_id": { "type": "string", "minLength": 1 },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "pass": { "const": true } }, "required": ["pass"] },
+          "then": { "properties": { "blocking_severity": { "const": "none" } } }
+        },
+        {
+          "if": {
+            "properties": { "owner_approval_required": { "const": true } },
+            "required": ["owner_approval_required"]
+          },
+          "then": { "required": ["approver"] }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "gateResultReference": {
+      "type": "object",
+      "required": [
+        "contract_version",
+        "gate_result_id",
+        "change_id",
+        "dataset_version",
+        "eval_suite_version",
+        "artifact_version",
+        "required_pass"
+      ],
+      "properties": {
+        "contract_version": { "const": "0.1.0" },
+        "gate_result_id": { "type": "string", "minLength": 1 },
+        "change_id": { "type": "string", "minLength": 1 },
+        "dataset_version": { "type": "string", "minLength": 1 },
+        "eval_suite_version": { "type": "string", "minLength": 1 },
+        "artifact_version": { "type": "string", "minLength": 1 },
+        "required_pass": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "required": ["error"],
+      "properties": {
+        "error": {
+          "type": "object",
+          "required": ["type", "message"],
+          "properties": {
+            "type": { "type": "string", "minLength": 1 },
+            "message": { "type": "string", "minLength": 1 },
+            "code": { "type": ["string", "null"] },
+            "param": { "type": ["string", "null"] },
+            "request_id": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

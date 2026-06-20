@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/eval/gate-definition.v0.1.schema.json",
+  "title": "DevGateway Eval Gate Definition Contract v0.1",
+  "description": "Declarative non-production eval gate definition for fixture/provider-fixture suites, thresholds, approver rules, and artifact/version binding.",
+  "oneOf": [
+    { "$ref": "#/$defs/gateDefinition" }
+  ],
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:[-+][0-9A-Za-z.-]+)?$"
+    },
+    "schemaRef": {
+      "type": "string",
+      "pattern": "^https://devgateway\\.local/schemas/[a-z0-9/.-]+\\.v[0-9]+\\.[0-9]+(?:\\.schema)?\\.json(?:#/[A-Za-z0-9_~/$.-]+)?$"
+    },
+    "evalSuite": {
+      "type": "string",
+      "enum": [
+        "gateway_model_smoke",
+        "provider_data_policy",
+        "retrieval_recall",
+        "faithfulness",
+        "acl_safety",
+        "prompt_injection_tainted_context",
+        "tool_safety",
+        "agent_workflow",
+        "persona_answers",
+        "cost_latency"
+      ]
+    },
+    "gateMode": {
+      "type": "string",
+      "enum": ["fixture", "provider_fixture"]
+    },
+    "blockingSeverity": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "targetKind": {
+      "type": "string",
+      "enum": [
+        "model_alias",
+        "fallback_route",
+        "tool",
+        "prompt_template",
+        "retrieval_strategy",
+        "skill",
+        "index_version",
+        "policy",
+        "registry"
+      ]
+    },
+    "threshold": {
+      "type": "object",
+      "required": ["metric_id", "operator", "value", "blocking_severity"],
+      "properties": {
+        "metric_id": { "$ref": "#/$defs/nonEmptyString" },
+        "operator": { "type": "string", "enum": ["lt", "lte", "eq", "gte", "gt"] },
+        "value": { "type": "number" },
+        "unit": { "$ref": "#/$defs/nonEmptyString" },
+        "blocking_severity": { "$ref": "#/$defs/blockingSeverity" },
+        "required": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "suiteThresholds": {
+      "type": "object",
+      "required": ["suite", "suite_version", "thresholds"],
+      "properties": {
+        "suite": { "$ref": "#/$defs/evalSuite" },
+        "suite_version": { "$ref": "#/$defs/semver" },
+        "thresholds": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/threshold" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "requiredApproverRules": {
+      "type": "object",
+      "required": [
+        "required_on_blocking_failure",
+        "minimum_approvers",
+        "allowed_roles",
+        "break_glass_requires_security_owner"
+      ],
+      "properties": {
+        "required_on_blocking_failure": { "const": true },
+        "minimum_approvers": { "type": "integer", "minimum": 1 },
+        "allowed_roles": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "approval_required_for_severity_at_or_above": { "$ref": "#/$defs/blockingSeverity" },
+        "break_glass_requires_security_owner": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "artifactVersionBinding": {
+      "type": "object",
+      "required": ["target_kind", "artifact_id", "artifact_version", "binding_required"],
+      "properties": {
+        "target_kind": { "$ref": "#/$defs/targetKind" },
+        "artifact_id": { "$ref": "#/$defs/nonEmptyString" },
+        "artifact_version": { "$ref": "#/$defs/semver" },
+        "schema_ref": { "$ref": "#/$defs/schemaRef" },
+        "binding_required": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "datasetSuiteBinding": {
+      "type": "object",
+      "required": ["dataset_id", "dataset_version", "suite", "suite_version", "binding_required"],
+      "properties": {
+        "dataset_id": { "type": "string", "pattern": "^[a-z0-9-]+\\.v[0-9]+\\.[0-9]+$" },
+        "dataset_version": { "$ref": "#/$defs/semver" },
+        "suite": { "$ref": "#/$defs/evalSuite" },
+        "suite_version": { "$ref": "#/$defs/semver" },
+        "binding_required": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "gateResultContract": {
+      "type": "object",
+      "required": [
+        "gate_result_schema_ref",
+        "gate_result_reference_schema_ref",
+        "persistence_schema_ref",
+        "required_fields"
+      ],
+      "properties": {
+        "gate_result_schema_ref": {
+          "const": "https://devgateway.local/schemas/shared/gate-result.v0.1.schema.json#/$defs/gateResult"
+        },
+        "gate_result_reference_schema_ref": {
+          "const": "https://devgateway.local/schemas/shared/gate-result.v0.1.schema.json#/$defs/gateResultReference"
+        },
+        "persistence_schema_ref": {
+          "const": "https://devgateway.local/schemas/eval/gate-result-persistence.v0.1.schema.json#/$defs/gateResultPersistenceRecord"
+        },
+        "required_fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "change_id",
+              "dataset_version",
+              "eval_suite_version",
+              "runner_version",
+              "model_alias",
+              "provider",
+              "retrieval_strategy_version",
+              "prompt_template_version",
+              "tool_version",
+              "skill_version",
+              "index_version",
+              "metrics",
+              "thresholds",
+              "pass",
+              "blocking_severity",
+              "reviewer",
+              "approver",
+              "artifact_refs",
+              "audit_event_id"
+            ]
+          }
+        }
+      },
+      "allOf": [
+        { "properties": { "required_fields": { "contains": { "const": "change_id" } } } },
+        { "properties": { "required_fields": { "contains": { "const": "dataset_version" } } } },
+        { "properties": { "required_fields": { "contains": { "const": "eval_suite_version" } } } },
+        { "properties": { "required_fields": { "contains": { "const": "runner_version" } } } },
+        { "properties": { "required_fields": { "contains": { "const": "metrics" } } } },
+        { "properties": { "required_fields": { "contains": { "const": "thresholds" } } } },
+        { "properties": { "required_fields": { "contains": { "const": "pass" } } } },
+        { "properties": { "required_fields": { "contains": { "const": "blocking_severity" } } } },
+        { "properties": { "required_fields": { "contains": { "const": "artifact_refs" } } } },
+        { "properties": { "required_fields": { "contains": { "const": "audit_event_id" } } } }
+      ],
+      "additionalProperties": false
+    },
+    "gateDefinition": {
+      "type": "object",
+      "required": [
+        "contract_version",
+        "gate_id",
+        "gate_version",
+        "mode",
+        "suite",
+        "suite_version",
+        "dataset_id",
+        "dataset_version",
+        "thresholds",
+        "blocking_severity",
+        "required_approver_rules",
+        "artifact_version_binding",
+        "dataset_suite_binding",
+        "gate_result_contract",
+        "production_enablement"
+      ],
+      "properties": {
+        "$schema": {
+          "const": "https://devgateway.local/schemas/eval/gate-definition.v0.1.schema.json"
+        },
+        "contract_version": { "const": "0.1.0" },
+        "gate_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[-_][a-z0-9]+)*\\.v[0-9]+\\.[0-9]+$"
+        },
+        "gate_version": { "$ref": "#/$defs/semver" },
+        "mode": { "$ref": "#/$defs/gateMode" },
+        "suite": { "$ref": "#/$defs/evalSuite" },
+        "suite_version": { "$ref": "#/$defs/semver" },
+        "dataset_id": { "type": "string", "pattern": "^[a-z0-9-]+\\.v[0-9]+\\.[0-9]+$" },
+        "dataset_version": { "$ref": "#/$defs/semver" },
+        "thresholds": { "$ref": "#/$defs/suiteThresholds" },
+        "blocking_severity": { "$ref": "#/$defs/blockingSeverity" },
+        "required_approver_rules": { "$ref": "#/$defs/requiredApproverRules" },
+        "artifact_version_binding": { "$ref": "#/$defs/artifactVersionBinding" },
+        "dataset_suite_binding": { "$ref": "#/$defs/datasetSuiteBinding" },
+        "gate_result_contract": { "$ref": "#/$defs/gateResultContract" },
+        "artifact_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "https://devgateway.local/schemas/shared/gate-result.v0.1.schema.json#/$defs/artifactRef"
+          }
+        },
+        "production_enablement": { "const": false },
+        "production_route_allowed": { "const": false },
+        "notes": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

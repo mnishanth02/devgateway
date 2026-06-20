@@ -1,0 +1,15 @@
+{
+  "name": "@devgateway/policy",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Placeholder package for provider, data-class, tool, and budget policy definitions.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "transit": "pnpm typecheck",
+    "typecheck": "tsc --noEmit",
+    "policy:validate": "node --experimental-strip-types src/validate-policy.ts"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "gateway-model-smoke-error-shape",
+  "category": "error_shape",
+  "request": {
+    "provider_error": "synthetic_rate_limit"
+  },
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "Error response includes code, message, trace_id, retryable, and details.policy_reason.",
+    "Provider raw error body is redacted from client output and retained only as synthetic fixture metadata.",
+    "HTTP status maps deterministically from denial taxonomy."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-error-shape/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-error-shape/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-error-shape/audit-event.json"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "gateway-model-smoke-usage-attribution",
+  "category": "usage_attribution",
+  "request": {
+    "model_alias": "track0-public-chat",
+    "project_id": "project-alpha"
+  },
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "Usage ledger includes input_tokens, output_tokens, total_tokens, and estimated_cost_usd.",
+    "Usage attribution includes principal_id, project_id, model_alias, provider_candidate_id, and trace_id.",
+    "No usage record is marked billable or production."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-usage-attribution/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-usage-attribution/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-usage-attribution/audit-event.json"
+  }
+}

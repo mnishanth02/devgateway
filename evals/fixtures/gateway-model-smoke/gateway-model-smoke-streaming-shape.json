@@ -1,0 +1,24 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "gateway-model-smoke-streaming-shape",
+  "category": "streaming",
+  "request": {
+    "stream": true,
+    "wire_format": "openai_chat_completions"
+  },
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "Stream emits message_start before content_delta and message_stop after final usage_delta.",
+    "Chunk payloads are synthetic and contain no provider-native secret fields.",
+    "Trace artifact records stream_event_count and terminal_finish_reason."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-streaming-shape/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-streaming-shape/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-streaming-shape/audit-event.json"
+  }
+}

@@ -1,0 +1,9 @@
+[project]
+name = "devgateway-retrieval-indexer"
+version = "0.0.0"
+description = "Placeholder Python worker for ingestion, parsing, embeddings, and graph extraction."
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv]
+package = false

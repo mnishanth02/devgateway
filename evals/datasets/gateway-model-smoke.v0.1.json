@@ -1,0 +1,255 @@
+{
+  "contract_version": "0.1.0",
+  "dataset_id": "gateway-model-smoke.v0.1",
+  "dataset_version": "0.1.0",
+  "suite": "gateway_model_smoke",
+  "schema_status": "layout_stub_until_shared_eval_schema_generalizes_beyond_acl_safety",
+  "fixture_root": "evals/fixtures/gateway-model-smoke",
+  "inert_fixture_mode": true,
+  "no_live_external_calls": true,
+  "production_enablement": false,
+  "source_data_policy": {
+    "synthetic_only": true,
+    "no_real_customer_data": true,
+    "no_real_repo_data": true,
+    "no_live_external_calls": true,
+    "fixture_review_required": true
+  },
+  "categories": [
+    "auth",
+    "streaming",
+    "usage_attribution",
+    "fallback",
+    "error_shape"
+  ],
+  "artifact_ref_policy": {
+    "required": true,
+    "description": "Each case declares expected gate-result, trace, and audit artifacts that a future runner must write."
+  },
+  "cases": [
+    {
+      "case_id": "gateway-model-smoke-auth-required",
+      "category": "auth",
+      "title": "Deny request without a valid virtual key or principal binding",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-auth-required.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-auth-required."
+        }
+      ],
+      "inputs": {
+        "route": "/v1/chat/completions",
+        "auth_state": "missing_virtual_key"
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Missing or invalid auth must stop before provider selection.",
+          "The error body uses the shared typed denial shape without provider response leakage.",
+          "Audit evidence records virtual_key_id as absent and provider_attempt_count as 0."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-auth-required/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-auth-required/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-auth-required/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "gateway-model-smoke-streaming-shape",
+      "category": "streaming",
+      "title": "Validate fixture-mode streaming event ordering and terminal usage",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-streaming-shape.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-streaming-shape."
+        }
+      ],
+      "inputs": {
+        "stream": true,
+        "wire_format": "openai_chat_completions"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Stream emits message_start before content_delta and message_stop after final usage_delta.",
+          "Chunk payloads are synthetic and contain no provider-native secret fields.",
+          "Trace artifact records stream_event_count and terminal_finish_reason."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-streaming-shape/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-streaming-shape/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-streaming-shape/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "gateway-model-smoke-usage-attribution",
+      "category": "usage_attribution",
+      "title": "Attribute synthetic token usage to principal, project, alias, and provider candidate",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-usage-attribution.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-usage-attribution."
+        }
+      ],
+      "inputs": {
+        "model_alias": "track0-public-chat",
+        "project_id": "project-alpha"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Usage ledger includes input_tokens, output_tokens, total_tokens, and estimated_cost_usd.",
+          "Usage attribution includes principal_id, project_id, model_alias, provider_candidate_id, and trace_id.",
+          "No usage record is marked billable or production."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-usage-attribution/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-usage-attribution/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-usage-attribution/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "gateway-model-smoke-fallback-route",
+      "category": "fallback",
+      "title": "Fallback to secondary candidate after synthetic retryable provider error",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-fallback-route.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-fallback-route."
+        }
+      ],
+      "inputs": {
+        "primary_candidate": "candidate-a",
+        "fallback_candidate": "candidate-b"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "First candidate records retryable_error and no final answer is produced from it.",
+          "Second candidate is selected only if policy, budget, and eval gate checks remain satisfied.",
+          "Fallback chain is written to the expected trace artifact."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-route/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-route/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-route/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "gateway-model-smoke-error-shape",
+      "category": "error_shape",
+      "title": "Return stable typed gateway error shape for fixture provider failure",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-error-shape.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-error-shape."
+        }
+      ],
+      "inputs": {
+        "provider_error": "synthetic_rate_limit"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Error response includes code, message, trace_id, retryable, and details.policy_reason.",
+          "Provider raw error body is redacted from client output and retained only as synthetic fixture metadata.",
+          "HTTP status maps deterministically from denial taxonomy."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-error-shape/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-error-shape/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-error-shape/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic"
+      ]
+    }
+  ]
+}

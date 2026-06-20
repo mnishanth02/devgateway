@@ -1,0 +1,152 @@
+{
+  "contract_version": "0.1.0",
+  "registry_version": "model-aliases.v0.1",
+  "created_at": "2026-06-20T07:48:38.024Z",
+  "freshness_expires_at": "2026-12-31T00:00:00.000Z",
+  "production_posture": {
+    "production_enabled": false,
+    "production_route_allowed": false,
+    "gate_result_ref": null,
+    "notes": "Track 0.5 registry snapshot is data-only and cannot route production keys; aliases have no candidates, routes, fallbacks, or passing gate references."
+  },
+  "model_aliases": [
+    {
+      "alias": "devgateway/orchestrator",
+      "purpose": "Supervisor, task decomposition, and synthesis.",
+      "lifecycle_status": "disabled",
+      "production_gate": {
+        "production_enabled": false,
+        "production_route_allowed": false,
+        "gate_result_ref": null,
+        "notes": "Initial Track 0.5 alias posture: disabled lifecycle, no production route, no candidate providers, and no passing gate result reference."
+      },
+      "routing": {
+        "tier": "disabled",
+        "fallback_aliases": []
+      },
+      "eval_gate": {
+        "suite_id": "agent_orchestration_v0_placeholder",
+        "suite_version": "placeholder",
+        "latest_gate_status": "not_run",
+        "gate_result_ref": null,
+        "evaluated_at": null
+      },
+      "candidates": []
+    },
+    {
+      "alias": "devgateway/deep-reasoning",
+      "purpose": "Architecture and high-complexity planning.",
+      "lifecycle_status": "disabled",
+      "production_gate": {
+        "production_enabled": false,
+        "production_route_allowed": false,
+        "gate_result_ref": null,
+        "notes": "Initial Track 0.5 alias posture: disabled lifecycle, no production route, no candidate providers, and no passing gate result reference."
+      },
+      "routing": {
+        "tier": "disabled",
+        "fallback_aliases": []
+      },
+      "eval_gate": {
+        "suite_id": "deep_reasoning_v0_placeholder",
+        "suite_version": "placeholder",
+        "latest_gate_status": "not_run",
+        "gate_result_ref": null,
+        "evaluated_at": null
+      },
+      "candidates": []
+    },
+    {
+      "alias": "devgateway/code-review",
+      "purpose": "Diff review plus bug and security finding.",
+      "lifecycle_status": "disabled",
+      "production_gate": {
+        "production_enabled": false,
+        "production_route_allowed": false,
+        "gate_result_ref": null,
+        "notes": "Initial Track 0.5 alias posture: disabled lifecycle, no production route, no candidate providers, and no passing gate result reference."
+      },
+      "routing": {
+        "tier": "disabled",
+        "fallback_aliases": []
+      },
+      "eval_gate": {
+        "suite_id": "code_review_v0_placeholder",
+        "suite_version": "placeholder",
+        "latest_gate_status": "not_run",
+        "gate_result_ref": null,
+        "evaluated_at": null
+      },
+      "candidates": []
+    },
+    {
+      "alias": "devgateway/large-context",
+      "purpose": "Large documents, repositories, and context packs.",
+      "lifecycle_status": "disabled",
+      "production_gate": {
+        "production_enabled": false,
+        "production_route_allowed": false,
+        "gate_result_ref": null,
+        "notes": "Initial Track 0.5 alias posture: disabled lifecycle, no production route, no candidate providers, no passing gate result reference, and any future Google Vertex route requires manual approval before configuration."
+      },
+      "routing": {
+        "tier": "disabled",
+        "fallback_aliases": []
+      },
+      "eval_gate": {
+        "suite_id": "large_context_v0_placeholder",
+        "suite_version": "placeholder",
+        "latest_gate_status": "not_run",
+        "gate_result_ref": null,
+        "evaluated_at": null
+      },
+      "candidates": []
+    },
+    {
+      "alias": "devgateway/fast",
+      "purpose": "Low-cost high-volume tasks.",
+      "lifecycle_status": "disabled",
+      "production_gate": {
+        "production_enabled": false,
+        "production_route_allowed": false,
+        "gate_result_ref": null,
+        "notes": "Initial Track 0.5 alias posture: disabled lifecycle, no production route, no candidate providers, and no passing gate result reference."
+      },
+      "routing": {
+        "tier": "disabled",
+        "fallback_aliases": []
+      },
+      "eval_gate": {
+        "suite_id": "fast_tasks_v0_placeholder",
+        "suite_version": "placeholder",
+        "latest_gate_status": "not_run",
+        "gate_result_ref": null,
+        "evaluated_at": null
+      },
+      "candidates": []
+    },
+    {
+      "alias": "devgateway/retrieval-planner",
+      "purpose": "Query planning and context-pack construction.",
+      "lifecycle_status": "disabled",
+      "production_gate": {
+        "production_enabled": false,
+        "production_route_allowed": false,
+        "gate_result_ref": null,
+        "notes": "Initial Track 0.5 alias posture: disabled lifecycle, no production route, no candidate providers, and no passing gate result reference."
+      },
+      "routing": {
+        "tier": "disabled",
+        "fallback_aliases": []
+      },
+      "eval_gate": {
+        "suite_id": "retrieval_planning_v0_placeholder",
+        "suite_version": "placeholder",
+        "latest_gate_status": "not_run",
+        "gate_result_ref": null,
+        "evaluated_at": null
+      },
+      "candidates": []
+    }
+  ]
+}

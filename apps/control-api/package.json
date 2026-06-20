@@ -1,0 +1,17 @@
+{
+  "name": "@devgateway/control-api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Placeholder package for the DevGateway control API service.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@devgateway/config": "workspace:*",
+    "better-auth": "^1.6.11"
+  }
+}

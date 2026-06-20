@@ -1,0 +1,10 @@
+{
+  "name": "@devgateway/shared-types",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Placeholder package for generated and hand-authored shared TypeScript types.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

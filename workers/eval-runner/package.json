@@ -1,0 +1,14 @@
+{
+  "name": "@devgateway/eval-runner",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Fixture-mode eval runner skeleton for gate-shaped smoke results.",
+  "scripts": {
+    "build": "node ../../scripts/eval-smoke.mjs --compile-only",
+    "eval:smoke": "node ../../scripts/eval-smoke.mjs",
+    "lint": "node ../../scripts/eval-smoke.mjs --compile-only",
+    "test": "node ../../scripts/eval-smoke.mjs --compile-only",
+    "transit": "node ../../scripts/eval-smoke.mjs --compile-only",
+    "typecheck": "node ../../scripts/eval-smoke.mjs --compile-only"
+  }
+}

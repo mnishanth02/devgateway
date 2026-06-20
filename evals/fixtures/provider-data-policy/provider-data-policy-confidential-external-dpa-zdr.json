@@ -1,0 +1,23 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "provider-data-policy-confidential-external-dpa-zdr",
+  "data_class": "confidential",
+  "provider_class": "external_dpa_zdr",
+  "provider_refs": [
+    "confidential-dpa-zdr-external-placeholder"
+  ],
+  "policy_matrix_ref": "packages/policy/policies/provider-data-class-matrix.v0.1.json",
+  "expected_decision": "allow",
+  "expected_denial_reason": null,
+  "manual_approval_required_before_production": false,
+  "notes": "External placeholder with signed DPA and ZDR available for confidential fixture coverage.",
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-confidential-external-dpa-zdr/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-confidential-external-dpa-zdr/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-confidential-external-dpa-zdr/audit-event.json"
+  }
+}

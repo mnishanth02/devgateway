@@ -1,0 +1,24 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "gateway-model-smoke-auth-required",
+  "category": "auth",
+  "request": {
+    "route": "/v1/chat/completions",
+    "auth_state": "missing_virtual_key"
+  },
+  "expected_decision": "deny",
+  "expected_assertions": [
+    "Missing or invalid auth must stop before provider selection.",
+    "The error body uses the shared typed denial shape without provider response leakage.",
+    "Audit evidence records virtual_key_id as absent and provider_attempt_count as 0."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-auth-required/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-auth-required/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-auth-required/audit-event.json"
+  }
+}

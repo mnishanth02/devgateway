@@ -1,0 +1,13 @@
+{
+  "name": "@devgateway/config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Placeholder package for shared typed configuration and environment validation.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

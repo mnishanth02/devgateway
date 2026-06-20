@@ -1,0 +1,23 @@
+{
+  "name": "@devgateway/schemas",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Locked JSON Schema stubs for external gateway contracts and shared gate-result records.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./catalog": "./schemas/index.v0.1.json"
+  },
+  "scripts": {
+    "check": "node ./src/validate-json.mjs",
+    "transit": "pnpm check",
+    "lint": "pnpm check",
+    "typecheck": "pnpm check",
+    "test": "pnpm check",
+    "build": "pnpm check",
+    "eval:smoke": "pnpm check",
+    "db:check": "pnpm check",
+    "registry:validate": "pnpm check",
+    "policy:validate": "pnpm check"
+  }
+}

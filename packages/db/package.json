@@ -1,0 +1,13 @@
+{
+  "name": "@devgateway/db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Placeholder package for operational database schema and migration conventions.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

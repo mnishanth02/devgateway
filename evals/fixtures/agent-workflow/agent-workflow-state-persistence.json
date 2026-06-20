@@ -1,0 +1,23 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "agent-workflow-state-persistence",
+  "category": "state_persistence",
+  "workflow_fixture": {
+    "state_version": "workflow-state-v0.1-fixture"
+  },
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "State transitions follow queued -> running -> waiting_for_approval -> completed/denied without skipped audit events.",
+    "State snapshot excludes raw secret values and external provider payloads.",
+    "Resume token references persisted state version."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/agent-workflow/agent-workflow-state-persistence/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/agent-workflow/agent-workflow-state-persistence/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/agent-workflow/agent-workflow-state-persistence/audit-event.json"
+  }
+}

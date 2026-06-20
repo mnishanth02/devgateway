@@ -1,0 +1,24 @@
+{
+  "name": "devgateway",
+  "private": true,
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "scripts": {
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "build": "turbo run build",
+    "eval:smoke": "turbo run eval:smoke",
+    "db:check": "turbo run db:check",
+    "registry:validate": "turbo run registry:validate",
+    "policy:validate": "turbo run policy:validate",
+    "workspace:validate": "node scripts/validate-root-tooling.mjs && node scripts/validate-eval-layout.mjs && pnpm --filter @devgateway/schemas check"
+  },
+  "devDependencies": {
+    "turbo": "^2.6.1",
+    "typescript": "^5.9.3"
+  }
+}

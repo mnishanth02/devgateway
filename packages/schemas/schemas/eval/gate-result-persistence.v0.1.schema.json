@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/eval/gate-result-persistence.v0.1.schema.json",
+  "title": "DevGateway Eval Gate Result Persistence Contract v0.1",
+  "description": "Persistence wrapper for shared gate-result records, immutable storage metadata, semver version bindings, and audit evidence.",
+  "oneOf": [
+    { "$ref": "#/$defs/gateResultPersistenceRecord" }
+  ],
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:[-+][0-9A-Za-z.-]+)?$"
+    },
+    "gateDefinitionRef": {
+      "type": "object",
+      "required": ["gate_id", "gate_version", "schema_ref"],
+      "properties": {
+        "gate_id": { "$ref": "#/$defs/nonEmptyString" },
+        "gate_version": { "$ref": "#/$defs/semver" },
+        "schema_ref": {
+          "const": "https://devgateway.local/schemas/eval/gate-definition.v0.1.schema.json#/$defs/gateDefinition"
+        }
+      },
+      "additionalProperties": false
+    },
+    "versionBindings": {
+      "type": "object",
+      "required": [
+        "change_id",
+        "dataset_version",
+        "eval_suite_version",
+        "runner_version",
+        "artifact_version"
+      ],
+      "properties": {
+        "change_id": { "$ref": "#/$defs/nonEmptyString" },
+        "dataset_version": { "$ref": "#/$defs/semver" },
+        "eval_suite_version": { "$ref": "#/$defs/semver" },
+        "runner_version": { "$ref": "#/$defs/semver" },
+        "artifact_version": { "$ref": "#/$defs/semver" },
+        "model_alias": { "$ref": "#/$defs/nonEmptyString" },
+        "provider": { "$ref": "#/$defs/nonEmptyString" },
+        "retrieval_strategy_version": { "$ref": "#/$defs/semver" },
+        "prompt_template_version": { "$ref": "#/$defs/semver" },
+        "tool_version": { "$ref": "#/$defs/semver" },
+        "skill_version": { "$ref": "#/$defs/semver" },
+        "index_version": { "$ref": "#/$defs/semver" }
+      },
+      "additionalProperties": false
+    },
+    "storage": {
+      "type": "object",
+      "required": ["backend", "uri", "immutable", "written_at"],
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": ["artifact_bucket", "database", "append_only_log"]
+        },
+        "uri": { "$ref": "#/$defs/nonEmptyString" },
+        "partition_key": { "$ref": "#/$defs/nonEmptyString" },
+        "immutable": { "const": true },
+        "written_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "retention": {
+      "type": "object",
+      "required": ["policy_id", "minimum_days"],
+      "properties": {
+        "policy_id": { "$ref": "#/$defs/nonEmptyString" },
+        "minimum_days": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "writeControls": {
+      "type": "object",
+      "required": [
+        "append_only",
+        "mutation_requires_break_glass",
+        "audit_event_required"
+      ],
+      "properties": {
+        "append_only": { "const": true },
+        "mutation_requires_break_glass": { "const": true },
+        "audit_event_required": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "gateResultPersistenceRecord": {
+      "type": "object",
+      "required": [
+        "contract_version",
+        "persistence_id",
+        "shared_gate_result_schema_ref",
+        "gate_definition_ref",
+        "gate_result",
+        "version_bindings",
+        "storage",
+        "retention",
+        "write_controls",
+        "audit_event_id",
+        "created_at"
+      ],
+      "properties": {
+        "$schema": {
+          "const": "https://devgateway.local/schemas/eval/gate-result-persistence.v0.1.schema.json"
+        },
+        "contract_version": { "const": "0.1.0" },
+        "persistence_id": { "$ref": "#/$defs/nonEmptyString" },
+        "shared_gate_result_schema_ref": {
+          "const": "https://devgateway.local/schemas/shared/gate-result.v0.1.schema.json#/$defs/gateResult"
+        },
+        "gate_definition_ref": { "$ref": "#/$defs/gateDefinitionRef" },
+        "gate_result": {
+          "$ref": "https://devgateway.local/schemas/shared/gate-result.v0.1.schema.json#/$defs/gateResult"
+        },
+        "version_bindings": { "$ref": "#/$defs/versionBindings" },
+        "storage": { "$ref": "#/$defs/storage" },
+        "retention": { "$ref": "#/$defs/retention" },
+        "write_controls": { "$ref": "#/$defs/writeControls" },
+        "audit_event_id": { "$ref": "#/$defs/nonEmptyString" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

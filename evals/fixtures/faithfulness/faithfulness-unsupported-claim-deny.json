@@ -1,0 +1,26 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "faithfulness-unsupported-claim-deny",
+  "category": "unsupported_claim",
+  "context": [
+    "SYNTHETIC_FAITHFULNESS_CONTEXT_ONLY"
+  ],
+  "candidate_answer": {
+    "unsupported_claim": "SYNTHETIC_UNSUPPORTED_SLA_DATE"
+  },
+  "expected_decision": "deny",
+  "expected_assertions": [
+    "Candidate answer adds an unsupported SLA date not present in context.",
+    "Unsupported claim is marked hallucinated and excluded from accepted response.",
+    "Audit artifact records unsupported_claim_count greater than zero."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/faithfulness/faithfulness-unsupported-claim-deny/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/faithfulness/faithfulness-unsupported-claim-deny/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/faithfulness/faithfulness-unsupported-claim-deny/audit-event.json"
+  }
+}

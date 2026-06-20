@@ -1,0 +1,26 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "faithfulness-insufficient-context-abstain",
+  "category": "insufficient_context_abstain",
+  "context": [
+    "SYNTHETIC_FAITHFULNESS_CONTEXT_ONLY"
+  ],
+  "candidate_answer": {
+    "question": "What is the undisclosed synthetic roadmap date?"
+  },
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "The accepted answer states insufficient context instead of fabricating details.",
+    "No source marker outside the provided fixture appears in the answer.",
+    "Artifact records abstention_reason=insufficient_context."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/faithfulness/faithfulness-insufficient-context-abstain/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/faithfulness/faithfulness-insufficient-context-abstain/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/faithfulness/faithfulness-insufficient-context-abstain/audit-event.json"
+  }
+}

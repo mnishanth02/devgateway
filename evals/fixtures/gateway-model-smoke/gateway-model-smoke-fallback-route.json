@@ -1,0 +1,24 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "gateway-model-smoke-fallback-route",
+  "category": "fallback",
+  "request": {
+    "primary_candidate": "candidate-a",
+    "fallback_candidate": "candidate-b"
+  },
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "First candidate records retryable_error and no final answer is produced from it.",
+    "Second candidate is selected only if policy, budget, and eval gate checks remain satisfied.",
+    "Fallback chain is written to the expected trace artifact."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-route/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-route/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-route/audit-event.json"
+  }
+}

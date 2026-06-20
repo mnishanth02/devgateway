@@ -1,0 +1,337 @@
+{
+  "$schema": "https://devgateway.local/schemas/policy/provider-policy.v0.1.schema.json",
+  "schemaVersion": "0.1.0",
+  "matrixId": "provider-data-class-matrix.v0.1",
+  "status": "track_0_governance_only",
+  "productionEnablement": {
+    "enabled": false,
+    "note": "Track 0.5 defines policy shape only and does not enable production provider, model, key, or route access."
+  },
+  "dataClasses": {
+    "public": {
+      "routingRule": "Any approved provider/model alias."
+    },
+    "internal": {
+      "routingRule": "Approved providers with acceptable retention/training terms."
+    },
+    "confidential": {
+      "routingRule": "Providers with DPA/ZDR or explicit company approval; traces redact sensitive snippets."
+    },
+    "restricted": {
+      "routingRule": "No external model calls; deterministic tooling or approved self-hosted route only."
+    }
+  },
+  "evaluationOrder": [
+    "resolve_principal_and_project",
+    "resolve_data_class_task_tool_context",
+    "resolve_alias_and_provider_candidate",
+    "check_provider_lifecycle_and_approval_gate",
+    "check_data_class_dpa_zdr_retention_training_region_trace_storage",
+    "check_eval_gate",
+    "check_budget_and_rate_limit",
+    "check_semantic_cache_acl_eligibility",
+    "select_route_or_typed_denial"
+  ],
+  "providers": [
+    {
+      "providerId": "openai-track0-external",
+      "displayName": "OpenAI Track 0 external placeholder",
+      "providerKind": "external_model",
+      "externalModelCalls": true,
+      "lifecycle": "approved_non_production",
+      "productionEnabled": false,
+      "allowedModelAliases": ["track0-public-chat", "track0-internal-chat"],
+      "dataClassPolicy": {
+        "allowedDataClasses": ["public", "internal"],
+        "deniedDataClasses": ["confidential", "restricted"],
+        "restrictedExternalCallsDefaultDeny": true,
+        "confidentialRequiresDpaOrZdrOrApproval": true,
+        "internalRequiresAcceptableRetentionTraining": true
+      },
+      "compliance": {
+        "dpa": "pending",
+        "zeroDataRetention": "pending",
+        "retention": {
+          "mode": "limited",
+          "maxDays": 30
+        },
+        "trainingUse": "opt_out",
+        "subprocessorsDocumented": true
+      },
+      "regionPolicy": {
+        "allowedRegions": ["us", "eu"],
+        "disallowedRegions": [],
+        "requiresRegionPinning": true
+      },
+      "traceStoragePolicy": {
+        "mode": "metadata_only",
+        "sensitiveSnippetRedactionRequired": true,
+        "retentionDays": 30,
+        "allowedForDataClasses": ["public", "internal"]
+      },
+      "manualApprovalGate": {
+        "required": true,
+        "requiredForDataClasses": ["confidential", "restricted"],
+        "productionApprovalRequired": true,
+        "approvalReference": null
+      },
+      "evalGate": {
+        "requiredForProduction": true,
+        "status": "not_started"
+      },
+      "budgetRateLimitPolicy": {
+        "requiresBudgetCheck": true,
+        "requiresRateLimitCheck": true
+      },
+      "semanticCachePolicy": {
+        "eligibleDataClasses": ["public", "internal"],
+        "requiresAclScopedCacheKey": true
+      },
+      "auditability": {
+        "decisionAuditRequired": true,
+        "providerAttemptAuditRequired": true,
+        "recordsDpaZdrRetentionTrainingRegionTracePolicy": true
+      }
+    },
+    {
+      "providerId": "anthropic-track0-external",
+      "displayName": "Anthropic Track 0 external placeholder",
+      "providerKind": "external_model",
+      "externalModelCalls": true,
+      "lifecycle": "approved_non_production",
+      "productionEnabled": false,
+      "allowedModelAliases": ["track0-public-chat", "track0-internal-chat"],
+      "dataClassPolicy": {
+        "allowedDataClasses": ["public", "internal"],
+        "deniedDataClasses": ["confidential", "restricted"],
+        "restrictedExternalCallsDefaultDeny": true,
+        "confidentialRequiresDpaOrZdrOrApproval": true,
+        "internalRequiresAcceptableRetentionTraining": true
+      },
+      "compliance": {
+        "dpa": "pending",
+        "zeroDataRetention": "pending",
+        "retention": {
+          "mode": "limited",
+          "maxDays": 30
+        },
+        "trainingUse": "opt_out",
+        "subprocessorsDocumented": true
+      },
+      "regionPolicy": {
+        "allowedRegions": ["us", "eu"],
+        "disallowedRegions": [],
+        "requiresRegionPinning": true
+      },
+      "traceStoragePolicy": {
+        "mode": "metadata_only",
+        "sensitiveSnippetRedactionRequired": true,
+        "retentionDays": 30,
+        "allowedForDataClasses": ["public", "internal"]
+      },
+      "manualApprovalGate": {
+        "required": true,
+        "requiredForDataClasses": ["confidential", "restricted"],
+        "productionApprovalRequired": true,
+        "approvalReference": null
+      },
+      "evalGate": {
+        "requiredForProduction": true,
+        "status": "not_started"
+      },
+      "budgetRateLimitPolicy": {
+        "requiresBudgetCheck": true,
+        "requiresRateLimitCheck": true
+      },
+      "semanticCachePolicy": {
+        "eligibleDataClasses": ["public", "internal"],
+        "requiresAclScopedCacheKey": true
+      },
+      "auditability": {
+        "decisionAuditRequired": true,
+        "providerAttemptAuditRequired": true,
+        "recordsDpaZdrRetentionTrainingRegionTracePolicy": true
+      }
+    },
+    {
+      "providerId": "confidential-dpa-zdr-external-placeholder",
+      "displayName": "Confidential DPA/ZDR external placeholder",
+      "providerKind": "external_model",
+      "externalModelCalls": true,
+      "lifecycle": "evaluation_only",
+      "productionEnabled": false,
+      "allowedModelAliases": ["track0-confidential-chat"],
+      "dataClassPolicy": {
+        "allowedDataClasses": ["public", "internal", "confidential"],
+        "deniedDataClasses": ["restricted"],
+        "restrictedExternalCallsDefaultDeny": true,
+        "confidentialRequiresDpaOrZdrOrApproval": true,
+        "internalRequiresAcceptableRetentionTraining": true
+      },
+      "compliance": {
+        "dpa": "signed",
+        "zeroDataRetention": "available",
+        "retention": {
+          "mode": "zero",
+          "maxDays": 0
+        },
+        "trainingUse": "prohibited",
+        "subprocessorsDocumented": true
+      },
+      "regionPolicy": {
+        "allowedRegions": ["us", "eu"],
+        "disallowedRegions": [],
+        "requiresRegionPinning": true
+      },
+      "traceStoragePolicy": {
+        "mode": "redacted_snippets_allowed",
+        "sensitiveSnippetRedactionRequired": true,
+        "retentionDays": 14,
+        "allowedForDataClasses": ["public", "internal", "confidential"]
+      },
+      "manualApprovalGate": {
+        "required": true,
+        "requiredForDataClasses": ["confidential"],
+        "productionApprovalRequired": true,
+        "approvalReference": null
+      },
+      "evalGate": {
+        "requiredForProduction": true,
+        "status": "not_started"
+      },
+      "budgetRateLimitPolicy": {
+        "requiresBudgetCheck": true,
+        "requiresRateLimitCheck": true
+      },
+      "semanticCachePolicy": {
+        "eligibleDataClasses": ["public", "internal"],
+        "requiresAclScopedCacheKey": true
+      },
+      "auditability": {
+        "decisionAuditRequired": true,
+        "providerAttemptAuditRequired": true,
+        "recordsDpaZdrRetentionTrainingRegionTracePolicy": true
+      }
+    },
+    {
+      "providerId": "self-hosted-track0-approved-placeholder",
+      "displayName": "Self-hosted Track 0 approved-route placeholder",
+      "providerKind": "self_hosted_model",
+      "externalModelCalls": false,
+      "lifecycle": "approved_self_hosted",
+      "productionEnabled": false,
+      "allowedModelAliases": ["track0-self-hosted-chat"],
+      "dataClassPolicy": {
+        "allowedDataClasses": ["public", "internal", "confidential", "restricted"],
+        "deniedDataClasses": [],
+        "restrictedExternalCallsDefaultDeny": true,
+        "confidentialRequiresDpaOrZdrOrApproval": true,
+        "internalRequiresAcceptableRetentionTraining": true
+      },
+      "compliance": {
+        "dpa": "not_applicable",
+        "zeroDataRetention": "not_applicable",
+        "retention": {
+          "mode": "none",
+          "maxDays": 0
+        },
+        "trainingUse": "not_applicable",
+        "subprocessorsDocumented": false
+      },
+      "regionPolicy": {
+        "allowedRegions": ["project_local"],
+        "disallowedRegions": [],
+        "requiresRegionPinning": true
+      },
+      "traceStoragePolicy": {
+        "mode": "metadata_only",
+        "sensitiveSnippetRedactionRequired": true,
+        "retentionDays": 7,
+        "allowedForDataClasses": ["public", "internal", "confidential", "restricted"]
+      },
+      "manualApprovalGate": {
+        "required": true,
+        "requiredForDataClasses": ["restricted"],
+        "productionApprovalRequired": true,
+        "approvalReference": null
+      },
+      "evalGate": {
+        "requiredForProduction": true,
+        "status": "not_started"
+      },
+      "budgetRateLimitPolicy": {
+        "requiresBudgetCheck": true,
+        "requiresRateLimitCheck": true
+      },
+      "semanticCachePolicy": {
+        "eligibleDataClasses": ["public", "internal"],
+        "requiresAclScopedCacheKey": true
+      },
+      "auditability": {
+        "decisionAuditRequired": true,
+        "providerAttemptAuditRequired": true,
+        "recordsDpaZdrRetentionTrainingRegionTracePolicy": true
+      }
+    },
+    {
+      "providerId": "deterministic-tooling-track0",
+      "displayName": "Deterministic tooling Track 0 route",
+      "providerKind": "deterministic_tooling",
+      "externalModelCalls": false,
+      "lifecycle": "approved_non_production",
+      "productionEnabled": false,
+      "allowedModelAliases": ["deterministic-tooling"],
+      "dataClassPolicy": {
+        "allowedDataClasses": ["public", "internal", "confidential", "restricted"],
+        "deniedDataClasses": [],
+        "restrictedExternalCallsDefaultDeny": true,
+        "confidentialRequiresDpaOrZdrOrApproval": false,
+        "internalRequiresAcceptableRetentionTraining": false
+      },
+      "compliance": {
+        "dpa": "not_applicable",
+        "zeroDataRetention": "not_applicable",
+        "retention": {
+          "mode": "none",
+          "maxDays": 0
+        },
+        "trainingUse": "not_applicable",
+        "subprocessorsDocumented": false
+      },
+      "regionPolicy": {
+        "allowedRegions": ["project_local"],
+        "disallowedRegions": [],
+        "requiresRegionPinning": true
+      },
+      "traceStoragePolicy": {
+        "mode": "metadata_only",
+        "sensitiveSnippetRedactionRequired": true,
+        "retentionDays": 7,
+        "allowedForDataClasses": ["public", "internal", "confidential", "restricted"]
+      },
+      "manualApprovalGate": {
+        "required": false,
+        "requiredForDataClasses": [],
+        "productionApprovalRequired": true,
+        "approvalReference": null
+      },
+      "evalGate": {
+        "requiredForProduction": true,
+        "status": "not_started"
+      },
+      "budgetRateLimitPolicy": {
+        "requiresBudgetCheck": false,
+        "requiresRateLimitCheck": true
+      },
+      "semanticCachePolicy": {
+        "eligibleDataClasses": ["public", "internal"],
+        "requiresAclScopedCacheKey": true
+      },
+      "auditability": {
+        "decisionAuditRequired": true,
+        "providerAttemptAuditRequired": false,
+        "recordsDpaZdrRetentionTrainingRegionTracePolicy": true
+      }
+    }
+  ]
+}

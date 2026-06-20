@@ -1,0 +1,121 @@
+{
+  "contract_version": "0.1.0",
+  "dataset_id": "cost-latency.v0.1",
+  "dataset_version": "0.1.0",
+  "suite": "cost_latency",
+  "schema_status": "layout_stub_until_shared_eval_schema_generalizes_beyond_acl_safety",
+  "fixture_root": "evals/fixtures/cost-latency",
+  "inert_fixture_mode": true,
+  "no_live_external_calls": true,
+  "production_enablement": false,
+  "source_data_policy": {
+    "synthetic_only": true,
+    "no_real_customer_data": true,
+    "no_real_repo_data": true,
+    "no_live_external_calls": true,
+    "fixture_review_required": true
+  },
+  "categories": [
+    "cost_attribution",
+    "gateway_overhead"
+  ],
+  "artifact_ref_policy": {
+    "required": true,
+    "description": "Each case declares expected gate-result, trace, and audit artifacts that a future runner must write."
+  },
+  "cases": [
+    {
+      "case_id": "cost-latency-cost-attribution",
+      "category": "cost_attribution",
+      "title": "Validate synthetic cost attribution shape",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/cost-latency/cost-latency-cost-attribution.json",
+          "sha256_required": true,
+          "description": "Inert fixture for cost-latency-cost-attribution."
+        }
+      ],
+      "inputs": {
+        "input_tokens": 120,
+        "output_tokens": 80,
+        "estimated_cost_usd": "0.00042"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Cost artifact includes model_alias, provider_candidate_id, input/output tokens, unit prices, and estimated_cost_usd.",
+          "Cost is attributed to principal_id, project_id, budget_scope, and trace_id.",
+          "Fixture cost is marked synthetic_non_billable."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/cost-latency/cost-latency-cost-attribution/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/cost-latency/cost-latency-cost-attribution/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/cost-latency/cost-latency-cost-attribution/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "cost-latency",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "cost-latency-gateway-overhead-shape",
+      "category": "gateway_overhead",
+      "title": "Validate gateway overhead measurement shape",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/cost-latency/cost-latency-gateway-overhead-shape.json",
+          "sha256_required": true,
+          "description": "Inert fixture for cost-latency-gateway-overhead-shape."
+        }
+      ],
+      "inputs": {
+        "client_to_gateway_ms": 4,
+        "policy_eval_ms": 2,
+        "provider_round_trip_ms": 35,
+        "gateway_overhead_ms": 6
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Latency artifact separates client_to_gateway_ms, policy_eval_ms, provider_round_trip_ms, stream_overhead_ms, and total_ms.",
+          "Gateway overhead excludes synthetic provider latency and includes routing/fallback overhead.",
+          "P95/P99 fields exist as placeholders without production SLO claims."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/cost-latency/cost-latency-gateway-overhead-shape/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/cost-latency/cost-latency-gateway-overhead-shape/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/cost-latency/cost-latency-gateway-overhead-shape/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "cost-latency",
+        "track-0",
+        "synthetic"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+# Bifrost configuration template for Phase 0.2
+# Placeholder-only file. Generate or validate concrete config from registry/policy artifacts.
+
+server:
+  host: "0.0.0.0"
+  port: ${BIFROST_PORT:-8080}
+  public_base_url: ${BIFROST_BASE_URL}
+
+admin:
+  token: ${BIFROST_ADMIN_TOKEN}
+  break_glass_enabled: ${BIFROST_BREAK_GLASS_ENABLED:-false}
+
+registry:
+  source_of_truth: "model-provider-registry"
+  route_config_version: ${BIFROST_ROUTE_CONFIG_VERSION}
+  validate_before_start: true
+
+virtual_keys:
+  seed: ${BIFROST_VIRTUAL_KEY_SEED}
+  require_principal_context: true
+  require_policy_version: true
+
+providers:
+  openai:
+    api_key: ${OPENAI_API_KEY}
+    enabled: false
+    enablement_requires_gate_result: true
+    data_classes:
+      - public
+      - internal
+  anthropic:
+    api_key: ${ANTHROPIC_API_KEY}
+    enabled: false
+    enablement_requires_gate_result: true
+    data_classes:
+      - public
+      - internal
+
+policy_context:
+  required_headers:
+    - x-devgateway-principal-id
+    - x-devgateway-project-id
+    - x-devgateway-data-class
+    - x-devgateway-policy-version
+    - x-devgateway-registry-version
+    - x-devgateway-trace-id
+
+telemetry:
+  otel_endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  service_name: ${OTEL_SERVICE_NAME:-bifrost-gateway}
+  environment: ${APP_ENV:-development}
+  trace_sample_rate: ${TRACE_SAMPLE_RATE:-1.0}
+
+production:
+  provisioning_enabled: ${PRODUCTION_PROVISIONING_ENABLED:-false}
+  deploy_approval_required: ${PRODUCTION_DEPLOY_APPROVAL_REQUIRED:-true}

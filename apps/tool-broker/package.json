@@ -1,0 +1,10 @@
+{
+  "name": "@devgateway/tool-broker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Placeholder package for the DevGateway tool broker service.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
