@@ -18,7 +18,7 @@ stakeholder views with citations and permission checks.
 | Cache helper | Redis | Short-lived locks, queue helpers, and cache metadata. |
 
 Qdrant, Zoekt, Tantivy, and OpenSearch are migration targets, not first-release dependencies.
-Neo4j is included from the first production graph stack, but only for graph traversal. ACL joins,
+Neo4j is included from the first production retrieval release, but only for graph traversal. ACL joins,
 permission sync, chunk metadata, and transactional source-of-truth data remain in Postgres.
 
 ## Source connectors
@@ -106,8 +106,9 @@ Representative relations:
 3. Retrieve candidates from full-text/symbol, pgvector, and graph tables.
 4. Apply principal/project/team ACL filter before reranking or prompt assembly.
 5. Rerank by relevance, freshness, source reliability, and persona fit.
-6. Expand graph neighbors when it improves answer faithfulness.
-7. Assemble context pack with source citations and confidence/coverage notes.
+6. Expand graph neighbors under the configured strategy when GraphRAG improves answer faithfulness.
+7. Budget and compress candidates into the target model context window.
+8. Assemble context pack with source citations and confidence/coverage notes.
 
 Ranking signals:
 
@@ -118,6 +119,51 @@ Ranking signals:
 - ownership relevance
 - accepted memory
 - persona-specific answer needs
+
+## Runtime retrieval controls
+
+Retrieval must be switchable without code changes so application behavior and eval results can compare
+hybrid-only retrieval against Neo4j-backed GraphRAG.
+
+| Control | Default | Rule |
+|---|---|---|
+| `RETRIEVAL_PRODUCTION_ENABLED` | `false` | Production retrieval stays disabled until eval gates pass and an approved release intentionally enables it. |
+| `RETRIEVAL_LEXICAL_ENABLED` | `true` | Required for first production retrieval; exact symbol/path/error matching is not replaced by embeddings or GraphRAG. |
+| `RETRIEVAL_EMBEDDINGS_ENABLED` | `true` | Required for first production retrieval; semantic retrieval complements lexical and graph retrieval. |
+| `RETRIEVAL_RERANKER_ENABLED` | `true` | Required for first production retrieval to reduce noisy candidate context. |
+| `RETRIEVAL_GRAPH_RAG_ENABLED` | `true` | Day-one GraphRAG path; can be disabled in development/evals for hybrid-only comparison. |
+| `RETRIEVAL_NEO4J_ENABLED` | `true` | Day-one Neo4j traversal store; GraphRAG enabled while Neo4j is disabled fails closed. |
+| `RETRIEVAL_CONTEXT_BUDGETER_ENABLED` | `true` | Required before production retrieval so prompt assembly is budgeted. |
+| `RETRIEVAL_CONTEXT_COMPRESSOR_ENABLED` | `true` | Required before production retrieval so large context packs are compressed safely. |
+| `RETRIEVAL_CODE_EMBEDDINGS_ENABLED` | `false` | Deferred until code-search evals prove material benefit. |
+| `RETRIEVAL_EVAL_STRATEGIES` | `hybrid,hybrid_graph` | Eval runner compares explicit strategy IDs. |
+
+Strategy IDs:
+
+| Strategy | Meaning |
+|---|---|
+| `hybrid` | Lexical + general embeddings + reranker + budget/compression; no GraphRAG or Neo4j traversal. |
+| `hybrid_graph` | Hybrid retrieval plus Neo4j-backed GraphRAG candidates and graph provenance. |
+| `hybrid_graph_shadow` | Runs GraphRAG side-by-side for eval/trace evidence without using graph candidates in the final answer. |
+
+Fail-closed rules:
+
+- `RETRIEVAL_GRAPH_RAG_ENABLED=true` with `RETRIEVAL_NEO4J_ENABLED=false` is invalid.
+- Production retrieval cannot be enabled outside `NODE_ENV=production`.
+- Production retrieval requires lexical, embeddings, reranker, GraphRAG, Neo4j, context budgeter, and context compressor to remain enabled.
+- Code-specific embeddings remain disabled in the first production release.
+
+## Context budgeter and compressor
+
+The Retrieval Orchestrator owns context reduction before any model call:
+
+1. Merge lexical, vector, graph, memory, and persona-specific candidates.
+2. Apply principal/project/team ACL filters before budgeting or compression.
+3. Deduplicate overlapping chunks, snippets, graph paths, and memory items.
+4. Allocate token budget by task type, persona, model context window, source reliability, freshness, and citation need.
+5. Compress low-risk prose, summaries, and repeated metadata first; preserve exact code, API signatures, policy text, and cited facts when they are answer-critical.
+6. Preserve citation IDs, ACL scope hash, source reference, index version, graph node/edge provenance, retrieval strategy ID, and taint markers.
+7. Emit trace fields for `retrieval_strategy_id`, `context_budget_policy_id`, `context_compression_run_id`, `context_pack_tokens`, dropped-candidate reasons, and required-citation coverage.
 
 ### Code question pipeline
 
@@ -236,6 +282,9 @@ ships without an eval run and gate decision.
 | Gateway/model smoke | 25 requests per enabled client/protocol | 100% auth, streaming, usage attribution, fallback, and error-shape pass. |
 | Provider data policy | All data classes x approved providers | 100% denial for disallowed class/provider/region combinations. |
 | Retrieval recall | 100 known-answer repo/doc questions | recall@10 >= 85%, MRR >= 0.70, citation support >= 95%. |
+| Retrieval strategy controls | Hybrid-only, hybrid+GraphRAG, shadow, and invalid-toggle fixtures | GraphRAG/Neo4j toggles are honored, invalid combinations fail closed, and strategy traces are complete. |
+| GraphRAG quality | 50 multi-hop repo/doc/business questions | hybrid_graph outperforms or matches hybrid on approved multi-hop questions; graph provenance support >= 95%. |
+| Context pack budget/compression | 50 over-budget context-pack cases | 100% within token budget, required citations/provenance preserved, no ACL or taint-marker loss. |
 | Faithfulness | 50 adversarial and contradiction cases | unsupported-claim rate <= 2%, contradiction surfaced in >= 90% of conflict cases. |
 | ACL safety | Cross-project/principal/cache/context-ref suite | zero leaks and zero stale-permission exposures. |
 | Tool safety | 50 allowed/denied tool-plan cases | 100% denial for disallowed side effects and zero approval bypasses. |

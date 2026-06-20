@@ -138,6 +138,11 @@ export const initialSchemaDomainMap = [
       'repo_symbol',
       'api_endpoint',
       'decision',
+      'retrieval_strategy_run',
+      'context_budget_policy',
+      'context_compression_run',
+      'context_pack',
+      'context_pack_item',
     ],
   },
   {

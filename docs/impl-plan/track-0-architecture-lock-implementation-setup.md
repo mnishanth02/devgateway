@@ -540,7 +540,7 @@ Track 0 should produce configuration artifacts for both environments. Production
 | Admin portal | Service definition, build command, API URL variables, auth origin settings. Stakeholder portal remains post-first-production-release. |
 | Tool Broker | MCP endpoint service plan, tool registry dependency, approval policy dependency. |
 | Agent/Workflow workers | Worker service plan, queue/lease variables, DB/object storage dependencies. |
-| Retrieval/Indexing workers | Worker service plan, knowledge DB, object storage, Neo4j, embedding/reranker variables. |
+| Retrieval/Indexing workers | Worker service plan, knowledge DB, object storage, Neo4j, retrieval strategy toggles, context budget/compression controls, and embedding model/reranker route variables. |
 | Eval runner | On-demand/worker plan, fixture mode, DB/object storage output. |
 | Operational Postgres | Auth, policies, workflows, audit, budgets, eval gates. |
 | Knowledge Postgres | Sources, chunks, full-text/symbol metadata, pgvector. |

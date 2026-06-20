@@ -26,6 +26,10 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", "build/**", ".next/**", "!.next/cache/**"]
     },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
     "eval:smoke": {
       "dependsOn": ["build"],
       "outputs": []

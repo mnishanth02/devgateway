@@ -1,0 +1,38 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "retrieval-strategy-hybrid-graph",
+  "category": "hybrid_graph",
+  "retrieval_config": {
+    "strategy_id": "hybrid_graph",
+    "graph_rag_enabled": true,
+    "neo4j_enabled": true,
+    "context_budgeter_enabled": true,
+    "context_compressor_enabled": true
+  },
+  "graph_fixture": {
+    "path_id": "graph-strategy-001",
+    "edges": [
+      "Service:SYNTHETIC_API depends_on Module:SYNTHETIC_POLICY",
+      "Module:SYNTHETIC_POLICY documents Requirement:SYNTHETIC_REQUIREMENT"
+    ],
+    "citation": "graph-strategy-001#edge-strategy-001"
+  },
+  "expected_engine_decision": {
+    "decision": "pass",
+    "strategy_id": "hybrid_graph",
+    "graph_provenance_support": true,
+    "prompt_context_allowed_markers": [
+      "SYNTHETIC_GRAPH_PATH_CONTEXT"
+    ],
+    "prompt_context_forbidden_markers": []
+  },
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-hybrid-graph/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-hybrid-graph/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-hybrid-graph/audit-event.json"
+  }
+}

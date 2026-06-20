@@ -18,7 +18,7 @@
 | Agent Orchestrator | Parent agent runs, sub-agent delegation, task planning, result synthesis, trace and artifact linking. | Provider routing internals. |
 | Durable Workflow Runtime | Persisted workflow state, retries, timeouts, cancellation, approvals, worker leases, event outbox. | LLM reasoning or tool policy decisions. |
 | Knowledge Ingestion | GitHub clone/mirror, docs/conversation ingestion, chunking, entity extraction, graph construction. | Final answer generation. |
-| Retrieval Orchestrator | Hybrid retrieval, GraphRAG, ACL filtering, reranking, context-pack assembly, citations. | Model execution. |
+| Retrieval Orchestrator | Hybrid retrieval, GraphRAG, runtime strategy controls, ACL filtering, reranking, context budgeting/compression, context-pack assembly, citations. | Model execution. |
 | Memory Service | Working, episodic, semantic, decision, and correction memory with retention policy. | Hidden ungoverned prompt state. |
 | Evaluation Service | Datasets, eval runs, metric computation, regression gates, release blocking. | Production routing without policy approval. |
 | Portal | Developer/admin/stakeholder experiences, dashboards, project knowledge views. | Direct unrestricted DB or provider access. |
@@ -41,7 +41,7 @@ This path cannot wait for human approvals, long-running tools, or multi-step dur
 1. Portal/API creates a task, or an IDE calls `start_background_task` through MCP.
 2. Control API authenticates the principal and creates `agent_run` and `workflow_run` records.
 3. Supervisor plans retrieval, tools, approvals, and sub-agent delegations.
-4. Retrieval Orchestrator builds ACL-filtered context packs with citations.
+4. Retrieval Orchestrator builds ACL-filtered, budgeted, and compressed context packs with citations under the configured retrieval strategy.
 5. Tool Broker validates requested tools, risk tier, approval policy, and sandbox level.
 6. Sub-agent executor calls Bifrost with the selected model alias and scoped budget.
 7. Workflow runtime persists every step, attempt, result, artifact, event, approval, and failure.
@@ -51,7 +51,7 @@ This path cannot wait for human approvals, long-running tools, or multi-step dur
 
 1. Portal sends persona, project, question, and permission scope.
 2. Retrieval Orchestrator creates a persona-aware query plan.
-3. ACL filtering removes forbidden sources before reranking and prompt assembly.
+3. ACL filtering removes forbidden sources before reranking, context budgeting/compression, and prompt assembly.
 4. Agent uses a model alias selected by answer contract and policy.
 5. Portal renders answer, citations, confidence/coverage notes, and allowed follow-up actions.
 

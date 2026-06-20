@@ -26,7 +26,7 @@ The implementation blueprint is intentionally limited to five documents:
 | Gateway | Self-hosted Bifrost OSS on Railway for provider access, virtual keys, budgets, routing, fallback, load balancing, semantic caching, Prometheus, and OpenTelemetry. |
 | External MCP | The Platform Tool Broker serves the external MCP endpoint. Bifrost is not exposed as a raw tool-policy surface to IDEs. |
 | Agent runtime | Build a small Postgres-backed durable workflow runtime for the first internal release, with mandatory migration triggers to Hatchet OSS or Temporal OSS if scope or reliability thresholds are exceeded. |
-| Retrieval | Start with Postgres full-text search, pgvector, **self-hosted Neo4j Community**, and object storage snapshots. Postgres remains the source of truth for ACLs/metadata; Neo4j handles multi-hop graph traversal for GraphRAG. |
+| Retrieval | Start with Postgres full-text search, pgvector, **self-hosted Neo4j Community**, and object storage snapshots. Postgres remains the source of truth for ACLs/metadata; Neo4j handles multi-hop GraphRAG traversal and is runtime-toggleable for eval comparison. |
 | Identity | Better Auth OSS is the first-release human authentication layer, backed by Railway Postgres and invite-only internal accounts. GitHub App permission sync supplies repository ACLs and CODEOWNER context. |
 | Provider policy | Every outbound model call is checked against project data class, provider terms, region, DPA/ZDR status, and prompt/trace storage policy. |
 | IDE protocols | Expose OpenAI-compatible Chat Completions, Anthropic-compatible Messages, and MCP Streamable HTTP/SSE compatibility. |
@@ -51,6 +51,8 @@ The previously open validation decisions are now resolved as follows:
 | Deployment | **Railway-first**. Do not move gateway/stateless services to Fly.io, Azure, AWS, GCP, or another managed platform without explicit approval after measured latency or reliability evidence. |
 | Cloud/provider approval | Railway is the approved first-release platform. Non-Railway managed services, hosted auth layers, and Azure/AWS/GCP services are approval-gated before they can become committed dependencies. |
 | Graph stack | Use **self-hosted Neo4j Community** for GraphRAG traversal. Keep Postgres for metadata, ACL source of truth, and simple relations. |
+| Retrieval strategy controls | Keep `hybrid`, `hybrid_graph`, and `hybrid_graph_shadow` as explicit runtime/eval strategy IDs. GraphRAG enabled with Neo4j disabled fails closed. |
+| Context reduction | Context budgeter and compressor are day-one Retrieval Orchestrator responsibilities, preserving citations, ACL metadata, graph provenance, index version, and taint markers while reducing prompt tokens. |
 | Embeddings/reranker | Start with `BAAI/bge-m3` embeddings and `BAAI/bge-reranker-v2-m3`; evaluate `Qwen3-Embedding-4B` or a verified Nomic code embedding model for code-heavy retrieval. |
 | Embedding migration | Use versioned collections, dual-write, background backfill, shadow eval, per-project alias cutover, 14-30 day rollback, then garbage collection. |
 | Initial language coverage | TypeScript/JavaScript, React/TSX, TanStack Router/Query, Python, Node.js/TypeScript, Markdown, OpenAPI, JSON/YAML/TOML, package manifests, and environment examples. |
@@ -81,7 +83,8 @@ flowchart TB
     ING[GitHub/docs/conversation ingestion]
     LEX[Postgres full-text + symbol index]
     VEC[pgvector]
-    GRAPH[Typed graph tables]
+    GRAPH[Neo4j graph traversal]
+    BUDGET[Context budgeter + compressor]
     RAG[Hybrid retrieval + GraphRAG]
   end
 
@@ -106,6 +109,10 @@ flowchart TB
   ING --> LEX
   ING --> VEC
   ING --> GRAPH
+  LEX --> BUDGET
+  VEC --> BUDGET
+  GRAPH --> BUDGET
+  BUDGET --> RAG
   RAG <--> LEX
   RAG <--> VEC
   RAG <--> GRAPH

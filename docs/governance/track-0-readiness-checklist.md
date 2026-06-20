@@ -28,6 +28,7 @@ Track 0 readiness evidence must reference the Phase 0.2 local development comman
 | Provider routing respects data-class policy. | Provider data-class matrix and typed denial taxonomy. | `pnpm policy:validate`. | [ ] Provider data-class matrix exists and validates allowed/denied routing cases. |
 | Identity and tenant access are safe to build on. | Better Auth baseline, secure defaults, admin bootstrap plan, auth migration plan, and smoke-test skeleton. | Auth/security approval and smoke-test evidence. | [ ] Better Auth baseline is defined with secure defaults and smoke tests. |
 | GitHub permissions fail closed when stale. | GitHub App permission model, permission sync entities, webhook validation rules, and stale-sync default-deny rules. | Permission review and ACL safety eval fixture evidence. | [ ] GitHub App permission model is defined with stale-sync default-deny behavior. |
+| Retrieval strategy controls are explicit and testable. | Typed retrieval env config, GraphRAG/Neo4j toggle rules, context budget/compression controls, and retrieval strategy control fixtures. | `pnpm --filter @devgateway/config test` plus retrieval strategy control eval fixture evidence. | [ ] Retrieval can compare hybrid-only and GraphRAG paths, and invalid GraphRAG/Neo4j toggles fail closed. |
 | Database work has clear ownership and conventions. | Schema and migration conventions, migration ownership by domain, and package convention representation. | `pnpm db:check` where available. | [ ] Schema and migration conventions are documented and represented in package conventions. |
 | Eval gates can be executed before production enablement. | Eval dataset layout, eval case schema, fixture-mode runner skeleton, gate schema, and gate-result persistence contract. | `pnpm eval:smoke` and gate-shaped output evidence. | [ ] Eval runner skeleton can execute fixture suites and produce gate-shaped results. |
 | Production enablement fails without passing gates. | Registry validator, policy validator, gate-result schema, and production enablement fixtures. | `pnpm registry:validate` and `pnpm policy:validate`. | [ ] Registry and policy validators fail production enablement without matching passing gate results. |
@@ -46,6 +47,7 @@ Track 0 readiness evidence must reference the Phase 0.2 local development comman
 - [ ] Provider data-class matrix exists and validates allowed/denied routing cases.
 - [ ] Better Auth baseline is defined with secure defaults and smoke tests.
 - [ ] GitHub App permission model is defined with stale-sync default-deny behavior.
+- [ ] Retrieval strategy controls and context budget/compression controls are typed, testable, and eval-gated.
 - [ ] Schema and migration conventions are documented and represented in package conventions.
 - [ ] Eval runner skeleton can execute fixture suites and produce gate-shaped results.
 - [ ] Registry and policy validators fail production enablement without matching passing gate results.

@@ -18,6 +18,7 @@ Set `PRODUCTION_PROVISIONING_ENABLED=false` and `PRODUCTION_DEPLOY_APPROVAL_REQU
 | Auth | `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_TRUSTED_ORIGINS` | URL/origins public or internal; secret is secret. |
 | Database | `OPERATIONAL_DATABASE_URL`, `KNOWLEDGE_DATABASE_URL`, migration/read-only URLs | Secret. |
 | Redis | `REDIS_URL`, queue/rate-limit namespaces | URL secret; namespaces internal. |
+| Retrieval controls | `RETRIEVAL_*`, `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `NEO4J_DATABASE` | Toggle/budget values internal; Neo4j password secret. |
 | Bifrost/provider | `BIFROST_*`, provider API keys, break-glass flags | Tokens/API keys secret; route versions internal. |
 | GitHub App | app ID, installation ID, private key, webhook secret | IDs internal; private key/webhook secret secret. |
 | Object storage | S3 endpoint, bucket, region, access key, secret key | Endpoint/bucket internal; keys secret. |

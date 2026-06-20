@@ -1,0 +1,33 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "retrieval-strategy-hybrid-only",
+  "category": "hybrid_only",
+  "retrieval_config": {
+    "strategy_id": "hybrid",
+    "graph_rag_enabled": false,
+    "neo4j_enabled": false,
+    "context_budgeter_enabled": true,
+    "context_compressor_enabled": true
+  },
+  "expected_engine_decision": {
+    "decision": "pass",
+    "strategy_id": "hybrid",
+    "graph_candidates_included": false,
+    "graph_paths_included": false,
+    "prompt_context_allowed_markers": [
+      "SYNTHETIC_HYBRID_ONLY_CONTEXT"
+    ],
+    "prompt_context_forbidden_markers": [
+      "SYNTHETIC_GRAPH_PATH_CONTEXT"
+    ]
+  },
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-hybrid-only/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-hybrid-only/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-hybrid-only/audit-event.json"
+  }
+}

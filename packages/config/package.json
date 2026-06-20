@@ -8,6 +8,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/retrieval-env.test.ts",
     "typecheck": "tsc --noEmit"
   }
 }

@@ -1,0 +1,30 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "retrieval-strategy-graphrag-without-neo4j-deny",
+  "category": "invalid_toggle_fail_closed",
+  "retrieval_config": {
+    "strategy_id": "hybrid_graph",
+    "graph_rag_enabled": true,
+    "neo4j_enabled": false,
+    "context_budgeter_enabled": true,
+    "context_compressor_enabled": true
+  },
+  "expected_engine_decision": {
+    "decision": "deny",
+    "denial_reason": "retrieval_strategy_invalid_toggle",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": [
+      "SYNTHETIC_GRAPH_PATH_CONTEXT",
+      "SYNTHETIC_GRAPH_SHAPED_FALLBACK"
+    ]
+  },
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-graphrag-without-neo4j-deny/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-graphrag-without-neo4j-deny/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-graphrag-without-neo4j-deny/audit-event.json"
+  }
+}

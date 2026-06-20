@@ -15,9 +15,16 @@
     "db:check": "turbo run db:check",
     "registry:validate": "turbo run registry:validate",
     "policy:validate": "turbo run policy:validate",
-    "workspace:validate": "node scripts/validate-root-tooling.mjs && node scripts/validate-eval-layout.mjs && pnpm --filter @devgateway/schemas check"
+    "workspace:validate": "node scripts/validate-root-tooling.mjs && node scripts/validate-eval-layout.mjs && pnpm --filter @devgateway/schemas check",
+    "local:setup": "node scripts/devgateway-dev.mjs setup",
+    "local:dev": "node scripts/devgateway-dev.mjs dev",
+    "local:stop": "node scripts/devgateway-dev.mjs stop",
+    "local:status": "node scripts/devgateway-dev.mjs status",
+    "local:reset": "node scripts/devgateway-dev.mjs reset",
+    "local:test": "node --test scripts/devgateway-dev.test.mjs"
   },
   "devDependencies": {
+    "@types/node": "^24.0.0",
     "turbo": "^2.6.1",
     "typescript": "^5.9.3"
   }

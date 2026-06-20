@@ -1,0 +1,138 @@
+name: devgateway-local
+
+services:
+  operational-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: devgateway
+      POSTGRES_PASSWORD: devgateway
+      POSTGRES_DB: devgateway_operational
+    ports:
+      - "45432:5432"
+    volumes:
+      - operational-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devgateway -d devgateway_operational"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  knowledge-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: devgateway
+      POSTGRES_PASSWORD: devgateway
+      POSTGRES_DB: devgateway_knowledge
+    ports:
+      - "45433:5432"
+    volumes:
+      - knowledge-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devgateway -d devgateway_knowledge"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "46379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: quay.io/minio/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: devgateway
+      MINIO_ROOT_PASSWORD: devgateway-local-secret
+    ports:
+      - "49000:9000"
+      - "49001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  neo4j:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/devgateway-local
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1G
+    ports:
+      - "47474:7474"
+      - "47687:7687"
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "cypher-shell -u neo4j -p devgateway-local 'RETURN 1' || exit 1",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "44317:4317"
+      - "44318:4318"
+      - "43133:13133"
+    volumes:
+      - ./infra/local/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    ports:
+      - "49090:9090"
+    volumes:
+      - ./infra/local/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - otel-collector
+
+  grafana:
+    image: grafana/grafana-oss:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: devgateway-local
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    ports:
+      - "43030:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  operational-postgres-data:
+  knowledge-postgres-data:
+  redis-data:
+  minio-data:
+  neo4j-data:
+  neo4j-logs:
+  prometheus-data:
+  grafana-data:

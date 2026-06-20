@@ -41,6 +41,7 @@ Fixtures must be safe to run before any gateway, provider, retrieval, tool, or w
 | Gateway/model smoke | `evals\datasets\gateway-model-smoke.v0.1.json` | `evals\fixtures\gateway-model-smoke` | Auth, streaming, usage attribution, fallback, error shape |
 | Provider data policy | `evals\datasets\provider-data-policy.v0.1.json` | `evals\fixtures\provider-data-policy` | Public/internal/confidential/restricted data classes crossed with external standard, external DPA/ZDR, self-hosted, and deterministic provider classes |
 | Retrieval recall | `evals\datasets\retrieval-recall.v0.1.json` | `evals\fixtures\retrieval-recall` | Placeholder known-answer and citation requirements |
+| Retrieval strategy controls | `evals\datasets\retrieval-strategy-controls.v0.1.json` | `evals\fixtures\retrieval-strategy-controls` | Hybrid-only, hybrid+GraphRAG, invalid-toggle fail-closed, and context budget/compression fixtures |
 | Faithfulness | `evals\datasets\faithfulness.v0.1.json` | `evals\fixtures\faithfulness` | Contradiction, unsupported claim, and insufficient-context abstention fixtures |
 | Prompt injection / tainted context | `evals\datasets\prompt-injection-tainted-context.v0.1.json` | `evals\fixtures\prompt-injection-tainted-context` | Instruction override, permission widening, hidden approval, and tool-bypass attempts |
 | Tool safety | `evals\datasets\tool-safety.v0.1.json` | `evals\fixtures\tool-safety` | Allowed/denied tool plans and approval-bypass checks |

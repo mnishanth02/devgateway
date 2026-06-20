@@ -20,7 +20,7 @@ All app and worker services keep the full repository as Railway build context. D
 | Admin portal | Platform architecture owner | Platform operations owner | `pnpm turbo run build --filter=@devgateway/admin-portal...` | `pnpm --filter @devgateway/admin-portal start` | `apps\admin-portal\**`, `packages\shared-types\**`, `packages\config\**`, root lock/config files | `/healthz` or platform static health; verifies Control API URL and Better Auth trusted origin alignment. |
 | Tool Broker | Platform architecture owner | Platform operations owner | `pnpm turbo run build --filter=@devgateway/tool-broker...` | `pnpm --filter @devgateway/tool-broker start` | `apps\tool-broker\**`, `workers\tool-integrations\**`, `packages\schemas\**`, `packages\policy\**`, `packages\registry\**`, `packages\observability\**`, root lock/config files | `/healthz` checks MCP endpoint, registry load, approval policy, Redis, and Operational Postgres. |
 | Agent/workflow workers | Platform architecture owner | Platform operations owner | `python -m compileall workers\agent-runtime\src` | `python -m devgateway_agent_runtime` | `workers\agent-runtime\**`, `packages\db\**`, `packages\schemas\**`, `packages\policy\**`, `packages\observability\**`, Python/root lock/config files | Worker heartbeat in Operational Postgres; `/healthz` sidecar when daemonized; readiness checks Redis leases and S3 artifact access. |
-| Retrieval/indexing workers | Platform architecture owner | Platform operations owner | `python -m compileall workers\retrieval-indexer\src` | `python -m devgateway_retrieval_indexer` | `workers\retrieval-indexer\**`, `packages\db\**`, `packages\schemas\**`, `packages\policy\**`, `packages\observability\**`, Python/root lock/config files | Heartbeat plus Knowledge Postgres, pgvector, object storage, Neo4j, ACL metadata, and embedding/reranker route state checks. |
+| Retrieval/indexing workers | Platform architecture owner | Platform operations owner | `python -m compileall workers\retrieval-indexer\src` | `python -m devgateway_retrieval_indexer` | `workers\retrieval-indexer\**`, `packages\config\**`, `packages\db\**`, `packages\schemas\**`, `packages\policy\**`, `packages\observability\**`, Python/root lock/config files | Heartbeat plus Knowledge Postgres, pgvector, object storage, Neo4j, ACL metadata, retrieval toggle validity, context budget/compression controls, and embedding/reranker route state checks. |
 | Eval runner | Evaluation owner | Platform operations owner | `pnpm turbo run build --filter=@devgateway/eval-runner...` | `pnpm --filter @devgateway/eval-runner eval:smoke` for job mode | `workers\eval-runner\**`, `evals\**`, `packages\schemas\**`, `packages\observability\**`, root lock/config files | Job exits 0 with gate-shaped results; daemon mode exposes `/healthz` and verifies fixture mode, Operational Postgres, and object storage writes. |
 | Operational Postgres | Platform operations owner | Platform operations owner | Railway managed | Railway managed | `packages\db\**`, `docs\governance\schema-and-migration-conventions.md` | `pg_isready`, `SELECT 1`, and `pnpm db:check`; production requires backup/restore evidence before migrations. |
 | Knowledge Postgres | Platform operations owner | Platform operations owner | Railway managed | Railway managed | `packages\db\**`, `workers\retrieval-indexer\**` | `pg_isready`, `SELECT 1`, and pgvector extension check before retrieval readiness. |
@@ -40,13 +40,13 @@ All app and worker services keep the full repository as Railway build context. D
 | Admin portal | Auth, Observability |
 | Tool Broker | Auth, Database, Redis, GitHub App, Observability, Secrets/encryption |
 | Agent/workflow workers | Database, Redis, Object storage, Bifrost/provider, Observability, Eval, Secrets/encryption |
-| Retrieval/indexing workers | Database, Object storage, Bifrost/provider, GitHub App, Observability, Eval, Secrets/encryption |
+| Retrieval/indexing workers | Retrieval controls, Database, Object storage, Bifrost/provider, GitHub App, Observability, Eval, Secrets/encryption |
 | Eval runner | Database, Object storage, Bifrost/provider, Observability, Eval |
 | Operational Postgres | Database, Secrets/encryption |
 | Knowledge Postgres | Database |
 | Redis | Redis |
 | Object storage | Object storage |
-| Neo4j Community | Database, Object storage, Observability |
+| Neo4j Community | Retrieval controls, Database, Object storage, Observability |
 | OpenTelemetry Collector | Observability |
 | Prometheus | Observability |
 | Grafana | Observability, Auth |

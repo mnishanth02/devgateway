@@ -134,10 +134,10 @@
       "railway_shape": "Full-repo worker service for workers\\retrieval-indexer plus shared packages.",
       "build_command": "python -m compileall workers\\retrieval-indexer\\src",
       "start_command": "python -m devgateway_retrieval_indexer",
-      "watch_patterns": ["workers\\retrieval-indexer\\**", "packages\\db\\**", "packages\\schemas\\**", "packages\\policy\\**", "packages\\observability\\**", "pyproject.toml", "package.json", "pnpm-lock.yaml"],
-      "health_expectation": "Worker heartbeat plus /healthz sidecar; readiness checks Knowledge Postgres, pgvector, object storage, Neo4j, ACL metadata, and Bifrost embedding route state.",
+      "watch_patterns": ["workers\\retrieval-indexer\\**", "packages\\config\\**", "packages\\db\\**", "packages\\schemas\\**", "packages\\policy\\**", "packages\\observability\\**", "pyproject.toml", "package.json", "pnpm-lock.yaml"],
+      "health_expectation": "Worker heartbeat plus /healthz sidecar; readiness checks Knowledge Postgres, pgvector, object storage, Neo4j, retrieval toggle validity, context budget/compression controls, ACL metadata, and Bifrost embedding route state.",
       "dependencies": ["knowledge-postgres", "object-storage", "neo4j", "bifrost-gateway", "otel-collector"],
-      "variable_groups": ["Database", "Object storage", "Bifrost/provider", "GitHub App", "Observability", "Eval", "Secrets/encryption"],
+      "variable_groups": ["Retrieval controls", "Database", "Object storage", "Bifrost/provider", "GitHub App", "Observability", "Eval", "Secrets/encryption"],
       "portable_boundary": "Python worker using Postgres/pgvector, S3, Neo4j, and OTLP-compatible clients."
     },
     {
@@ -227,7 +227,7 @@
       "watch_patterns": ["infra\\railway\\**", "workers\\retrieval-indexer\\**"],
       "health_expectation": "HTTP/Bolt readiness plus cypher RETURN 1; import/export restore fixture before production.",
       "dependencies": ["object-storage"],
-      "variable_groups": ["Database", "Object storage", "Observability"],
+      "variable_groups": ["Retrieval controls", "Database", "Object storage", "Observability"],
       "portable_boundary": "Bolt/HTTP endpoints and export/import backups; no Railway-only graph APIs."
     },
     {

@@ -1,0 +1,243 @@
+{
+  "contract_version": "0.1.0",
+  "dataset_id": "retrieval-strategy-controls.v0.1",
+  "dataset_version": "0.1.0",
+  "suite": "retrieval_strategy_controls",
+  "schema_status": "layout_stub_until_shared_eval_schema_generalizes_beyond_acl_safety",
+  "fixture_root": "evals/fixtures/retrieval-strategy-controls",
+  "inert_fixture_mode": true,
+  "no_live_external_calls": true,
+  "production_enablement": false,
+  "source_data_policy": {
+    "synthetic_only": true,
+    "no_real_customer_data": true,
+    "no_real_repo_data": true,
+    "no_live_external_calls": true,
+    "fixture_review_required": true
+  },
+  "categories": [
+    "hybrid_only",
+    "hybrid_graph",
+    "invalid_toggle_fail_closed",
+    "context_budget_compression"
+  ],
+  "artifact_ref_policy": {
+    "required": true,
+    "description": "Each case declares expected gate-result, trace, and audit artifacts that a future runner must write."
+  },
+  "cases": [
+    {
+      "case_id": "retrieval-strategy-hybrid-only",
+      "category": "hybrid_only",
+      "title": "Run retrieval with GraphRAG and Neo4j disabled",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/retrieval-strategy-controls/retrieval-strategy-hybrid-only.json",
+          "sha256_required": true,
+          "description": "Inert fixture for hybrid-only retrieval strategy controls."
+        }
+      ],
+      "inputs": {
+        "strategy_id": "hybrid",
+        "retrieval_config": {
+          "graph_rag_enabled": false,
+          "neo4j_enabled": false,
+          "context_budgeter_enabled": true,
+          "context_compressor_enabled": true
+        }
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Hybrid-only mode does not require Neo4j connectivity.",
+          "Graph candidates and graph paths are absent from the accepted context pack.",
+          "Trace records strategy_id=hybrid and graph_rag_enabled=false."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-hybrid-only/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-hybrid-only/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-hybrid-only/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "strategy_id",
+        "graph_rag_enabled",
+        "neo4j_enabled",
+        "decision"
+      ],
+      "tags": [
+        "retrieval-strategy",
+        "hybrid-only",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "retrieval-strategy-hybrid-graph",
+      "category": "hybrid_graph",
+      "title": "Run retrieval with GraphRAG and Neo4j enabled",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/retrieval-strategy-controls/retrieval-strategy-hybrid-graph.json",
+          "sha256_required": true,
+          "description": "Inert fixture for hybrid+GraphRAG retrieval strategy controls."
+        }
+      ],
+      "inputs": {
+        "strategy_id": "hybrid_graph",
+        "retrieval_config": {
+          "graph_rag_enabled": true,
+          "neo4j_enabled": true,
+          "context_budgeter_enabled": true,
+          "context_compressor_enabled": true
+        }
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Hybrid+GraphRAG mode requires Neo4j readiness evidence.",
+          "Accepted context pack includes at least one cited synthetic graph path.",
+          "Trace records strategy_id=hybrid_graph and graph_provenance_support=true."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-hybrid-graph/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-hybrid-graph/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-hybrid-graph/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "strategy_id",
+        "graph_rag_enabled",
+        "neo4j_enabled",
+        "graph_provenance_support",
+        "decision"
+      ],
+      "tags": [
+        "retrieval-strategy",
+        "graphrag",
+        "neo4j",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "retrieval-strategy-graphrag-without-neo4j-deny",
+      "category": "invalid_toggle_fail_closed",
+      "title": "Fail closed when GraphRAG is enabled but Neo4j is disabled",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/retrieval-strategy-controls/retrieval-strategy-graphrag-without-neo4j-deny.json",
+          "sha256_required": true,
+          "description": "Inert fixture for invalid GraphRAG/Neo4j toggle behavior."
+        }
+      ],
+      "inputs": {
+        "strategy_id": "hybrid_graph",
+        "retrieval_config": {
+          "graph_rag_enabled": true,
+          "neo4j_enabled": false,
+          "context_budgeter_enabled": true,
+          "context_compressor_enabled": true
+        }
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "GraphRAG enabled with Neo4j disabled is rejected before retrieval.",
+          "No graph-shaped context or fallback graph answer is produced.",
+          "Audit event records retrieval_strategy_invalid_toggle."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-graphrag-without-neo4j-deny/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-graphrag-without-neo4j-deny/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-graphrag-without-neo4j-deny/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "strategy_id",
+        "denial_reason",
+        "decision"
+      ],
+      "tags": [
+        "retrieval-strategy",
+        "fail-closed",
+        "graphrag",
+        "neo4j",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "retrieval-strategy-context-budget-compression",
+      "category": "context_budget_compression",
+      "title": "Compress retrieved context under budget while preserving citations",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/retrieval-strategy-controls/retrieval-strategy-context-budget-compression.json",
+          "sha256_required": true,
+          "description": "Inert fixture for context budget/compression behavior."
+        }
+      ],
+      "inputs": {
+        "strategy_id": "hybrid_graph",
+        "candidate_context_tokens": 6000,
+        "max_context_tokens": 2000,
+        "required_citation_ids": [
+          "doc-strategy-001#chunk-strategy-001",
+          "graph-strategy-001#edge-strategy-001"
+        ]
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Final context_pack_tokens is less than or equal to max_context_tokens.",
+          "Required citation IDs and graph edge provenance survive compression.",
+          "Trace records context_budget_policy_id and context_compression_run_id."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-context-budget-compression/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-context-budget-compression/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-context-budget-compression/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "strategy_id",
+        "context_budget_policy_id",
+        "context_compression_run_id",
+        "context_pack_tokens",
+        "decision"
+      ],
+      "tags": [
+        "retrieval-strategy",
+        "context-budget",
+        "context-compression",
+        "track-0",
+        "synthetic"
+      ]
+    }
+  ]
+}

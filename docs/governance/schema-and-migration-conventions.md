@@ -63,7 +63,7 @@ Required columns for these domains:
 | Source reference | Source identifier such as `source_ref`, `repository_ref`, `document_ref`, or an equivalent domain-specific FK/reference. |
 | `index_version` | Version of the index, embedding, graph extraction, or context-pack build that produced the row. |
 
-These columns apply to tables such as `knowledge_source`, `document`, `chunk`, `embedding`, `entity`, `relation`, `repo_symbol`, `api_endpoint`, `decision`, `working_memory`, `episodic_summary`, `semantic_memory`, `decision_memory`, graph metadata tables, and context-pack tables.
+These columns apply to tables such as `knowledge_source`, `document`, `chunk`, `embedding`, `entity`, `relation`, `repo_symbol`, `api_endpoint`, `decision`, `retrieval_strategy_run`, `context_budget_policy`, `context_compression_run`, `context_pack`, `context_pack_item`, `working_memory`, `episodic_summary`, `semantic_memory`, `decision_memory`, graph metadata tables, and context-pack tables.
 
 ## 6. Audit immutability
 
@@ -96,7 +96,7 @@ For each candidate, the owning migration must document expected write rate, rete
 | Provider/model | `provider`, `model`, `model_alias`, `capability`, `price_snapshot`, `rate_limit`, `routing_policy`. |
 | Agents/workflows | `agent_definition`, `agent_run`, `delegation`, `workflow_definition`, `workflow_run`, `workflow_step`, `step_attempt`, `workflow_event`, `workflow_outbox`, `workflow_lease`, `task_artifact`. |
 | Tools/MCP/skills | `tool_definition`, `mcp_server`, `tool_policy`, `tool_call`, `approval_request`, `sandbox_run`, `skill_definition`, `skill_version`. |
-| Knowledge | `knowledge_source`, `document`, `chunk`, `embedding`, `entity`, `relation`, `repo_symbol`, `api_endpoint`, `decision`. |
+| Knowledge | `knowledge_source`, `document`, `chunk`, `embedding`, `entity`, `relation`, `repo_symbol`, `api_endpoint`, `decision`, `retrieval_strategy_run`, `context_budget_policy`, `context_compression_run`, `context_pack`, `context_pack_item`. |
 | Memory | `working_memory`, `episodic_summary`, `semantic_memory`, `decision_memory`, `memory_correction`, `retention_policy`. |
 | Observability/evals | `request_log`, `trace_ref`, `eval_dataset`, `eval_case`, `eval_run`, `metric`, `cost_event`, `audit_event`. |
 

@@ -193,7 +193,7 @@ developer/admin/stakeholder portal. Use TypeScript/TSX for frontend code and gen
 |---|---|---|
 | Operational DB | Railway Postgres | Upgrade within Railway or move to another Postgres provider only after manual approval when production criticality or restore SLO requires it. |
 | Redis/cache/queue helpers | Railway Redis | Upgrade within Railway or move to another Redis provider only after manual approval when availability or throughput SLO requires it. |
-| Knowledge DB/vector/lexical/graph | Postgres full-text + pgvector + **self-hosted Neo4j Community** | Split vector/lexical to Qdrant/Zoekt/OpenSearch only when thresholds are exceeded; keep Neo4j for graph traversal from first graph release. |
+| Knowledge DB/vector/lexical/graph | Postgres full-text + pgvector + **self-hosted Neo4j Community** | Split vector/lexical to Qdrant/Zoekt/OpenSearch only when thresholds are exceeded; keep Neo4j for graph traversal from the first production retrieval release. |
 | Object storage | Railway Object Storage bucket using the S3-compatible API | Move to another S3-compatible provider only after manual approval when cost, lifecycle, or compliance requires it. |
 | Trace/eval/cost tables | Postgres tables separated from gateway policy compute | Split when write volume affects gateway/control latency. |
 
@@ -264,6 +264,18 @@ first-release provider is Railway-hosted or self-hosted.
 
 **Model providers:** Model API providers are governed separately by provider data-class policy, budget
 approval, eval gates, and this managed-service approval gate when the provider is Azure, AWS, or GCP.
+
+## ADR-018: Retrieval strategy controls and context budget gates
+
+**Decision:** Neo4j-backed GraphRAG, lexical retrieval, general embeddings, reranking, context budgeting,
+and context compression are day-one retrieval capabilities. They remain runtime-toggleable through typed
+config so development, application runs, and evals can compare `hybrid`, `hybrid_graph`, and
+`hybrid_graph_shadow` strategies. GraphRAG enabled while Neo4j is disabled fails closed. Code-specific
+embeddings stay disabled until eval evidence proves material improvement.
+
+**Gate:** Production retrieval cannot be enabled unless retrieval strategy controls, context
+budget/compression checks, GraphRAG provenance checks, ACL safety, retrieval recall, and faithfulness
+gates pass.
 
 ## Roadmap
 
@@ -353,19 +365,24 @@ Build:
 - docs connector
 - metadata DB
 - graph schema and provenance model
+- Neo4j Community graph traversal store
+- runtime retrieval strategy controls for `hybrid`, `hybrid_graph`, and `hybrid_graph_shadow`
+- context budgeter and compressor
 - deterministic repo graph extraction for initial languages
 - Postgres full-text/symbol index
 - pgvector index
-- hybrid retrieval
+- hybrid retrieval plus Neo4j-backed GraphRAG
 - ACL filtering
 - citation generation
-- embedding/reranker eval
+- embedding/reranker, GraphRAG, retrieval strategy, and context budget/compression evals
 
 Exit:
 
 - agents answer repo/doc questions with citations
 - retrieval eval baseline passes
 - ACL leak tests pass
+- GraphRAG/Neo4j can be enabled, disabled, and shadowed through typed config
+- context packs stay within budget while preserving citations, ACL metadata, graph provenance, and taint markers
 - graph-backed APIs exist for stakeholder portal
 
 ### Track 5 - Stakeholder portal
@@ -387,13 +404,13 @@ Exit:
 - non-developer personas can answer project questions without IDE access
 - persona-specific answer formats pass eval gates
 
-### Track 6 - GraphRAG enrichment
+### Track 6 - Advanced GraphRAG enrichment
 
 Build:
 
 - expanded deterministic repo graph coverage
 - LLM entity/relation extraction for unstructured docs/tickets/conversations
-- graph expansion retrieval
+- advanced graph expansion retrieval beyond the day-one Neo4j GraphRAG path
 - community/domain summaries where useful
 - code-to-business traceability
 
@@ -444,15 +461,15 @@ The first production release is complete when Tracks 0-4 pass exit criteria and 
 - read-only Tool Broker
 - durable workflow restart/resume
 - GitHub ACL sync
-- repo/doc retrieval with citations
+- repo/doc retrieval with citations, Neo4j-backed GraphRAG, and context budget/compression controls
 - eval gates
 - cost attribution
 - break-glass route
 - admin portal
 - developer onboarding snippets
 
-Stakeholder portal ships after the first production release. GraphRAG foundation ships with the first
-graph-enabled release through Neo4j; advanced graph analytics/community summaries can come later.
+Stakeholder portal ships after the first production release. Neo4j-backed GraphRAG foundation ships in
+the first production retrieval release; advanced graph analytics/community summaries can come later.
 
 ## Deployment baseline
 
