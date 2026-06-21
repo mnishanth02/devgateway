@@ -8,6 +8,13 @@
       "when": 1781967462377,
       "tag": "0000_fair_bushwacker",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782032394738,
+      "tag": "0001_abandoned_talos",
+      "breakpoints": true
     }
   ]
 }
