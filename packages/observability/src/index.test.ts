@@ -17,6 +17,7 @@ import {
   emitCostEvent,
   ForbiddenTelemetryFieldError,
   formatAuditEvent,
+  formatBudgetLifecycleCostEvent,
   formatCostEvent,
   initializeNodeOpenTelemetry,
   registerFastifyRequestTracing,
@@ -458,6 +459,85 @@ describe('cost telemetry helpers', () => {
     assert.equal(row.actual_total_tokens, 40);
     assert.equal(row.actual_cost_amount, 0.02);
     assert.equal(row.metadata.aggregation_targets, event.aggregation_targets);
+  });
+
+  it('preserves workflow, delegation, and tool-class aggregation targets', () => {
+    const event = formatCostEvent(
+      baseCostInput({
+        aggregationTargets: {
+          tenant_id: 'tenant_1',
+          org_id: 'org_1',
+          team_id: 'team_1',
+          workflow_run_id: 'workflow_run_1',
+          delegation_id: 'delegation_1',
+          tool_class: 'code_interpreter',
+          reset_period_start: '2026-06-01T00:00:00.000Z',
+          reset_period_end: '2026-07-01T00:00:00.000Z',
+        },
+      }),
+    );
+
+    assert.equal(event.aggregation_targets.workflow_run_id, 'workflow_run_1');
+    assert.equal(event.aggregation_targets.delegation_id, 'delegation_1');
+    assert.equal(event.aggregation_targets.tool_class, 'code_interpreter');
+    assert.equal(toCostEventContractRow(event).metadata.aggregation_targets, event.aggregation_targets);
+  });
+
+  it('formats budget lifecycle reservation, settlement, and release cost events', () => {
+    const noActualUsage = { source: 'not_available' } as const;
+    const reservation = formatBudgetLifecycleCostEvent({
+      ...baseCostInput({ actual: noActualUsage, usageSource: 'not_available' }),
+      phase: 'reservation',
+    });
+    const settlement = formatBudgetLifecycleCostEvent({
+      ...baseCostInput(),
+      phase: 'settlement',
+    });
+    const release = formatBudgetLifecycleCostEvent({
+      ...baseCostInput({ actual: noActualUsage, usageSource: 'not_available' }),
+      phase: 'release',
+    });
+
+    assert.equal(reservation.eventName, 'cost.budget.reservation');
+    assert.equal(reservation.event.event_type, 'estimate');
+    assert.equal(reservation.event.attempt_status, 'started');
+    assert.equal(reservation.event.actual.source, 'not_available');
+    assert.equal(reservation.metadata.budget_lifecycle_phase, 'reservation');
+    assert.equal(reservation.metadata.represented_event_type, 'estimate');
+
+    assert.equal(settlement.eventName, 'cost.budget.settlement');
+    assert.equal(settlement.event.event_type, 'actual');
+    assert.equal(settlement.event.attempt_status, 'succeeded');
+    assert.equal(settlement.metadata.budget_lifecycle_phase, 'settlement');
+
+    assert.equal(release.eventName, 'cost.budget.release');
+    assert.equal(release.event.event_type, 'reconciliation');
+    assert.equal(release.event.attempt_status, 'cancelled');
+    assert.equal(release.event.actual.source, 'not_available');
+    assert.equal(release.event.usage_source, 'not_available');
+    assert.equal(release.metadata.budget_lifecycle_phase, 'release');
+  });
+
+  it('rejects forbidden budget lifecycle aggregation target fields', () => {
+    assert.throws(
+      () =>
+        formatBudgetLifecycleCostEvent({
+          ...baseCostInput({
+            aggregationTargets: {
+              tenant_id: 'tenant_1',
+              org_id: 'org_1',
+              team_id: 'team_1',
+              workflow_run_id: 'dg_vk_rawSecretExample1234567890',
+              delegation_id: 'delegation_1',
+              tool_class: 'code_interpreter',
+              reset_period_start: '2026-06-01T00:00:00.000Z',
+              reset_period_end: '2026-07-01T00:00:00.000Z',
+            },
+          }),
+          phase: 'reservation',
+        }),
+      ForbiddenTelemetryFieldError,
+    );
   });
 
   it('fails closed for missing or test cost sinks in production', async () => {

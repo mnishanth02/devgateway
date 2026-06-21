@@ -51,7 +51,16 @@ export function operationalSnapshotQueryOptions() {
 
 function summarizeEndpoints(snapshot: OperationalControlApiSnapshot): readonly EndpointStatus[] {
   return (Object.keys(CONTROL_API_SNAPSHOT_ENDPOINTS) as ControlApiSnapshotKey[]).map((key) => {
-    const result = snapshot[key];
+    const result = snapshot[key] as OperationalControlApiSnapshot[ControlApiSnapshotKey] | undefined;
+    if (result === undefined) {
+      return {
+        key,
+        path: CONTROL_API_SNAPSHOT_ENDPOINTS[key],
+        status: 0,
+        ok: false,
+        detail: 'endpoint missing from snapshot',
+      };
+    }
     return {
       key,
       path: result.path,

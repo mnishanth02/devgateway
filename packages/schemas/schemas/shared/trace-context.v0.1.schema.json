@@ -68,7 +68,18 @@
     },
     "routeIntent": {
       "type": "string",
-      "enum": ["chat", "completion", "embedding", "eval", "tool_planning", "tool_execution", "policy_check"]
+      "enum": [
+        "chat",
+        "completion",
+        "embedding",
+        "eval",
+        "agent_planning",
+        "sub_agent_execution",
+        "tool_planning",
+        "tool_execution",
+        "synthesis",
+        "policy_check"
+      ]
     },
     "environment": {
       "type": "string",
@@ -121,7 +132,21 @@
       "properties": {
         "component": {
           "type": "string",
-          "enum": ["control_api", "bifrost", "provider", "audit", "cost", "eval", "tool_broker", "admin_portal"]
+          "enum": [
+            "control_api",
+            "bifrost",
+            "provider",
+            "audit",
+            "cost",
+            "eval",
+            "tool_broker",
+            "admin_portal",
+            "workflow_runtime",
+            "agent_runtime",
+            "supervisor_agent",
+            "sub_agent_executor",
+            "tool_integrations"
+          ]
         },
         "span_id": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
         "entered_at": { "type": "string", "format": "date-time" },

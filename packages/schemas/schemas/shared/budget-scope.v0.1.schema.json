@@ -73,7 +73,7 @@
     },
     "budgetScopeType": {
       "type": "string",
-      "enum": ["org", "team", "project", "principal", "virtual_key"]
+      "enum": ["org", "team", "project", "principal", "virtual_key", "workflow", "delegation", "tool_class"]
     },
     "ownerRef": {
       "type": "object",

@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/agent/agent-definition.v0.1.schema.json",
+  "title": "DevGateway Agent Definition Contract v0.1",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "agent_definition_id",
+    "agent_definition_version",
+    "role",
+    "status",
+    "owner_ref",
+    "allowed_model_aliases",
+    "allowed_tool_bundles",
+    "output_schema_refs",
+    "instruction_template_refs",
+    "eval_suite_refs",
+    "rollout_policy",
+    "gate_result_refs",
+    "policy_version",
+    "registry_version",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "agent_definition_id": { "$ref": "#/$defs/nonEmptyString" },
+    "agent_definition_version": { "$ref": "#/$defs/nonEmptyString" },
+    "role": { "$ref": "#/$defs/agentRole" },
+    "status": { "$ref": "#/$defs/lifecycleStatus" },
+    "owner_ref": { "$ref": "#/$defs/ownerRef" },
+    "allowed_model_aliases": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/nonEmptyString" }, "uniqueItems": true },
+    "allowed_tool_bundles": { "type": "array", "items": { "$ref": "#/$defs/toolBundleRef" }, "uniqueItems": true },
+    "output_schema_refs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/schemaRef" }, "uniqueItems": true },
+    "instruction_template_refs": { "type": "array", "items": { "$ref": "#/$defs/opaqueRef" }, "uniqueItems": true },
+    "eval_suite_refs": { "type": "array", "items": { "$ref": "#/$defs/evalSuiteRef" }, "uniqueItems": true },
+    "rollout_policy": { "$ref": "#/$defs/rolloutPolicy" },
+    "gate_result_refs": { "type": "array", "items": { "$ref": "#/$defs/opaqueRef" }, "uniqueItems": true },
+    "policy_version": { "$ref": "#/$defs/nonEmptyString" },
+    "registry_version": { "$ref": "#/$defs/nonEmptyString" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "production" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "gate_result_refs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/opaqueRef" }, "uniqueItems": true },
+          "rollout_policy": {
+            "allOf": [
+              { "$ref": "#/$defs/rolloutPolicy" },
+              { "properties": { "production_enabled": { "const": true }, "rollout_state": { "const": "production" } } }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "nullableNonEmptyString": { "type": ["string", "null"], "minLength": 1 },
+    "agentRole": { "type": "string", "enum": ["supervisor", "planner", "researcher", "synthesizer", "reviewer", "tool_executor", "custom"] },
+    "lifecycleStatus": { "type": "string", "enum": ["draft", "eval_ready", "approved", "limited_rollout", "production", "disabled"] },
+    "dataClass": { "type": "string", "enum": ["public", "internal", "confidential", "restricted"] },
+    "schemaRef": {
+      "type": "object",
+      "required": ["schema_id", "json_pointer", "schema_version", "enforcement"],
+      "properties": {
+        "schema_id": { "$ref": "#/$defs/nonEmptyString" },
+        "json_pointer": { "type": "string", "pattern": "^#(/.*)?$" },
+        "schema_version": { "$ref": "#/$defs/nonEmptyString" },
+        "enforcement": { "type": "string", "enum": ["validate_before_dispatch", "validate_before_execution", "validate_before_synthesis", "validate_before_persist"] }
+      },
+      "additionalProperties": false
+    },
+    "opaqueRef": {
+      "type": "object",
+      "required": ["ref_id", "ref_type", "scope_ref"],
+      "properties": {
+        "ref_id": { "$ref": "#/$defs/nonEmptyString" },
+        "ref_type": { "$ref": "#/$defs/nonEmptyString" },
+        "scope_ref": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "toolRef": {
+      "type": "object",
+      "required": ["tool_definition_id", "tool_version", "risk_tier"],
+      "properties": {
+        "tool_definition_id": { "$ref": "#/$defs/nonEmptyString" },
+        "tool_version": { "$ref": "#/$defs/nonEmptyString" },
+        "risk_tier": { "type": "string", "enum": ["read_only_low", "read_only_medium", "approval_required", "disallowed_write", "network_restricted"] }
+      },
+      "additionalProperties": false
+    },
+    "toolBundleRef": {
+      "type": "object",
+      "required": ["tool_bundle_id", "tool_bundle_version", "allowed_tool_refs", "disallowed_tool_refs", "policy_version"],
+      "properties": {
+        "tool_bundle_id": { "$ref": "#/$defs/nonEmptyString" },
+        "tool_bundle_version": { "$ref": "#/$defs/nonEmptyString" },
+        "allowed_tool_refs": { "type": "array", "items": { "$ref": "#/$defs/toolRef" }, "uniqueItems": true },
+        "disallowed_tool_refs": { "type": "array", "items": { "$ref": "#/$defs/toolRef" }, "uniqueItems": true },
+        "policy_version": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "ownerRef": {
+      "type": "object",
+      "required": ["owner_type", "owner_id", "project_id", "principal_id"],
+      "properties": {
+        "owner_type": { "type": "string", "enum": ["principal", "team", "project", "service"] },
+        "owner_id": { "$ref": "#/$defs/nonEmptyString" },
+        "project_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "principal_id": { "$ref": "#/$defs/nullableNonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "evalSuiteRef": {
+      "type": "object",
+      "required": ["eval_suite_id", "eval_suite_version", "gate_result_ref"],
+      "properties": {
+        "eval_suite_id": { "$ref": "#/$defs/nonEmptyString" },
+        "eval_suite_version": { "$ref": "#/$defs/nonEmptyString" },
+        "gate_result_ref": { "$ref": "#/$defs/opaqueRef" }
+      },
+      "additionalProperties": false
+    },
+    "rolloutPolicy": {
+      "type": "object",
+      "required": ["rollout_state", "production_enabled", "allowed_project_refs", "allowed_principal_refs"],
+      "properties": {
+        "rollout_state": { "type": "string", "enum": ["none", "limited", "production", "disabled"] },
+        "production_enabled": { "type": "boolean" },
+        "allowed_project_refs": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" }, "uniqueItems": true },
+        "allowed_principal_refs": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "agentDefinitionRef": {
+      "type": "object",
+      "required": ["agent_definition_id", "agent_definition_version", "role"],
+      "properties": {
+        "agent_definition_id": { "$ref": "#/$defs/nonEmptyString" },
+        "agent_definition_version": { "$ref": "#/$defs/nonEmptyString" },
+        "role": { "$ref": "#/$defs/agentRole" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

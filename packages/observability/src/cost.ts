@@ -8,6 +8,7 @@ import {
   type CostEventType,
   type CostMeasurement,
   type CostMeasurementSource,
+  type CostPhase,
   type DataClass,
   type DenialReasonCode,
   type EnvironmentName,
@@ -112,6 +113,45 @@ export interface EmitCostEventOptions {
   readonly environment?: EnvironmentName;
 }
 
+export type CostBudgetLifecyclePhase = Extract<CostPhase, 'reservation' | 'settlement' | 'release'>;
+export type CostBudgetLifecycleEventName = `cost.budget.${CostBudgetLifecyclePhase}`;
+
+export interface CostBudgetLifecycleEventInput extends Omit<CostEventInput, 'attemptStatus' | 'eventType'> {
+  readonly phase: CostBudgetLifecyclePhase;
+}
+
+export interface CostBudgetLifecycleEvent {
+  readonly phase: CostBudgetLifecyclePhase;
+  readonly eventName: CostBudgetLifecycleEventName;
+  readonly event: CostEventRecord;
+  readonly metadata: Readonly<Record<string, unknown>>;
+}
+
+const budgetLifecycleCostEventMapping = {
+  reservation: {
+    eventName: 'cost.budget.reservation',
+    eventType: 'estimate',
+    attemptStatus: 'started',
+  },
+  settlement: {
+    eventName: 'cost.budget.settlement',
+    eventType: 'actual',
+    attemptStatus: 'succeeded',
+  },
+  release: {
+    eventName: 'cost.budget.release',
+    eventType: 'reconciliation',
+    attemptStatus: 'cancelled',
+  },
+} as const satisfies Record<
+  CostBudgetLifecyclePhase,
+  Readonly<{
+    readonly eventName: CostBudgetLifecycleEventName;
+    readonly eventType: CostEventType;
+    readonly attemptStatus: CostAttemptStatus;
+  }>
+>;
+
 export function formatCostEvent(input: CostEventInput): CostEventRecord {
   assertNoForbiddenTelemetryFields(input, 'cost event input');
   const estimated = formatCostMeasurement(input.estimated, 'registry_estimate');
@@ -164,6 +204,41 @@ export function formatCostEvent(input: CostEventInput): CostEventRecord {
   validateCostDecision(event);
   assertNoForbiddenTelemetryFields(event, 'cost event');
   return event;
+}
+
+export function formatBudgetLifecycleCostEvent(input: CostBudgetLifecycleEventInput): CostBudgetLifecycleEvent {
+  assertNoForbiddenTelemetryFields(input, 'budget lifecycle cost event input');
+  const { phase, ...costInput } = input;
+  const mapping = budgetLifecycleCostEventMapping[phase];
+  const releaseDefaults =
+    phase === 'release'
+      ? {
+          actual: costInput.actual ?? { source: 'not_available' },
+          usageSource: costInput.usageSource ?? 'not_available',
+        }
+      : {};
+  const event = formatCostEvent({
+    ...costInput,
+    ...releaseDefaults,
+    eventType: mapping.eventType,
+    attemptStatus: mapping.attemptStatus,
+  });
+  const metadata = removeUndefined({
+    budget_lifecycle_phase: phase,
+    budget_lifecycle_event_name: mapping.eventName,
+    represented_event_type: event.event_type,
+    represented_attempt_status: event.attempt_status,
+    workflow_run_id: event.aggregation_targets.workflow_run_id,
+    delegation_id: event.aggregation_targets.delegation_id,
+    tool_class: event.aggregation_targets.tool_class,
+  });
+  assertNoForbiddenTelemetryFields(metadata, 'budget lifecycle cost event metadata');
+  return {
+    phase,
+    eventName: mapping.eventName,
+    event,
+    metadata,
+  };
 }
 
 export async function emitCostEvent(
@@ -264,6 +339,15 @@ function formatAggregationTargets(input: CostEventInput): CostAggregationTargets
     principal_id: targets.principal_id ?? input.principalId,
     virtual_key_id: targets.virtual_key_id ?? input.virtualKeyId,
     budget_scope_id: targets.budget_scope_id ?? input.budgetScopeId,
+    ...(targets.workflow_run_id === undefined
+      ? {}
+      : { workflow_run_id: nullableNonEmptyString(targets.workflow_run_id, 'aggregationTargets.workflow_run_id') }),
+    ...(targets.delegation_id === undefined
+      ? {}
+      : { delegation_id: nullableNonEmptyString(targets.delegation_id, 'aggregationTargets.delegation_id') }),
+    ...(targets.tool_class === undefined
+      ? {}
+      : { tool_class: nullableNonEmptyString(targets.tool_class, 'aggregationTargets.tool_class') }),
     model_alias: targets.model_alias ?? input.modelAlias,
     provider_id: targets.provider_id ?? input.providerId,
     environment: targets.environment ?? input.environment,
@@ -313,6 +397,11 @@ function requireNonEmpty(value: string, field: string): string {
     throw new Error(`Cost event requires non-empty ${field}`);
   }
   return value;
+}
+
+function nullableNonEmptyString(value: string | null, field: string): string | null {
+  if (value === null) return null;
+  return requireNonEmpty(value, field);
 }
 
 function positiveInteger(value: number, field: string): number {

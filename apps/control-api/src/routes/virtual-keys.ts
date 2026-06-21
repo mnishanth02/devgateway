@@ -3,7 +3,10 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 import {
+  budgetScopeTypes,
   gatewayControlContractVersion,
+  routeIntents,
+  type BudgetScopeType,
   type EnvironmentName,
   type PrincipalBinding,
   type PrincipalType,
@@ -82,7 +85,7 @@ export interface CreateVirtualKeyRequest {
   readonly org_id?: string | undefined;
   readonly team_ids?: readonly string[] | undefined;
   readonly budget_scope_id: string;
-  readonly budget_scope_type?: 'org' | 'team' | 'project' | 'principal' | 'virtual_key' | undefined;
+  readonly budget_scope_type?: BudgetScopeType | undefined;
   readonly environment?: EnvironmentName | undefined;
   readonly scope_constraints: VirtualKeyScopeConstraints;
   readonly policy_version: string;
@@ -739,18 +742,10 @@ const virtualKeyPublicResponseSchema = z
 
 const environmentSchema = z.enum(['development', 'test', 'staging', 'production']);
 const principalTypeSchema = z.enum(['user', 'service_account', 'automation', 'system']);
-const budgetScopeTypeSchema = z.enum(['org', 'team', 'project', 'principal', 'virtual_key']);
+const budgetScopeTypeSchema = z.enum(budgetScopeTypes);
 const virtualKeyStatusSchema = z.enum(['draft', 'active', 'rotating', 'revoked', 'expired', 'disabled']);
 const dataClassSchema = z.enum(['public', 'internal', 'confidential', 'restricted']);
-const routeIntentSchema = z.enum([
-  'chat',
-  'completion',
-  'embedding',
-  'eval',
-  'tool_planning',
-  'tool_execution',
-  'policy_check',
-]);
+const routeIntentSchema = z.enum(routeIntents);
 
 const scopeConstraintsSchema = z
   .object({

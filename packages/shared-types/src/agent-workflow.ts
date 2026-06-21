@@ -1,0 +1,726 @@
+import { gatewayControlContractVersion, type DataClass, type GatewayControlContractVersion } from './gateway-control.ts';
+
+export const agentWorkflowContractVersion = gatewayControlContractVersion;
+
+export const workflowStates = [
+  'created',
+  'queued',
+  'planning',
+  'running',
+  'waiting_on_child',
+  'synthesizing',
+  'succeeded',
+  'failed',
+  'cancelled',
+  'timed_out',
+  'denied',
+] as const;
+export const workflowTerminalStates = ['succeeded', 'failed', 'cancelled', 'timed_out', 'denied'] as const;
+export const workflowAllowedTransitions = {
+  created: ['queued', 'failed', 'denied'],
+  queued: ['planning', 'cancelled', 'timed_out', 'failed', 'denied'],
+  planning: ['running', 'waiting_on_child', 'cancelled', 'timed_out', 'failed', 'denied'],
+  running: ['waiting_on_child', 'synthesizing', 'succeeded', 'cancelled', 'timed_out', 'failed', 'denied'],
+  waiting_on_child: ['running', 'synthesizing', 'cancelled', 'timed_out', 'failed', 'denied'],
+  synthesizing: ['succeeded', 'cancelled', 'timed_out', 'failed', 'denied'],
+  succeeded: [],
+  failed: [],
+  cancelled: [],
+  timed_out: [],
+  denied: [],
+} satisfies Readonly<Record<WorkflowState, readonly WorkflowState[]>>;
+
+export const workflowEventTypes = [
+  'workflow_created',
+  'state_transitioned',
+  'agent_run_started',
+  'delegation_created',
+  'delegation_completed',
+  'tool_call_decided',
+  'artifact_recorded',
+  'budget_recorded',
+  'audit_recorded',
+  'workflow_completed',
+  'workflow_failed',
+] as const;
+
+export const agentRoles = ['supervisor', 'planner', 'researcher', 'synthesizer', 'reviewer', 'tool_executor', 'custom'] as const;
+export const agentDefinitionStatuses = ['draft', 'eval_ready', 'approved', 'limited_rollout', 'production', 'disabled'] as const;
+export const agentRunStatuses = [
+  'queued',
+  'leased',
+  'running',
+  'waiting_on_child',
+  'succeeded',
+  'failed',
+  'cancelled',
+  'timed_out',
+  'denied',
+] as const;
+export const delegationStatuses = ['draft', 'queued', 'dispatched', 'running', 'succeeded', 'failed', 'cancelled', 'timed_out', 'denied'] as const;
+export const subAgentResultStatuses = ['succeeded', 'failed', 'cancelled', 'timed_out', 'denied', 'invalid_output'] as const;
+
+export const artifactSensitivityLabels = ['public', 'internal', 'confidential', 'restricted'] as const;
+export const artifactKinds = [
+  'workflow_input_ref',
+  'delegation_result',
+  'tool_result',
+  'citation',
+  'trace_evidence',
+  'cost_report',
+  'audit_report',
+  'schema_validation',
+  'runtime_log',
+  'other',
+] as const;
+export const artifactSourceKinds = ['workflow', 'delegation', 'agent_run', 'tool_call', 'eval', 'upload'] as const;
+
+export const toolRiskTiers = [
+  'read_only_low',
+  'read_only_medium',
+  'approval_required',
+  'disallowed_write',
+  'network_restricted',
+] as const;
+export const toolPolicyDecisions = ['allowed', 'denied', 'approval_required'] as const;
+export const toolCallStatuses = ['queued', 'running', 'succeeded', 'failed', 'denied', 'cancelled', 'timed_out'] as const;
+export const toolDefinitionStatuses = ['draft', 'active', 'disabled', 'archived'] as const;
+
+export const skillLifecycleStates = ['draft', 'eval_ready', 'approved', 'limited_rollout', 'production', 'disabled'] as const;
+
+export const agentWorkflowMetadataForbiddenFields = [
+  'one_time_secret',
+  'raw_secret',
+  'secret',
+  'value',
+  'provider_key',
+  'provider_secret',
+  'api_key',
+  'token',
+  'access_token',
+  'refresh_token',
+  'id_token',
+  'authorization',
+  'password',
+  'private_key',
+  'credential',
+  'signed_url',
+  'raw_context',
+  'raw_artifact',
+  'raw_input',
+  'raw_output',
+  'raw_prompt',
+  'raw_completion',
+] as const;
+
+export type AgentWorkflowContractVersion = typeof agentWorkflowContractVersion;
+export type WorkflowState = (typeof workflowStates)[number];
+export type WorkflowTerminalState = (typeof workflowTerminalStates)[number];
+export type WorkflowEventType = (typeof workflowEventTypes)[number];
+export type AgentRole = (typeof agentRoles)[number];
+export type AgentDefinitionStatus = (typeof agentDefinitionStatuses)[number];
+export type AgentRunStatus = (typeof agentRunStatuses)[number];
+export type DelegationStatus = (typeof delegationStatuses)[number];
+export type SubAgentResultStatus = (typeof subAgentResultStatuses)[number];
+export type ArtifactSensitivityLabel = (typeof artifactSensitivityLabels)[number];
+export type ArtifactKind = (typeof artifactKinds)[number];
+export type ArtifactSourceKind = (typeof artifactSourceKinds)[number];
+export type ToolRiskTier = (typeof toolRiskTiers)[number];
+export type ToolPolicyDecision = (typeof toolPolicyDecisions)[number];
+export type ToolCallStatus = (typeof toolCallStatuses)[number];
+export type ToolDefinitionStatus = (typeof toolDefinitionStatuses)[number];
+export type SkillLifecycleState = (typeof skillLifecycleStates)[number];
+export type AgentWorkflowMetadataForbiddenField = (typeof agentWorkflowMetadataForbiddenFields)[number];
+export type ToolClass = string;
+export type NullableDateTime = string | null;
+export type IdempotencyScope = 'workflow' | 'step' | 'delegation' | 'agent_run' | 'tool_call' | 'artifact_write' | 'skill_publish';
+export type SchemaEnforcement =
+  | 'validate_before_dispatch'
+  | 'validate_before_execution'
+  | 'validate_before_synthesis'
+  | 'validate_before_persist';
+export type CostPhase = 'estimate' | 'reservation' | 'settlement' | 'release' | 'reconciliation';
+export type AgentFailureType =
+  | 'policy_denial'
+  | 'budget_denial'
+  | 'timeout'
+  | 'validation_error'
+  | 'tool_denial'
+  | 'runtime_error'
+  | 'cancelled';
+
+export interface AgentWorkflowScopeRef {
+  readonly principal_id: string;
+  readonly project_id: string;
+  readonly data_class: DataClass;
+  readonly budget_scope_id: string;
+  readonly policy_version: string;
+  readonly registry_version: string;
+}
+
+export interface TraceContextRef {
+  readonly trace_context_id: string;
+  readonly span_id: string;
+  readonly propagation_ref: string;
+}
+
+export interface AgentWorkflowTraceRef {
+  readonly trace_id: string;
+  readonly trace_context_ref: TraceContextRef;
+}
+
+export interface ScopedAgentContractFields extends AgentWorkflowScopeRef, AgentWorkflowTraceRef {
+  readonly contract_version: GatewayControlContractVersion;
+}
+
+export interface SchemaRef {
+  readonly schema_id: string;
+  readonly json_pointer: string;
+  readonly schema_version: string;
+  readonly enforcement: SchemaEnforcement;
+}
+
+export type OutputSchemaRef = SchemaRef;
+
+export interface OpaqueRef {
+  readonly ref_id: string;
+  readonly ref_type: string;
+  readonly scope_ref: string;
+}
+
+export type OpaqueContextRef = OpaqueRef;
+
+export interface ToolRef {
+  readonly tool_definition_id: string;
+  readonly tool_version: string;
+  readonly risk_tier: ToolRiskTier;
+}
+
+export interface ToolBundleRef {
+  readonly tool_bundle_id: string;
+  readonly tool_bundle_version: string;
+  readonly allowed_tool_refs: readonly ToolRef[];
+  readonly disallowed_tool_refs: readonly ToolRef[];
+  readonly policy_version: string;
+}
+
+export interface OwnerRef {
+  readonly owner_type: 'principal' | 'team' | 'project' | 'service';
+  readonly owner_id: string;
+  readonly project_id: string | null;
+  readonly principal_id: string | null;
+}
+
+export interface EvalSuiteRef {
+  readonly eval_suite_id: string;
+  readonly eval_suite_version: string;
+  readonly gate_result_ref: OpaqueRef;
+}
+
+export interface RolloutPolicy {
+  readonly rollout_state: 'none' | 'limited' | 'production' | 'disabled';
+  readonly production_enabled: boolean;
+  readonly allowed_project_refs: readonly string[];
+  readonly allowed_principal_refs: readonly string[];
+}
+
+export interface AgentDefinitionRef {
+  readonly agent_definition_id: string;
+  readonly agent_definition_version: string;
+  readonly role: AgentRole;
+}
+
+export interface TimeoutPolicy {
+  readonly queue_seconds: number;
+  readonly execution_seconds: number;
+  readonly idle_seconds: number;
+  readonly overall_seconds: number;
+}
+
+export interface IdempotencyRef {
+  readonly idempotency_key: string;
+  readonly scope: IdempotencyScope;
+  readonly dedupe_ref: string;
+  readonly expires_at: string;
+}
+
+export interface ArtifactRef {
+  readonly artifact_id: string;
+  readonly artifact_kind: string;
+  readonly data_class: DataClass;
+  readonly sha256: string;
+  readonly size_bytes: number;
+}
+
+export interface TaskArtifactRef extends ArtifactRef {
+  readonly artifact_kind: ArtifactKind;
+}
+
+export interface AuditRef {
+  readonly audit_event_id: string;
+  readonly audit_stream: string;
+  readonly recorded_at: string;
+}
+
+export interface CostRef {
+  readonly cost_event_id: string;
+  readonly budget_scope_id: string;
+  readonly cost_phase: CostPhase;
+  readonly recorded_at: string;
+}
+
+export interface LeaseRef {
+  readonly lease_id: string | null;
+  readonly lease_owner_ref: string | null;
+  readonly heartbeat_at: NullableDateTime;
+  readonly expires_at: NullableDateTime;
+}
+
+export interface LeaseState extends LeaseRef {
+  readonly lease_status: 'none' | 'active' | 'expired' | 'released';
+}
+
+export interface BudgetReservationRef {
+  readonly reservation_id: string;
+  readonly budget_scope_id: string;
+  readonly currency: string;
+  readonly reserved_amount: number;
+  readonly reservation_status: 'reserved' | 'settled' | 'released' | 'denied';
+}
+
+export interface ApprovalPolicy {
+  readonly approval_required: boolean;
+  readonly approval_ref: string | null;
+  readonly approver_ref: string | null;
+  readonly policy_ref: string;
+}
+
+export interface ProvenanceRequirement {
+  readonly citation_required: boolean;
+  readonly artifact_reference_required: boolean;
+  readonly minimum_confidence: number;
+  readonly allowed_source_classes: readonly (DataClass | 'verified_tool' | 'system')[];
+}
+
+export interface FailureRef {
+  readonly failure_type: AgentFailureType;
+  readonly failure_code: string;
+  readonly failure_ref: string;
+  readonly retryable: boolean;
+}
+
+export type FailureCause = FailureRef;
+
+export interface WorkflowStepRef {
+  readonly step_id: string;
+  readonly step_type: 'planning' | 'delegation' | 'tool_call' | 'model_call' | 'synthesis' | 'terminalization';
+  readonly step_status: WorkflowState;
+  readonly agent_run_id: string | null;
+  readonly delegation_id: string | null;
+}
+
+export interface WorkflowStateTransition {
+  readonly from_status: WorkflowState | null;
+  readonly to_status: WorkflowState | null;
+  readonly transition_reason_ref: string | null;
+}
+
+export interface WorkflowEventActorRef {
+  readonly actor_type: 'system' | 'principal' | 'agent' | 'tool' | 'worker';
+  readonly actor_ref: string;
+  readonly principal_id: string | null;
+}
+
+export interface StructuredResultRef {
+  readonly result_ref_id: string;
+  readonly schema_ref: SchemaRef;
+  readonly artifact_ref: ArtifactRef;
+  readonly validation_status: 'not_validated' | 'valid' | 'invalid';
+}
+
+export interface CitationRef {
+  readonly citation_ref_id: string;
+  readonly artifact_ref: ArtifactRef;
+  readonly locator_ref: string;
+  readonly source_class: DataClass | 'verified_tool' | 'system';
+  readonly retrieved_at: string;
+}
+
+export interface UsageRef {
+  readonly usage_id: string;
+  readonly measurement_ref: string;
+  readonly cost_refs: readonly CostRef[];
+}
+
+export interface PolicyRef {
+  readonly policy_version: string;
+  readonly policy_decision_ref: string;
+  readonly evaluated_at: string;
+}
+
+export interface StorageRef {
+  readonly storage_system: 's3' | 'azure_blob' | 'gcs' | 'filesystem' | 'artifact_service';
+  readonly container_ref: string;
+  readonly object_path_ref: string;
+  readonly version_ref: string | null;
+}
+
+export interface TaskArtifactOwnerRef {
+  readonly owner_type: 'workflow' | 'delegation' | 'agent_run' | 'tool_call' | 'skill' | 'principal';
+  readonly owner_id: string;
+  readonly principal_id: string;
+  readonly project_id: string;
+}
+
+export interface ArtifactSourceRef {
+  readonly source_type: ArtifactSourceKind;
+  readonly source_id: string;
+  readonly produced_by_ref: string;
+}
+
+export interface ArtifactRetentionPolicy {
+  readonly retained_until: NullableDateTime;
+  readonly delete_after_seconds: number | null;
+  readonly legal_hold: boolean;
+}
+
+export interface ArtifactSignedAccessPolicy {
+  readonly signed_access_allowed: boolean;
+  readonly expires_at: NullableDateTime;
+  readonly audience_scope_ref: string;
+}
+
+export interface ArtifactSignedUrlPolicy extends ArtifactSignedAccessPolicy {}
+
+export interface ArtifactAclScope {
+  readonly budget_scope_id: string;
+  readonly allowed_project_refs: readonly string[];
+  readonly allowed_principal_refs: readonly string[];
+}
+
+export interface ToolDefinitionRef {
+  readonly tool_definition_id: string;
+  readonly tool_version: string;
+  readonly tool_server_ref: string;
+  readonly operation_ref: string;
+  readonly input_schema_ref: SchemaRef;
+  readonly output_schema_ref: SchemaRef;
+}
+
+export interface ArgumentsRef {
+  readonly argument_set_ref: string;
+  readonly schema_ref: SchemaRef;
+  readonly sha256: string;
+}
+
+export interface ToolPolicyDecisionRecord {
+  readonly decision: ToolPolicyDecision;
+  readonly policy_ref: string;
+  readonly denial_reason: string | null;
+  readonly evaluated_at: string;
+}
+
+export interface ApprovalRef {
+  readonly approval_ref: string;
+  readonly approver_ref: string;
+  readonly approved_at: string;
+}
+
+export interface ToolCallResultReference {
+  readonly tool_call_id: string;
+  readonly status: ToolCallStatus;
+  readonly result_artifact_refs: readonly ArtifactRef[];
+  readonly audit_refs: readonly AuditRef[];
+  readonly cost_refs: readonly CostRef[];
+}
+
+export interface AgentDefinitionRecord {
+  readonly contract_version: GatewayControlContractVersion;
+  readonly agent_definition_id: string;
+  readonly agent_definition_version: string;
+  readonly role: AgentRole;
+  readonly status: AgentDefinitionStatus;
+  readonly owner_ref: OwnerRef;
+  readonly allowed_model_aliases: readonly string[];
+  readonly allowed_tool_bundles: readonly ToolBundleRef[];
+  readonly output_schema_refs: readonly SchemaRef[];
+  readonly instruction_template_refs: readonly OpaqueRef[];
+  readonly eval_suite_refs: readonly EvalSuiteRef[];
+  readonly rollout_policy: RolloutPolicy;
+  readonly gate_result_refs: readonly OpaqueRef[];
+  readonly policy_version: string;
+  readonly registry_version: string;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface WorkflowStateRecord extends ScopedAgentContractFields {
+  readonly workflow_run_id: string;
+  readonly task_id: string;
+  readonly workflow_version: string;
+  readonly status: WorkflowState;
+  readonly current_step_ref: WorkflowStepRef;
+  readonly allowed_transitions: readonly WorkflowState[];
+  readonly idempotency_refs: readonly IdempotencyRef[];
+  readonly lease_state: LeaseState;
+  readonly resume_ref: OpaqueRef | null;
+  readonly terminal_failure_ref: FailureRef | null;
+  readonly artifact_refs: readonly ArtifactRef[];
+  readonly audit_refs: readonly AuditRef[];
+  readonly cost_refs: readonly CostRef[];
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export type WorkflowRunRecord = WorkflowStateRecord;
+
+export interface WorkflowEventRecord extends ScopedAgentContractFields {
+  readonly workflow_event_id: string;
+  readonly workflow_run_id: string;
+  readonly sequence_number: number;
+  readonly event_type: WorkflowEventType;
+  readonly actor_ref: WorkflowEventActorRef;
+  readonly state_transition: WorkflowStateTransition;
+  readonly step_ref: OpaqueRef;
+  readonly agent_run_ref: OpaqueRef | null;
+  readonly delegation_ref: OpaqueRef | null;
+  readonly tool_call_ref: OpaqueRef | null;
+  readonly event_metadata_ref: OpaqueRef;
+  readonly artifact_refs: readonly ArtifactRef[];
+  readonly audit_refs: readonly AuditRef[];
+  readonly cost_refs: readonly CostRef[];
+  readonly idempotency: IdempotencyRef;
+  readonly occurred_at: string;
+}
+
+export interface AgentRunRecord extends ScopedAgentContractFields {
+  readonly agent_run_id: string;
+  readonly workflow_run_id: string;
+  readonly task_id: string;
+  readonly delegation_id: string | null;
+  readonly parent_agent_run_id: string | null;
+  readonly agent_definition_ref: AgentDefinitionRef;
+  readonly role: AgentRole;
+  readonly status: AgentRunStatus;
+  readonly model_alias: string;
+  readonly output_schema_ref: SchemaRef;
+  readonly timeouts: TimeoutPolicy;
+  readonly idempotency: IdempotencyRef;
+  readonly allowed_tool_refs: readonly ToolRef[];
+  readonly disallowed_tool_refs: readonly ToolRef[];
+  readonly context_refs: readonly OpaqueContextRef[];
+  readonly child_agent_run_refs: readonly OpaqueRef[];
+  readonly artifact_refs: readonly ArtifactRef[];
+  readonly audit_refs: readonly AuditRef[];
+  readonly cost_refs: readonly CostRef[];
+  readonly lease_ref: LeaseRef;
+  readonly started_at: NullableDateTime;
+  readonly completed_at: NullableDateTime;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface DelegationRecord extends ScopedAgentContractFields {
+  readonly delegation_id: string;
+  readonly workflow_run_id: string;
+  readonly task_id: string;
+  readonly parent_agent_run_id: string;
+  readonly child_agent_definition_ref: AgentDefinitionRef;
+  readonly status: DelegationStatus;
+  readonly task_type: 'plan' | 'research' | 'analysis' | 'code_review' | 'synthesis' | 'tool_execution' | 'custom';
+  readonly model_alias: string;
+  readonly input_context_refs: readonly OpaqueContextRef[];
+  readonly allowed_tool_refs: readonly ToolRef[];
+  readonly disallowed_tool_refs: readonly ToolRef[];
+  readonly budget_reservation_ref: BudgetReservationRef;
+  readonly timeouts: TimeoutPolicy;
+  readonly output_schema_ref: SchemaRef;
+  readonly approval_policy: ApprovalPolicy;
+  readonly provenance_requirement: ProvenanceRequirement;
+  readonly idempotency: IdempotencyRef;
+  readonly artifact_refs: readonly ArtifactRef[];
+  readonly audit_refs: readonly AuditRef[];
+  readonly cost_refs: readonly CostRef[];
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface SubAgentResultRecord extends ScopedAgentContractFields {
+  readonly sub_agent_result_id: string;
+  readonly delegation_id: string;
+  readonly workflow_run_id: string;
+  readonly agent_run_id: string;
+  readonly status: SubAgentResultStatus;
+  readonly output_schema_ref: SchemaRef;
+  readonly validation_status: 'not_validated' | 'valid' | 'invalid';
+  readonly confidence: number;
+  readonly structured_result_ref: StructuredResultRef | null;
+  readonly citation_refs: readonly CitationRef[];
+  readonly artifact_refs: readonly ArtifactRef[];
+  readonly usage_ref: UsageRef;
+  readonly policy_ref: PolicyRef;
+  readonly audit_refs: readonly AuditRef[];
+  readonly cost_refs: readonly CostRef[];
+  readonly failure_ref: FailureRef | null;
+  readonly idempotency: IdempotencyRef;
+  readonly created_at: string;
+  readonly completed_at: NullableDateTime;
+}
+
+export interface TaskArtifactRecord extends ScopedAgentContractFields {
+  readonly artifact_id: string;
+  readonly artifact_kind: ArtifactKind;
+  readonly workflow_run_id: string;
+  readonly task_id: string;
+  readonly delegation_id: string | null;
+  readonly agent_run_id: string | null;
+  readonly tool_call_id: string | null;
+  readonly owner_ref: TaskArtifactOwnerRef;
+  readonly storage_ref: StorageRef;
+  readonly media_type: string;
+  readonly size_bytes: number;
+  readonly sha256: string;
+  readonly sensitivity_label: ArtifactSensitivityLabel;
+  readonly source_ref: ArtifactSourceRef;
+  readonly retention_policy: ArtifactRetentionPolicy;
+  readonly signed_access_policy: ArtifactSignedAccessPolicy;
+  readonly acl_scope: ArtifactAclScope;
+  readonly related_artifact_refs: readonly TaskArtifactRef[];
+  readonly audit_refs: readonly AuditRef[];
+  readonly cost_refs: readonly CostRef[];
+  readonly idempotency: IdempotencyRef;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface ToolDefinitionRecord {
+  readonly contract_version: GatewayControlContractVersion;
+  readonly tool_definition_id: string;
+  readonly tool_class: ToolClass;
+  readonly display_name: string;
+  readonly description: string;
+  readonly risk_tier: ToolRiskTier;
+  readonly status: ToolDefinitionStatus;
+  readonly input_schema_ref: SchemaRef;
+  readonly output_schema_ref: SchemaRef;
+  readonly owner_principal_id: string;
+  readonly allowed_roles: readonly AgentRole[];
+  readonly policy_version: string;
+  readonly registry_version: string;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface ToolCallRecord extends ScopedAgentContractFields {
+  readonly tool_call_id: string;
+  readonly workflow_run_id: string;
+  readonly task_id: string;
+  readonly delegation_id: string | null;
+  readonly agent_run_id: string;
+  readonly status: ToolCallStatus;
+  readonly tool_definition_ref: ToolDefinitionRef;
+  readonly risk_tier: ToolRiskTier;
+  readonly arguments_ref: ArgumentsRef;
+  readonly policy_decision: ToolPolicyDecisionRecord;
+  readonly approval_ref: ApprovalRef | null;
+  readonly allowed_tool_refs: readonly ToolRef[];
+  readonly disallowed_tool_refs: readonly ToolRef[];
+  readonly output_schema_ref: SchemaRef;
+  readonly timeouts: TimeoutPolicy;
+  readonly result_artifact_refs: readonly ArtifactRef[];
+  readonly audit_refs: readonly AuditRef[];
+  readonly cost_refs: readonly CostRef[];
+  readonly idempotency: IdempotencyRef;
+  readonly created_at: string;
+  readonly started_at: NullableDateTime;
+  readonly completed_at: NullableDateTime;
+}
+
+export interface SkillDefinitionRecord extends ScopedAgentContractFields {
+  readonly skill_definition_id: string;
+  readonly skill_version_id: string;
+  readonly status: SkillLifecycleState;
+  readonly owner_ref: OwnerRef;
+  readonly allowed_model_aliases: readonly string[];
+  readonly allowed_tool_refs: readonly ToolRef[];
+  readonly disallowed_tool_refs: readonly ToolRef[];
+  readonly instruction_template_refs: readonly OpaqueRef[];
+  readonly input_schema_ref: SchemaRef;
+  readonly output_schema_ref: SchemaRef;
+  readonly approval_policy: ApprovalPolicy;
+  readonly eval_suite_refs: readonly EvalSuiteRef[];
+  readonly rollout_policy: RolloutPolicy;
+  readonly gate_result_refs: readonly OpaqueRef[];
+  readonly artifact_refs: readonly ArtifactRef[];
+  readonly audit_refs: readonly AuditRef[];
+  readonly cost_refs: readonly CostRef[];
+  readonly idempotency: IdempotencyRef;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface SkillVersionRecord {
+  readonly contract_version: GatewayControlContractVersion;
+  readonly skill_definition_id: string;
+  readonly skill_version_id: string;
+  readonly version: string;
+  readonly instruction_template_refs: readonly OpaqueRef[];
+  readonly allowed_model_aliases: readonly string[];
+  readonly allowed_tool_refs: readonly ToolRef[];
+  readonly disallowed_tool_refs: readonly ToolRef[];
+  readonly input_schema_ref: SchemaRef;
+  readonly output_schema_ref: SchemaRef;
+  readonly eval_suite_refs: readonly EvalSuiteRef[];
+  readonly lifecycle_state: SkillLifecycleState;
+  readonly created_by_principal_id: string;
+  readonly created_at: string;
+}
+
+export interface AgentWorkflowMetadataValidationIssue {
+  readonly code: 'forbidden_metadata_field';
+  readonly path: string;
+  readonly field: AgentWorkflowMetadataForbiddenField;
+}
+
+export function validateAgentWorkflowMetadataShape(
+  metadata: unknown,
+): readonly AgentWorkflowMetadataValidationIssue[] {
+  const issues: AgentWorkflowMetadataValidationIssue[] = [];
+  collectForbiddenAgentWorkflowMetadataFields(metadata, '$', issues);
+  return issues;
+}
+
+export function hasForbiddenAgentWorkflowMetadataFields(metadata: unknown): boolean {
+  return validateAgentWorkflowMetadataShape(metadata).length > 0;
+}
+
+export function toAgentWorkflowMetadataForbiddenField(
+  key: string,
+): AgentWorkflowMetadataForbiddenField | undefined {
+  const normalized = normalizeAgentWorkflowMetadataFieldKey(key);
+  return agentWorkflowMetadataForbiddenFields.find((field) => normalizeAgentWorkflowMetadataFieldKey(field) === normalized);
+}
+
+function collectForbiddenAgentWorkflowMetadataFields(
+  value: unknown,
+  path: string,
+  issues: AgentWorkflowMetadataValidationIssue[],
+): void {
+  if (value === null || typeof value !== 'object') return;
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => collectForbiddenAgentWorkflowMetadataFields(item, `${path}[${index}]`, issues));
+    return;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    const forbiddenField = toAgentWorkflowMetadataForbiddenField(key);
+    const childPath = `${path}.${key}`;
+    if (forbiddenField !== undefined) {
+      issues.push({ code: 'forbidden_metadata_field', path: childPath, field: forbiddenField });
+    }
+    collectForbiddenAgentWorkflowMetadataFields(child, childPath, issues);
+  }
+}
+
+function normalizeAgentWorkflowMetadataFieldKey(key: string): string {
+  return key.toLowerCase().replace(/[_-]/gu, '');
+}

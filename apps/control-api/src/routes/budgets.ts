@@ -32,6 +32,9 @@ import type {
 export const BUDGET_SCOPES_BASE_PATH = '/api/budget-scopes' as const;
 export const BUDGET_POLICIES_BASE_PATH = '/api/budget-policies' as const;
 export const BUDGET_SPEND_BASE_PATH = '/api/budget-spend' as const;
+export const BUDGET_RESERVATIONS_BASE_PATH = '/api/budget-reservations' as const;
+export const BUDGET_RESERVATION_SETTLE_PATH = `${BUDGET_RESERVATIONS_BASE_PATH}/:reservation_id/settle` as const;
+export const BUDGET_RESERVATION_RELEASE_PATH = `${BUDGET_RESERVATIONS_BASE_PATH}/:reservation_id/release` as const;
 
 export interface BudgetRouteRegistrar {
   route(route: ControlRouteDefinition): unknown;
@@ -48,6 +51,17 @@ export interface BudgetStore {
   applyPolicy(input: DefineBudgetPolicyRequest, actor: ControlRouteAuthContext): Promise<BudgetScopeRecord>;
   getScope(budgetScopeId: string): Promise<BudgetScopeRecord | null>;
   inspectSpend(filter: BudgetSpendFilter): Promise<BudgetSpendInspection[]>;
+  reserve(input: ReserveBudgetReservationRequest, actor: ControlRouteAuthContext): Promise<BudgetReservationRecord>;
+  settle(
+    reservationId: string,
+    input: SettleBudgetReservationRequest,
+    actor: ControlRouteAuthContext,
+  ): Promise<BudgetReservationRecord>;
+  release(
+    reservationId: string,
+    input: ReleaseBudgetReservationRequest,
+    actor: ControlRouteAuthContext,
+  ): Promise<BudgetReservationRecord>;
 }
 
 export interface DefineBudgetScopeRequest {
@@ -78,6 +92,89 @@ export interface DefineBudgetPolicyRequest {
   readonly timezone?: string | undefined;
   readonly policy_version: string;
   readonly expected_current_policy_version?: string | undefined;
+}
+
+export type BudgetReservationStatus = 'reserved' | 'settled' | 'released';
+
+export interface ReserveBudgetReservationRequest {
+  readonly budget_scope_id: string;
+  readonly workflow_run_id: string;
+  readonly delegation_id?: string | null | undefined;
+  readonly tool_class?: string | null | undefined;
+  readonly model_alias?: string | null | undefined;
+  readonly currency: string;
+  readonly amount: number;
+  readonly input_tokens: number;
+  readonly output_tokens: number;
+  readonly idempotency_key: string;
+  readonly request_id: string;
+  readonly trace_id: string;
+  readonly policy_version: string;
+}
+
+export interface SettleBudgetReservationRequest {
+  readonly budget_scope_id: string;
+  readonly workflow_run_id: string;
+  readonly delegation_id?: string | null | undefined;
+  readonly tool_class?: string | null | undefined;
+  readonly model_alias?: string | null | undefined;
+  readonly currency: string;
+  readonly actual_amount: number;
+  readonly actual_input_tokens: number;
+  readonly actual_output_tokens: number;
+  readonly cost_event_id: string;
+  readonly idempotency_key: string;
+  readonly request_id: string;
+  readonly trace_id: string;
+  readonly policy_version: string;
+}
+
+export interface ReleaseBudgetReservationRequest {
+  readonly budget_scope_id: string;
+  readonly workflow_run_id: string;
+  readonly delegation_id?: string | null | undefined;
+  readonly tool_class?: string | null | undefined;
+  readonly model_alias?: string | null | undefined;
+  readonly currency: string;
+  readonly release_reason: string;
+  readonly idempotency_key: string;
+  readonly request_id: string;
+  readonly trace_id: string;
+  readonly policy_version: string;
+}
+
+export interface BudgetReservationRecord {
+  readonly contract_version: typeof gatewayControlContractVersion;
+  readonly reservation_id: string;
+  readonly budget_scope_id: string;
+  readonly workflow_run_id: string;
+  readonly delegation_id: string | null;
+  readonly tool_class: string | null;
+  readonly model_alias: string | null;
+  readonly currency: string;
+  readonly reserved_amount: number;
+  readonly reserved_input_tokens: number;
+  readonly reserved_output_tokens: number;
+  readonly status: BudgetReservationStatus;
+  readonly idempotency_key: string;
+  readonly request_id: string;
+  readonly trace_id: string;
+  readonly policy_version: string;
+  readonly actual_amount: number | null;
+  readonly actual_input_tokens: number | null;
+  readonly actual_output_tokens: number | null;
+  readonly cost_event_id: string | null;
+  readonly settlement_idempotency_key: string | null;
+  readonly settlement_request_id: string | null;
+  readonly settlement_trace_id: string | null;
+  readonly settled_at: string | null;
+  readonly release_reason: string | null;
+  readonly release_idempotency_key: string | null;
+  readonly release_request_id: string | null;
+  readonly release_trace_id: string | null;
+  readonly released_at: string | null;
+  readonly created_at: string;
+  readonly updated_at: string;
 }
 
 export interface BudgetSpendFilter {
@@ -124,6 +221,10 @@ class BudgetRouteValidationError extends Error {
 
 export class InMemoryBudgetStore implements BudgetStore {
   readonly #scopes = new Map<string, BudgetScopeRecord>();
+  readonly #reservations = new Map<string, BudgetReservationRecord>();
+  readonly #reservationIdempotencyKeys = new Map<string, string>();
+  readonly #settlementIdempotencyKeys = new Map<string, string>();
+  readonly #releaseIdempotencyKeys = new Map<string, string>();
 
   constructor(initialScopes: readonly BudgetScopeRecord[] = []) {
     for (const scope of initialScopes) {
@@ -243,6 +344,174 @@ export class InMemoryBudgetStore implements BudgetStore {
     return updated;
   }
 
+  async reserve(input: ReserveBudgetReservationRequest, actor: ControlRouteAuthContext): Promise<BudgetReservationRecord> {
+    assertNoForbiddenSecretFields(input);
+    assertReservationRequest(input);
+    const idempotentReservation = this.#getReservationForIdempotencyKey(
+      this.#reservationIdempotencyKeys,
+      input.idempotency_key,
+      'reservation',
+    );
+    if (idempotentReservation !== null) {
+      assertReservationReplayMatches(input, idempotentReservation);
+      return idempotentReservation;
+    }
+
+    const scope = this.#getExistingScope(input.budget_scope_id);
+    assertScopeAcceptsReservation(scope, input);
+    assertBudgetHeadroomForReservation(scope, input.amount);
+
+    const now = new Date().toISOString();
+    const reservationId = `br_${randomUUID()}`;
+    const reservation: BudgetReservationRecord = {
+      contract_version: gatewayControlContractVersion,
+      reservation_id: reservationId,
+      budget_scope_id: input.budget_scope_id,
+      workflow_run_id: input.workflow_run_id,
+      delegation_id: input.delegation_id ?? null,
+      tool_class: input.tool_class ?? null,
+      model_alias: input.model_alias ?? null,
+      currency: input.currency,
+      reserved_amount: input.amount,
+      reserved_input_tokens: input.input_tokens,
+      reserved_output_tokens: input.output_tokens,
+      status: 'reserved',
+      idempotency_key: input.idempotency_key,
+      request_id: input.request_id,
+      trace_id: input.trace_id,
+      policy_version: input.policy_version,
+      actual_amount: null,
+      actual_input_tokens: null,
+      actual_output_tokens: null,
+      cost_event_id: null,
+      settlement_idempotency_key: null,
+      settlement_request_id: null,
+      settlement_trace_id: null,
+      settled_at: null,
+      release_reason: null,
+      release_idempotency_key: null,
+      release_request_id: null,
+      release_trace_id: null,
+      released_at: null,
+      created_at: now,
+      updated_at: now,
+    };
+    const updatedScope: BudgetScopeRecord = {
+      ...scope,
+      reservation_state: {
+        reserved_amount: scope.reservation_state.reserved_amount + input.amount,
+        reserved_input_tokens: scope.reservation_state.reserved_input_tokens + input.input_tokens,
+        reserved_output_tokens: scope.reservation_state.reserved_output_tokens + input.output_tokens,
+        reservation_count: scope.reservation_state.reservation_count + 1,
+      },
+      updated_at: now,
+    };
+    void actor;
+    this.#scopes.set(updatedScope.budget_scope_id, updatedScope);
+    this.#reservations.set(reservation.reservation_id, reservation);
+    this.#reservationIdempotencyKeys.set(input.idempotency_key, reservation.reservation_id);
+    return reservation;
+  }
+
+  async settle(
+    reservationId: string,
+    input: SettleBudgetReservationRequest,
+    actor: ControlRouteAuthContext,
+  ): Promise<BudgetReservationRecord> {
+    assertNoForbiddenSecretFields(input);
+    assertSettlementRequest(input);
+    const idempotentReservationId = this.#settlementIdempotencyKeys.get(input.idempotency_key);
+    if (idempotentReservationId !== undefined) {
+      assertIdempotencyKeyMatchesReservation(idempotentReservationId, reservationId, 'settlement');
+      const replayedReservation = this.#getExistingReservation(reservationId);
+      assertReservationMutationMatches(input, replayedReservation);
+      assertSettlementReplayMatches(input, replayedReservation);
+      return replayedReservation;
+    }
+
+    const reservation = this.#getExistingReservation(reservationId);
+    assertReservationIsReserved(reservation, 'settle');
+    assertReservationMutationMatches(input, reservation);
+    const scope = this.#getExistingScope(reservation.budget_scope_id);
+    assertSettlementWithinReservation(input, reservation);
+
+    const now = new Date().toISOString();
+    const updatedScope: BudgetScopeRecord = {
+      ...scope,
+      spend_state: {
+        actual_spend_amount: scope.spend_state.actual_spend_amount + input.actual_amount,
+        actual_input_tokens: scope.spend_state.actual_input_tokens + input.actual_input_tokens,
+        actual_output_tokens: scope.spend_state.actual_output_tokens + input.actual_output_tokens,
+        actual_request_count: scope.spend_state.actual_request_count + 1,
+        last_cost_event_id: input.cost_event_id,
+      },
+      reservation_state: releaseReservationState(scope.reservation_state, reservation),
+      updated_at: now,
+    };
+    const updatedReservation: BudgetReservationRecord = {
+      ...reservation,
+      status: 'settled',
+      actual_amount: input.actual_amount,
+      actual_input_tokens: input.actual_input_tokens,
+      actual_output_tokens: input.actual_output_tokens,
+      cost_event_id: input.cost_event_id,
+      settlement_idempotency_key: input.idempotency_key,
+      settlement_request_id: input.request_id,
+      settlement_trace_id: input.trace_id,
+      settled_at: now,
+      updated_at: now,
+    };
+    void actor;
+    this.#scopes.set(updatedScope.budget_scope_id, updatedScope);
+    this.#reservations.set(updatedReservation.reservation_id, updatedReservation);
+    this.#settlementIdempotencyKeys.set(input.idempotency_key, updatedReservation.reservation_id);
+    return updatedReservation;
+  }
+
+  async release(
+    reservationId: string,
+    input: ReleaseBudgetReservationRequest,
+    actor: ControlRouteAuthContext,
+  ): Promise<BudgetReservationRecord> {
+    assertNoForbiddenSecretFields(input);
+    assertReleaseRequest(input);
+    const idempotentReservationId = this.#releaseIdempotencyKeys.get(input.idempotency_key);
+    if (idempotentReservationId !== undefined) {
+      assertIdempotencyKeyMatchesReservation(idempotentReservationId, reservationId, 'release');
+      const replayedReservation = this.#getExistingReservation(reservationId);
+      assertReservationMutationMatches(input, replayedReservation);
+      assertReleaseReplayMatches(input, replayedReservation);
+      return replayedReservation;
+    }
+
+    const reservation = this.#getExistingReservation(reservationId);
+    assertReservationIsReserved(reservation, 'release');
+    assertReservationMutationMatches(input, reservation);
+    const scope = this.#getExistingScope(reservation.budget_scope_id);
+
+    const now = new Date().toISOString();
+    const updatedScope: BudgetScopeRecord = {
+      ...scope,
+      reservation_state: releaseReservationState(scope.reservation_state, reservation),
+      updated_at: now,
+    };
+    const updatedReservation: BudgetReservationRecord = {
+      ...reservation,
+      status: 'released',
+      release_reason: input.release_reason,
+      release_idempotency_key: input.idempotency_key,
+      release_request_id: input.request_id,
+      release_trace_id: input.trace_id,
+      released_at: now,
+      updated_at: now,
+    };
+    void actor;
+    this.#scopes.set(updatedScope.budget_scope_id, updatedScope);
+    this.#reservations.set(updatedReservation.reservation_id, updatedReservation);
+    this.#releaseIdempotencyKeys.set(input.idempotency_key, updatedReservation.reservation_id);
+    return updatedReservation;
+  }
+
   async getScope(budgetScopeId: string): Promise<BudgetScopeRecord | null> {
     return this.#scopes.get(budgetScopeId) ?? null;
   }
@@ -256,6 +525,36 @@ export class InMemoryBudgetStore implements BudgetStore {
       .filter((scope) => filter.principal_id === undefined || scope.owner_ref.principal_id === filter.principal_id)
       .filter((scope) => filter.virtual_key_id === undefined || scope.owner_ref.virtual_key_id === filter.virtual_key_id)
       .map(toSpendInspection);
+  }
+
+  #getExistingScope(budgetScopeId: string): BudgetScopeRecord {
+    const scope = this.#scopes.get(budgetScopeId);
+    if (scope === undefined) {
+      throw new BudgetRouteValidationError(`Unknown budget_scope_id: ${budgetScopeId}`);
+    }
+    return scope;
+  }
+
+  #getExistingReservation(reservationId: string): BudgetReservationRecord {
+    const reservation = this.#reservations.get(reservationId);
+    if (reservation === undefined) {
+      throw new BudgetRouteValidationError(`Unknown reservation_id: ${reservationId}`);
+    }
+    return reservation;
+  }
+
+  #getReservationForIdempotencyKey(
+    index: ReadonlyMap<string, string>,
+    idempotencyKey: string,
+    operation: string,
+  ): BudgetReservationRecord | null {
+    const reservationId = index.get(idempotencyKey);
+    if (reservationId === undefined) return null;
+    const reservation = this.#reservations.get(reservationId);
+    if (reservation === undefined) {
+      throw new BudgetRouteValidationError(`${operation} idempotency_key references an unknown reservation.`);
+    }
+    return reservation;
   }
 }
 
@@ -287,6 +586,56 @@ export function registerBudgetRoutes(registrar: BudgetRouteRegistrar, options: B
         assertRouteEnabledOutsideProduction(options, 'budget-policy-define');
         const actor = await authenticateBudgetRequest(request, options);
         return respond(reply, 200, { budget_scope: await store.applyPolicy(asDefineBudgetPolicyRequest(request.body), actor) });
+      }),
+  });
+
+  registrar.route({
+    method: 'POST',
+    url: BUDGET_RESERVATIONS_BASE_PATH,
+    schema: reserveBudgetReservationSchema,
+    handler: async (request, reply) =>
+      handleKnownBudgetRouteErrors(reply, async () => {
+        assertRouteEnabledOutsideProduction(options, 'budget-reservation-reserve');
+        const actor = await authenticateBudgetRequest(request, options);
+        return respond(reply, 201, {
+          budget_reservation: await store.reserve(asReserveBudgetReservationRequest(request.body), actor),
+        });
+      }),
+  });
+
+  registrar.route({
+    method: 'POST',
+    url: BUDGET_RESERVATION_SETTLE_PATH,
+    schema: settleBudgetReservationSchema,
+    handler: async (request, reply) =>
+      handleKnownBudgetRouteErrors(reply, async () => {
+        assertRouteEnabledOutsideProduction(options, 'budget-reservation-settle');
+        const actor = await authenticateBudgetRequest(request, options);
+        return respond(reply, 200, {
+          budget_reservation: await store.settle(
+            getBudgetReservationIdParam(request.params),
+            asSettleBudgetReservationRequest(request.body),
+            actor,
+          ),
+        });
+      }),
+  });
+
+  registrar.route({
+    method: 'POST',
+    url: BUDGET_RESERVATION_RELEASE_PATH,
+    schema: releaseBudgetReservationSchema,
+    handler: async (request, reply) =>
+      handleKnownBudgetRouteErrors(reply, async () => {
+        assertRouteEnabledOutsideProduction(options, 'budget-reservation-release');
+        const actor = await authenticateBudgetRequest(request, options);
+        return respond(reply, 200, {
+          budget_reservation: await store.release(
+            getBudgetReservationIdParam(request.params),
+            asReleaseBudgetReservationRequest(request.body),
+            actor,
+          ),
+        });
       }),
   });
 
@@ -369,6 +718,203 @@ function isBudgetExhausted(scope: BudgetScopeRecord): boolean {
   );
 }
 
+function assertBudgetHeadroomForReservation(scope: BudgetScopeRecord, requestedAmount: number): void {
+  const hardCapAmount = scope.limits.hard_cap_amount;
+  if (hardCapAmount === null) return;
+  const committedAmount = scope.spend_state.actual_spend_amount + scope.reservation_state.reserved_amount;
+  if (committedAmount + requestedAmount > hardCapAmount) {
+    throw budgetExhaustedControlError({
+      budget_scope_id: scope.budget_scope_id,
+      hard_cap_amount: hardCapAmount,
+      actual_spend_amount: scope.spend_state.actual_spend_amount,
+      reserved_amount: scope.reservation_state.reserved_amount,
+      requested_amount: requestedAmount,
+      remaining_amount: Math.max(0, hardCapAmount - committedAmount),
+      reset_period: scope.period.reset_period,
+      policy_version: scope.policy_version,
+    });
+  }
+}
+
+function assertScopeAcceptsReservation(scope: BudgetScopeRecord, input: ReserveBudgetReservationRequest): void {
+  if (scope.currency !== input.currency) {
+    throw new BudgetRouteValidationError(
+      `currency must match budget scope currency ${scope.currency} for budget_scope_id: ${scope.budget_scope_id}`,
+    );
+  }
+  if (scope.policy_version !== input.policy_version) {
+    throw stalePolicyControlError({
+      budget_scope_id: scope.budget_scope_id,
+      expected_policy_version: scope.policy_version,
+      actual_policy_version: input.policy_version,
+    });
+  }
+}
+
+function assertReservationRequest(input: ReserveBudgetReservationRequest): void {
+  assertReservationIdentity(input);
+  assertNonNegativeAmount(input.amount, 'amount');
+  assertNonNegativeInteger(input.input_tokens, 'input_tokens');
+  assertNonNegativeInteger(input.output_tokens, 'output_tokens');
+}
+
+function assertSettlementRequest(input: SettleBudgetReservationRequest): void {
+  assertReservationIdentity(input);
+  assertNonNegativeAmount(input.actual_amount, 'actual_amount');
+  assertNonNegativeInteger(input.actual_input_tokens, 'actual_input_tokens');
+  assertNonNegativeInteger(input.actual_output_tokens, 'actual_output_tokens');
+  assertNonEmptyString(input.cost_event_id, 'cost_event_id');
+}
+
+function assertReleaseRequest(input: ReleaseBudgetReservationRequest): void {
+  assertReservationIdentity(input);
+  assertNonEmptyString(input.release_reason, 'release_reason');
+}
+
+function assertReservationIdentity(
+  input: ReserveBudgetReservationRequest | SettleBudgetReservationRequest | ReleaseBudgetReservationRequest,
+): void {
+  assertNonEmptyString(input.budget_scope_id, 'budget_scope_id');
+  assertNonEmptyString(input.workflow_run_id, 'workflow_run_id');
+  assertOptionalNonEmptyString(input.delegation_id, 'delegation_id');
+  assertOptionalNonEmptyString(input.tool_class, 'tool_class');
+  assertOptionalNonEmptyString(input.model_alias, 'model_alias');
+  assertCurrency(input.currency);
+  assertNonEmptyString(input.idempotency_key, 'idempotency_key');
+  assertNonEmptyString(input.request_id, 'request_id');
+  assertNonEmptyString(input.trace_id, 'trace_id');
+  assertPolicyVersion(input.policy_version);
+}
+
+function assertReservationReplayMatches(
+  input: ReserveBudgetReservationRequest,
+  reservation: BudgetReservationRecord,
+): void {
+  const matches =
+    reservation.budget_scope_id === input.budget_scope_id &&
+    reservation.workflow_run_id === input.workflow_run_id &&
+    reservation.delegation_id === optionalStringToNull(input.delegation_id) &&
+    reservation.tool_class === optionalStringToNull(input.tool_class) &&
+    reservation.model_alias === optionalStringToNull(input.model_alias) &&
+    reservation.currency === input.currency &&
+    reservation.reserved_amount === input.amount &&
+    reservation.reserved_input_tokens === input.input_tokens &&
+    reservation.reserved_output_tokens === input.output_tokens &&
+    reservation.policy_version === input.policy_version;
+  if (!matches) {
+    throw new BudgetRouteValidationError('reservation idempotency_key was already used with different reservation inputs.');
+  }
+}
+
+function assertReservationMutationMatches(
+  input: SettleBudgetReservationRequest | ReleaseBudgetReservationRequest,
+  reservation: BudgetReservationRecord,
+): void {
+  if (
+    reservation.budget_scope_id !== input.budget_scope_id ||
+    reservation.workflow_run_id !== input.workflow_run_id ||
+    reservation.delegation_id !== optionalStringToNull(input.delegation_id) ||
+    reservation.tool_class !== optionalStringToNull(input.tool_class) ||
+    reservation.model_alias !== optionalStringToNull(input.model_alias) ||
+    reservation.currency !== input.currency
+  ) {
+    throw new BudgetRouteValidationError('reservation mutation body does not match the reserved budget identity.');
+  }
+  if (reservation.policy_version !== input.policy_version) {
+    throw stalePolicyControlError({
+      budget_scope_id: reservation.budget_scope_id,
+      reservation_id: reservation.reservation_id,
+      expected_policy_version: reservation.policy_version,
+      actual_policy_version: input.policy_version,
+    });
+  }
+}
+
+function assertSettlementWithinReservation(
+  input: SettleBudgetReservationRequest,
+  reservation: BudgetReservationRecord,
+): void {
+  if (input.actual_amount > reservation.reserved_amount) {
+    throw new BudgetRouteValidationError('actual_amount must not exceed the reserved_amount without an approved adjustment.');
+  }
+  if (input.actual_input_tokens > reservation.reserved_input_tokens) {
+    throw new BudgetRouteValidationError('actual_input_tokens must not exceed reserved_input_tokens without an approved adjustment.');
+  }
+  if (input.actual_output_tokens > reservation.reserved_output_tokens) {
+    throw new BudgetRouteValidationError('actual_output_tokens must not exceed reserved_output_tokens without an approved adjustment.');
+  }
+}
+
+function assertSettlementReplayMatches(
+  input: SettleBudgetReservationRequest,
+  reservation: BudgetReservationRecord,
+): void {
+  if (
+    reservation.status !== 'settled' ||
+    reservation.actual_amount !== input.actual_amount ||
+    reservation.actual_input_tokens !== input.actual_input_tokens ||
+    reservation.actual_output_tokens !== input.actual_output_tokens ||
+    reservation.cost_event_id !== input.cost_event_id
+  ) {
+    throw new BudgetRouteValidationError('settlement idempotency_key was already used with different settlement inputs.');
+  }
+}
+
+function assertReleaseReplayMatches(
+  input: ReleaseBudgetReservationRequest,
+  reservation: BudgetReservationRecord,
+): void {
+  if (reservation.status !== 'released' || reservation.release_reason !== input.release_reason) {
+    throw new BudgetRouteValidationError('release idempotency_key was already used with different release inputs.');
+  }
+}
+
+function assertReservationIsReserved(reservation: BudgetReservationRecord, operation: 'settle' | 'release'): void {
+  if (reservation.status !== 'reserved') {
+    throw new BudgetRouteValidationError(
+      `Cannot ${operation} reservation_id ${reservation.reservation_id} because it is ${reservation.status}.`,
+    );
+  }
+}
+
+function assertIdempotencyKeyMatchesReservation(
+  idempotentReservationId: string,
+  reservationId: string,
+  operation: 'settlement' | 'release',
+): void {
+  if (idempotentReservationId !== reservationId) {
+    throw new BudgetRouteValidationError(`${operation} idempotency_key is already bound to a different reservation_id.`);
+  }
+}
+
+function releaseReservationState(
+  state: BudgetScopeRecord['reservation_state'],
+  reservation: BudgetReservationRecord,
+): BudgetScopeRecord['reservation_state'] {
+  return {
+    reserved_amount: subtractReservedValue(state.reserved_amount, reservation.reserved_amount, 'reserved_amount'),
+    reserved_input_tokens: subtractReservedValue(
+      state.reserved_input_tokens,
+      reservation.reserved_input_tokens,
+      'reserved_input_tokens',
+    ),
+    reserved_output_tokens: subtractReservedValue(
+      state.reserved_output_tokens,
+      reservation.reserved_output_tokens,
+      'reserved_output_tokens',
+    ),
+    reservation_count: Math.max(0, state.reservation_count - 1),
+  };
+}
+
+function subtractReservedValue(current: number, reserved: number, field: string): number {
+  const next = current - reserved;
+  if (next < -Number.EPSILON) {
+    throw new BudgetRouteValidationError(`Budget reservation_state is inconsistent for ${field}.`);
+  }
+  return next <= 0 ? 0 : next;
+}
+
 async function authenticateBudgetRequest(
   request: ControlRouteRequest,
   options: BudgetRouteOptions,
@@ -404,6 +950,18 @@ function asDefineBudgetPolicyRequest(body: unknown): DefineBudgetPolicyRequest {
   return defineBudgetPolicyRequestSchema.parse(body);
 }
 
+function asReserveBudgetReservationRequest(body: unknown): ReserveBudgetReservationRequest {
+  return reserveBudgetReservationRequestSchema.parse(body);
+}
+
+function asSettleBudgetReservationRequest(body: unknown): SettleBudgetReservationRequest {
+  return settleBudgetReservationRequestSchema.parse(body);
+}
+
+function asReleaseBudgetReservationRequest(body: unknown): ReleaseBudgetReservationRequest {
+  return releaseBudgetReservationRequestSchema.parse(body);
+}
+
 function asBudgetSpendFilter(query: unknown): BudgetSpendFilter {
   if (query === undefined) return {};
   const filter = budgetSpendFilterSchema.parse(query);
@@ -420,6 +978,15 @@ function getBudgetScopeIdParam(params: unknown): string {
   return value;
 }
 
+function getBudgetReservationIdParam(params: unknown): string {
+  assertObject(params, 'route params');
+  const value = (params as Readonly<Record<string, unknown>>).reservation_id;
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new BudgetRouteValidationError('reservation_id route parameter is required.');
+  }
+  return value;
+}
+
 function assertPolicyVersion(policyVersion: unknown): asserts policyVersion is string {
   if (typeof policyVersion !== 'string' || policyVersion.trim() === '') {
     throw stalePolicyControlError({ field: 'policy_version' });
@@ -428,7 +995,7 @@ function assertPolicyVersion(policyVersion: unknown): asserts policyVersion is s
 
 function assertBudgetScopeType(value: unknown): asserts value is BudgetScopeType {
   if (typeof value !== 'string' || !(budgetScopeTypes as readonly string[]).includes(value)) {
-    throw new BudgetRouteValidationError('scope_type must be one of org, team, project, principal, virtual_key.');
+    throw new BudgetRouteValidationError(`scope_type must be one of ${budgetScopeTypes.join(', ')}.`);
   }
 }
 
@@ -445,14 +1012,20 @@ function normalizeLimits(input: BudgetLimitsInput): BudgetLimits {
 function childScopeTypesFor(scopeType: BudgetScopeType): readonly BudgetScopeType[] {
   switch (scopeType) {
     case 'org':
-      return ['team', 'project', 'principal', 'virtual_key'];
+      return ['team', 'project', 'principal', 'virtual_key', 'workflow', 'delegation', 'tool_class'];
     case 'team':
-      return ['project', 'principal', 'virtual_key'];
+      return ['project', 'principal', 'virtual_key', 'workflow', 'delegation', 'tool_class'];
     case 'project':
-      return ['principal', 'virtual_key'];
+      return ['principal', 'virtual_key', 'workflow', 'delegation', 'tool_class'];
     case 'principal':
-      return ['virtual_key'];
+      return ['virtual_key', 'workflow', 'delegation', 'tool_class'];
     case 'virtual_key':
+      return ['workflow', 'delegation', 'tool_class'];
+    case 'workflow':
+      return ['delegation', 'tool_class'];
+    case 'delegation':
+      return ['tool_class'];
+    case 'tool_class':
       return [];
   }
 }
@@ -471,10 +1044,37 @@ function assertNoForbiddenSecretFields(value: unknown, path = 'body'): void {
   }
 }
 
+function assertCurrency(value: unknown): asserts value is string {
+  if (typeof value !== 'string' || !/^[A-Z]{3}$/u.test(value)) {
+    throw new BudgetRouteValidationError('currency must be an ISO 4217 uppercase currency code.');
+  }
+}
+
 function assertNonEmptyString(value: unknown, field: string): asserts value is string {
   if (typeof value !== 'string' || value.trim() === '') {
     throw new BudgetRouteValidationError(`${field} is required.`);
   }
+}
+
+function assertOptionalNonEmptyString(value: unknown, field: string): void {
+  if (value === null || value === undefined) return;
+  assertNonEmptyString(value, field);
+}
+
+function assertNonNegativeAmount(value: unknown, field: string): asserts value is number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new BudgetRouteValidationError(`${field} must be a non-negative finite number.`);
+  }
+}
+
+function assertNonNegativeInteger(value: unknown, field: string): asserts value is number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    throw new BudgetRouteValidationError(`${field} must be a non-negative integer.`);
+  }
+}
+
+function optionalStringToNull(value: string | null | undefined): string | null {
+  return value ?? null;
 }
 
 function assertObject(value: unknown, label: string): asserts value is Readonly<Record<string, unknown>> {
@@ -527,10 +1127,15 @@ const budgetScopeResponseSchema = z
     owner_ref: z.record(z.string(), z.unknown()),
     limits: z.record(z.string(), z.unknown()),
     spend_state: z.record(z.string(), z.unknown()),
+    reservation_state: z.record(z.string(), z.unknown()),
     policy_version: z.string(),
   })
   .passthrough();
 
+const nonEmptyStringSchema = z.string().min(1);
+const currencySchema = z.string().regex(/^[A-Z]{3}$/u);
+const amountSchema = z.number().min(0);
+const tokenCountSchema = z.number().int().min(0);
 const budgetScopeTypeSchema = z.enum(budgetScopeTypes);
 const budgetScopeStatusSchema = z.enum(['draft', 'active', 'disabled', 'archived']);
 const budgetResetPeriodSchema = z.enum(['none', 'daily', 'weekly', 'monthly', 'rolling_24h', 'rolling_7d', 'rolling_30d']);
@@ -559,7 +1164,7 @@ const defineBudgetScopeRequestSchema = z
     virtual_key_id: z.string().min(1).nullable().optional(),
     parent_scope_ref: budgetScopeRefSchema.nullable().optional(),
     status: budgetScopeStatusSchema.optional(),
-    currency: z.string().regex(/^[A-Z]{3}$/u).optional(),
+    currency: currencySchema.optional(),
     limits: budgetLimitsSchema.optional(),
     reset_period: budgetResetPeriodSchema.optional(),
     period_started_at: z.string().min(1).optional(),
@@ -571,7 +1176,7 @@ const defineBudgetScopeRequestSchema = z
 const defineBudgetPolicyRequestSchema = z
   .object({
     budget_scope_id: z.string().min(1),
-    currency: z.string().regex(/^[A-Z]{3}$/u).optional(),
+    currency: currencySchema.optional(),
     limits: budgetLimitsSchema,
     reset_period: budgetResetPeriodSchema.optional(),
     period_started_at: z.string().min(1).optional(),
@@ -579,6 +1184,41 @@ const defineBudgetPolicyRequestSchema = z
     timezone: z.string().min(1).optional(),
     policy_version: z.string().min(1),
     expected_current_policy_version: z.string().min(1).optional(),
+  })
+  .strict();
+const budgetReservationIdentityRequestSchema = {
+  budget_scope_id: nonEmptyStringSchema,
+  workflow_run_id: nonEmptyStringSchema,
+  delegation_id: nonEmptyStringSchema.nullable().optional(),
+  tool_class: nonEmptyStringSchema.nullable().optional(),
+  model_alias: nonEmptyStringSchema.nullable().optional(),
+  currency: currencySchema,
+  idempotency_key: nonEmptyStringSchema,
+  request_id: nonEmptyStringSchema,
+  trace_id: nonEmptyStringSchema,
+  policy_version: nonEmptyStringSchema,
+} as const;
+const reserveBudgetReservationRequestSchema = z
+  .object({
+    ...budgetReservationIdentityRequestSchema,
+    amount: amountSchema,
+    input_tokens: tokenCountSchema,
+    output_tokens: tokenCountSchema,
+  })
+  .strict();
+const settleBudgetReservationRequestSchema = z
+  .object({
+    ...budgetReservationIdentityRequestSchema,
+    actual_amount: amountSchema,
+    actual_input_tokens: tokenCountSchema,
+    actual_output_tokens: tokenCountSchema,
+    cost_event_id: nonEmptyStringSchema,
+  })
+  .strict();
+const releaseBudgetReservationRequestSchema = z
+  .object({
+    ...budgetReservationIdentityRequestSchema,
+    release_reason: nonEmptyStringSchema,
   })
   .strict();
 const budgetSpendFilterSchema = z
@@ -592,8 +1232,47 @@ const budgetSpendFilterSchema = z
   })
   .strict();
 const budgetScopeIdParamsSchema = z.object({ budget_scope_id: z.string().min(1) }).strict();
+const budgetReservationIdParamsSchema = z.object({ reservation_id: nonEmptyStringSchema }).strict();
+const budgetReservationStatusSchema = z.enum(['reserved', 'settled', 'released']);
+const budgetReservationResponseSchema = z
+  .object({
+    contract_version: z.literal(gatewayControlContractVersion),
+    reservation_id: nonEmptyStringSchema,
+    budget_scope_id: nonEmptyStringSchema,
+    workflow_run_id: nonEmptyStringSchema,
+    delegation_id: nonEmptyStringSchema.nullable(),
+    tool_class: nonEmptyStringSchema.nullable(),
+    model_alias: nonEmptyStringSchema.nullable(),
+    currency: currencySchema,
+    reserved_amount: amountSchema,
+    reserved_input_tokens: tokenCountSchema,
+    reserved_output_tokens: tokenCountSchema,
+    status: budgetReservationStatusSchema,
+    idempotency_key: nonEmptyStringSchema,
+    request_id: nonEmptyStringSchema,
+    trace_id: nonEmptyStringSchema,
+    policy_version: nonEmptyStringSchema,
+    actual_amount: amountSchema.nullable(),
+    actual_input_tokens: tokenCountSchema.nullable(),
+    actual_output_tokens: tokenCountSchema.nullable(),
+    cost_event_id: nonEmptyStringSchema.nullable(),
+    settlement_idempotency_key: nonEmptyStringSchema.nullable(),
+    settlement_request_id: nonEmptyStringSchema.nullable(),
+    settlement_trace_id: nonEmptyStringSchema.nullable(),
+    settled_at: nonEmptyStringSchema.nullable(),
+    release_reason: nonEmptyStringSchema.nullable(),
+    release_idempotency_key: nonEmptyStringSchema.nullable(),
+    release_request_id: nonEmptyStringSchema.nullable(),
+    release_trace_id: nonEmptyStringSchema.nullable(),
+    released_at: nonEmptyStringSchema.nullable(),
+    created_at: nonEmptyStringSchema,
+    updated_at: nonEmptyStringSchema,
+  })
+  .strict();
+const budgetReservationEnvelopeResponseSchema = z.object({ budget_reservation: budgetReservationResponseSchema });
 
 export const defineBudgetScopeSchema = {
+  operationId: 'defineBudgetScope',
   tags: ['control-api', 'budgets'],
   summary: 'Define a non-production budget scope and policy placeholder',
   description: 'Request body follows the shared gateway-control budget scope contract with scope_type, owner_id, limits, reset period, and policy_version.',
@@ -602,6 +1281,7 @@ export const defineBudgetScopeSchema = {
 } as const;
 
 export const defineBudgetPolicySchema = {
+  operationId: 'defineBudgetPolicy',
   tags: ['control-api', 'budgets'],
   summary: 'Apply a versioned budget policy to an existing budget scope',
   description: 'Request body requires budget_scope_id, limits, policy_version, and optional expected_current_policy_version for stale-policy protection.',
@@ -609,24 +1289,62 @@ export const defineBudgetPolicySchema = {
   response: { 200: z.object({ budget_scope: budgetScopeResponseSchema }) },
 } as const;
 
+export const reserveBudgetReservationSchema = {
+  operationId: 'reserveBudget',
+  tags: ['control-api', 'budgets'],
+  summary: 'Reserve non-production budget before model or tool execution',
+  description:
+    'Creates an idempotent budget reservation after verifying hard-cap headroom using actual spend plus active reservations plus requested amount.',
+  body: reserveBudgetReservationRequestSchema,
+  response: { 201: budgetReservationEnvelopeResponseSchema },
+} as const;
+
+export const settleBudgetReservationSchema = {
+  operationId: 'settleBudgetReservation',
+  tags: ['control-api', 'budgets'],
+  summary: 'Settle a non-production budget reservation',
+  description:
+    'Records actual spend for a reserved model or tool execution, clears the reserved amount and tokens, and applies idempotency for settlement retries.',
+  params: budgetReservationIdParamsSchema,
+  body: settleBudgetReservationRequestSchema,
+  response: { 200: budgetReservationEnvelopeResponseSchema },
+} as const;
+
+export const releaseBudgetReservationSchema = {
+  operationId: 'releaseBudgetReservation',
+  tags: ['control-api', 'budgets'],
+  summary: 'Release an unused non-production budget reservation',
+  description:
+    'Releases the reserved amount and tokens without recording spend, requiring a release reason and an idempotency key for safe retries.',
+  params: budgetReservationIdParamsSchema,
+  body: releaseBudgetReservationRequestSchema,
+  response: { 200: budgetReservationEnvelopeResponseSchema },
+} as const;
+
 export const getBudgetScopeSchema = {
+  operationId: 'getBudgetScope',
   tags: ['control-api', 'budgets'],
   summary: 'Inspect a budget scope and current spend state',
+  description: 'Returns a sanitized budget scope record including spend_state and reservation_state for non-production inspection.',
   params: budgetScopeIdParamsSchema,
   response: { 200: z.object({ budget_scope: budgetScopeResponseSchema }) },
 } as const;
 
 export const getBudgetScopeSpendSchema = {
+  operationId: 'getBudgetScopeSpend',
   tags: ['control-api', 'budgets'],
   summary: 'Inspect spend for a budget scope',
+  description: 'Returns sanitized spend_state and reservation_state for a single budget scope.',
   params: budgetScopeIdParamsSchema,
   response: { 200: z.record(z.string(), z.unknown()) },
 } as const;
 
 export const inspectBudgetSpendSchema = {
+  operationId: 'inspectBudgetSpend',
   tags: ['control-api', 'budgets'],
-  summary: 'Inspect spend by org, team, project, principal, or virtual key',
-  description: 'Supports budget_scope_id, scope_type, owner_id, project_id, principal_id, and virtual_key_id query filters.',
+  summary: 'Inspect spend and active reservations by budget scope filters',
+  description:
+    'Supports budget_scope_id, scope_type, owner_id, project_id, principal_id, and virtual_key_id query filters without exposing raw ledger rows or secrets.',
   querystring: budgetSpendFilterSchema,
   response: { 200: z.record(z.string(), z.unknown()) },
 } as const;

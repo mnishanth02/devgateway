@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "test": "node --experimental-strip-types --test src/*.test.ts",
     "typecheck": "tsc --noEmit",
     "registry:validate": "node --experimental-strip-types src/validate-registry.ts",
     "transit": "pnpm typecheck"

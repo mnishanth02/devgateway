@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Outlet } from '@tanstack/react-router';
+import { Outlet, useRouterState } from '@tanstack/react-router';
 import { adminSessionQueryOptions } from '../session-query.js';
 import { isAuthNotConfiguredError } from '../auth-session.js';
 
@@ -102,14 +102,19 @@ function LocalDevPreviewShell() {
 }
 
 function NavigationRail() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+
   return (
     <aside className="rail" aria-label="Admin portal navigation">
       <div className="rail__mark" aria-hidden="true">
         DG
       </div>
       <nav>
-        <a aria-current="page" href="/">
+        <a aria-current={pathname === '/' ? 'page' : undefined} href="/">
           Command
+        </a>
+        <a aria-current={pathname === '/trace' ? 'page' : undefined} href="/trace">
+          Trace
         </a>
         <span>Routes</span>
         <span>Keys</span>

@@ -34,6 +34,11 @@ export function createOpenApiDocumentOptions(
       { name: 'Registry', description: 'Model/provider registry snapshot foundation.' },
       { name: 'Policy', description: 'Provider data-class policy snapshot foundation.' },
       { name: 'Bifrost', description: 'Bifrost config validation foundation.' },
+      { name: 'tasks', description: 'Non-production Track 2 task creation and status foundation.' },
+      { name: 'workflows', description: 'Non-production Track 2 workflow state and event trace foundation.' },
+      { name: 'artifacts', description: 'Track 2 task artifact metadata inspection without raw object bodies.' },
+      { name: 'agent-runs', description: 'Track 2 agent-run and delegation trace inspection foundation.' },
+      { name: 'skills', description: 'Track 2 governed skill registry listing foundation.' },
     ],
     components: {
       securitySchemes: {

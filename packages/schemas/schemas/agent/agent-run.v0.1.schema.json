@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/agent/agent-run.v0.1.schema.json",
+  "title": "DevGateway Agent Run Contract v0.1",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "agent_run_id",
+    "workflow_run_id",
+    "task_id",
+    "delegation_id",
+    "parent_agent_run_id",
+    "agent_definition_ref",
+    "role",
+    "status",
+    "principal_id",
+    "project_id",
+    "data_class",
+    "budget_scope_id",
+    "policy_version",
+    "registry_version",
+    "trace_id",
+    "trace_context_ref",
+    "model_alias",
+    "output_schema_ref",
+    "timeouts",
+    "idempotency",
+    "allowed_tool_refs",
+    "disallowed_tool_refs",
+    "context_refs",
+    "child_agent_run_refs",
+    "artifact_refs",
+    "audit_refs",
+    "cost_refs",
+    "lease_ref",
+    "started_at",
+    "completed_at",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "agent_run_id": { "$ref": "#/$defs/nonEmptyString" },
+    "workflow_run_id": { "$ref": "#/$defs/nonEmptyString" },
+    "task_id": { "$ref": "#/$defs/nonEmptyString" },
+    "delegation_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+    "parent_agent_run_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+    "agent_definition_ref": { "$ref": "https://devgateway.local/schemas/agent/agent-definition.v0.1.schema.json#/$defs/agentDefinitionRef" },
+    "role": { "$ref": "#/$defs/agentRole" },
+    "status": { "$ref": "#/$defs/runStatus" },
+    "principal_id": { "$ref": "#/$defs/nonEmptyString" },
+    "project_id": { "$ref": "#/$defs/nonEmptyString" },
+    "data_class": { "$ref": "#/$defs/dataClass" },
+    "budget_scope_id": { "$ref": "#/$defs/nonEmptyString" },
+    "policy_version": { "$ref": "#/$defs/nonEmptyString" },
+    "registry_version": { "$ref": "#/$defs/nonEmptyString" },
+    "trace_id": { "$ref": "#/$defs/nonEmptyString" },
+    "trace_context_ref": { "$ref": "#/$defs/traceContextRef" },
+    "model_alias": { "$ref": "#/$defs/nonEmptyString" },
+    "output_schema_ref": { "$ref": "#/$defs/schemaRef" },
+    "timeouts": { "$ref": "#/$defs/timeoutPolicy" },
+    "idempotency": { "$ref": "#/$defs/idempotencyRef" },
+    "allowed_tool_refs": { "type": "array", "items": { "$ref": "#/$defs/toolRef" }, "uniqueItems": true },
+    "disallowed_tool_refs": { "type": "array", "items": { "$ref": "#/$defs/toolRef" }, "uniqueItems": true },
+    "context_refs": { "type": "array", "items": { "$ref": "#/$defs/opaqueRef" }, "uniqueItems": true },
+    "child_agent_run_refs": { "type": "array", "items": { "$ref": "#/$defs/opaqueRef" }, "uniqueItems": true },
+    "artifact_refs": { "type": "array", "items": { "$ref": "#/$defs/artifactRef" }, "uniqueItems": true },
+    "audit_refs": { "type": "array", "items": { "$ref": "#/$defs/auditRef" }, "uniqueItems": true },
+    "cost_refs": { "type": "array", "items": { "$ref": "#/$defs/costRef" }, "uniqueItems": true },
+    "lease_ref": { "$ref": "#/$defs/leaseRef" },
+    "started_at": { "$ref": "#/$defs/nullableDateTime" },
+    "completed_at": { "$ref": "#/$defs/nullableDateTime" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "nullableNonEmptyString": { "type": ["string", "null"], "minLength": 1 },
+    "nullableDateTime": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
+    "agentRole": { "type": "string", "enum": ["supervisor", "planner", "researcher", "synthesizer", "reviewer", "tool_executor", "custom"] },
+    "runStatus": { "type": "string", "enum": ["queued", "leased", "running", "waiting_on_child", "succeeded", "failed", "cancelled", "timed_out", "denied"] },
+    "dataClass": { "type": "string", "enum": ["public", "internal", "confidential", "restricted"] },
+    "traceContextRef": {
+      "type": "object",
+      "required": ["trace_context_id", "span_id", "propagation_ref"],
+      "properties": {
+        "trace_context_id": { "$ref": "#/$defs/nonEmptyString" },
+        "span_id": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+        "propagation_ref": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "schemaRef": {
+      "type": "object",
+      "required": ["schema_id", "json_pointer", "schema_version", "enforcement"],
+      "properties": {
+        "schema_id": { "$ref": "#/$defs/nonEmptyString" },
+        "json_pointer": { "type": "string", "pattern": "^#(/.*)?$" },
+        "schema_version": { "$ref": "#/$defs/nonEmptyString" },
+        "enforcement": { "type": "string", "enum": ["validate_before_dispatch", "validate_before_execution", "validate_before_synthesis", "validate_before_persist"] }
+      },
+      "additionalProperties": false
+    },
+    "timeoutPolicy": {
+      "type": "object",
+      "required": ["queue_seconds", "execution_seconds", "idle_seconds", "overall_seconds"],
+      "properties": {
+        "queue_seconds": { "type": "integer", "minimum": 1 },
+        "execution_seconds": { "type": "integer", "minimum": 1 },
+        "idle_seconds": { "type": "integer", "minimum": 1 },
+        "overall_seconds": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "idempotencyRef": {
+      "type": "object",
+      "required": ["idempotency_key", "scope", "dedupe_ref", "expires_at"],
+      "properties": {
+        "idempotency_key": { "$ref": "#/$defs/nonEmptyString" },
+        "scope": { "type": "string", "enum": ["workflow", "step", "delegation", "agent_run", "tool_call", "artifact_write"] },
+        "dedupe_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "expires_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "toolRef": {
+      "type": "object",
+      "required": ["tool_definition_id", "tool_version", "risk_tier"],
+      "properties": {
+        "tool_definition_id": { "$ref": "#/$defs/nonEmptyString" },
+        "tool_version": { "$ref": "#/$defs/nonEmptyString" },
+        "risk_tier": { "type": "string", "enum": ["read_only_low", "read_only_medium", "approval_required", "disallowed_write", "network_restricted"] }
+      },
+      "additionalProperties": false
+    },
+    "opaqueRef": {
+      "type": "object",
+      "required": ["ref_id", "ref_type", "scope_ref"],
+      "properties": {
+        "ref_id": { "$ref": "#/$defs/nonEmptyString" },
+        "ref_type": { "$ref": "#/$defs/nonEmptyString" },
+        "scope_ref": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "artifactRef": {
+      "type": "object",
+      "required": ["artifact_id", "artifact_kind", "data_class", "sha256", "size_bytes"],
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/nonEmptyString" },
+        "artifact_kind": { "$ref": "#/$defs/nonEmptyString" },
+        "data_class": { "$ref": "#/$defs/dataClass" },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "size_bytes": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "auditRef": {
+      "type": "object",
+      "required": ["audit_event_id", "audit_stream", "recorded_at"],
+      "properties": {
+        "audit_event_id": { "$ref": "#/$defs/nonEmptyString" },
+        "audit_stream": { "$ref": "#/$defs/nonEmptyString" },
+        "recorded_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "costRef": {
+      "type": "object",
+      "required": ["cost_event_id", "budget_scope_id", "cost_phase", "recorded_at"],
+      "properties": {
+        "cost_event_id": { "$ref": "#/$defs/nonEmptyString" },
+        "budget_scope_id": { "$ref": "#/$defs/nonEmptyString" },
+        "cost_phase": { "type": "string", "enum": ["estimate", "reservation", "settlement", "release", "reconciliation"] },
+        "recorded_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "leaseRef": {
+      "type": "object",
+      "required": ["lease_id", "lease_owner_ref", "heartbeat_at", "expires_at"],
+      "properties": {
+        "lease_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "lease_owner_ref": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "heartbeat_at": { "$ref": "#/$defs/nullableDateTime" },
+        "expires_at": { "$ref": "#/$defs/nullableDateTime" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -11,9 +11,26 @@ export const CONTROL_API_SNAPSHOT_ENDPOINTS = {
   budgetSpend: '/api/budget-spend',
   costEvents: '/api/cost-events',
   openapi: '/openapi.json',
+  task: '/api/tasks/task_demo_001',
+  taskArtifacts: '/api/tasks/task_demo_001/artifacts',
+  workflow: '/api/workflows/workflow_demo_001',
+  workflowEvents: '/api/workflows/workflow_demo_001/events',
+  agentRun: '/api/agent-runs/agent_run_demo_001',
+  skills: '/api/skills',
 } as const;
 
 export type ControlApiSnapshotKey = keyof typeof CONTROL_API_SNAPSHOT_ENDPOINTS;
+
+export const CONTROL_API_TRACK2_TRACE_ENDPOINTS = {
+  task: '/api/tasks/:task_id',
+  taskArtifacts: '/api/tasks/:task_id/artifacts',
+  workflow: '/api/workflows/:workflow_id',
+  workflowEvents: '/api/workflows/:workflow_id/events',
+  agentRun: '/api/agent-runs/:agent_run_id',
+  skills: '/api/skills',
+} as const;
+
+export type ControlApiTrack2TraceEndpointKey = keyof typeof CONTROL_API_TRACK2_TRACE_ENDPOINTS;
 
 export interface FetchControlApiOptions {
   readonly signal?: AbortSignal;

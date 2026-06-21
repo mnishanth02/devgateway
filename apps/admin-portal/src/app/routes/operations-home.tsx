@@ -52,6 +52,9 @@ export function OperationsHome() {
           <span>{model.controlApiBaseUrl}</span>
           <span>snapshot {generatedAt}</span>
         </div>
+        <a className="ops-home__trace-link" href="/trace">
+          Open Trace lab <span>{model.taskTrace.status}</span>
+        </a>
       </div>
 
       <EndpointStrip endpoints={endpoints} />

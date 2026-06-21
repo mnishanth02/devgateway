@@ -4,13 +4,18 @@ import fastifySwaggerUi from '@fastify/swagger-ui';
 import { z } from 'zod';
 import type { ControlAuth } from './auth/index.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
+import { registerAgentRunRoutes } from './routes/agent-runs.ts';
+import { registerArtifactRoutes } from './routes/artifacts.ts';
 import { registerBifrostConfigRoutes } from './routes/bifrost-config.ts';
 import { registerBudgetRoutes } from './routes/budgets.ts';
 import { registerCostEventRoutes } from './routes/cost-events.ts';
 import { registerPolicyRoutes } from './routes/policy.ts';
 import { registerRegistryRoutes } from './routes/registry.ts';
+import { registerSkillRoutes } from './routes/skills.ts';
 import type { SnapshotRoute } from './routes/snapshot-common.ts';
+import { registerTaskRoutes } from './routes/tasks.ts';
 import { registerVirtualKeyRoutes, type ControlRouteDefinition } from './routes/virtual-keys.ts';
+import { registerWorkflowRoutes } from './routes/workflows.ts';
 import { missingAuthControlError } from './policies/control-errors.ts';
 import {
     controlApiServiceName,
@@ -222,6 +227,11 @@ function registerTrackOneControlPlaneRoutes(
     registerVirtualKeyRoutes(controlRegistrar, { runtimeEnvironment: options.runtimeEnvironment, authenticate });
     registerBudgetRoutes(controlRegistrar, { runtimeEnvironment: options.runtimeEnvironment, authenticate });
     registerCostEventRoutes(controlRegistrar, { runtimeEnvironment: options.runtimeEnvironment, authenticate });
+    registerTaskRoutes(controlRegistrar, { runtimeEnvironment: options.runtimeEnvironment, authenticate });
+    registerArtifactRoutes(controlRegistrar, { runtimeEnvironment: options.runtimeEnvironment, authenticate });
+    registerWorkflowRoutes(controlRegistrar, { runtimeEnvironment: options.runtimeEnvironment, authenticate });
+    registerAgentRunRoutes(controlRegistrar, { runtimeEnvironment: options.runtimeEnvironment, authenticate });
+    registerSkillRoutes(controlRegistrar, { runtimeEnvironment: options.runtimeEnvironment, authenticate });
     const snapshotOptions = { runtimeEnvironment: options.runtimeEnvironment } as const;
     registerRegistryRoutes(snapshotRegistrar, snapshotOptions);
     registerPolicyRoutes(snapshotRegistrar, snapshotOptions);
