@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 import {
   dataClasses,
@@ -1263,7 +1264,7 @@ function assertPolicyMatches(record: TaskRecord, policyVersion: string, registry
 }
 
 function agentWorkflowValuesEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return isDeepStrictEqual(left, right);
 }
 
 function assertDataClass(value: unknown): asserts value is DataClass {

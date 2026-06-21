@@ -735,13 +735,13 @@ function assertBudgetHeadroomForReservation(scope: BudgetScopeRecord, input: Res
       });
     }
   }
-  assertReservationLimit(scope, 'input_token_limit', scope.spend_state.actual_input_tokens, scope.reservation_state.reserved_input_tokens, input.input_tokens);
+  assertReservationLimit(scope, 'input_token_limit', scope.spend_state.actual_input_tokens, scope.reservation_state.reserved_input_tokens, input.input_tokens ?? 0);
   assertReservationLimit(
     scope,
     'output_token_limit',
     scope.spend_state.actual_output_tokens,
     scope.reservation_state.reserved_output_tokens,
-    input.output_tokens,
+    input.output_tokens ?? 0,
   );
   assertReservationLimit(scope, 'request_limit', scope.spend_state.actual_request_count, scope.reservation_state.reservation_count, 1);
 }
