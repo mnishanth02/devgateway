@@ -149,6 +149,7 @@ const DEFAULT_POLICY_VERSION = 'tool-broker-readonly-policy.v1';
 const DEFAULT_REGISTRY_VERSION = `${tool_integrationsPackage.name}:${tool_integrationsPackage.status}`;
 const DEFAULT_MAX_BODY_BYTES = 1_048_576;
 const MAX_AUDIT_RECORDS = 500;
+const MCP_BATCH_CONCURRENCY_LIMIT = 4;
 const SAFE_TOOL_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{1,120}$/u;
 const SAFE_CONTEXT_VALUE_PATTERN = /^[a-z0-9][a-z0-9._:@/-]{0,127}$/iu;
 const READ_ROLES = new Set(['admin', 'auditor', 'developer', 'operator', 'reader', 'service', 'viewer']);
@@ -542,14 +543,33 @@ export async function handleMcpJsonRpc(
         if (body.length === 0) {
             return { statusCode: 400, body: jsonRpcError(null, -32600, 'JSON-RPC batch must not be empty.', { code: 'INVALID_REQUEST' }) };
         }
-        const responses: Record<string, unknown>[] = [];
-        for (const item of body) {
-            responses.push(await handleSingleMcpRequest(item, request, options));
-        }
+        const responses = await mapWithConcurrencyLimit(body, MCP_BATCH_CONCURRENCY_LIMIT, (item) =>
+            handleSingleMcpRequest(item, request, options),
+        );
         return { statusCode: responses.some((item) => 'error' in item) ? 400 : 200, body: responses };
     }
     const response = await handleSingleMcpRequest(body, request, options);
     return { statusCode: 'error' in response ? 400 : 200, body: response };
+}
+
+async function mapWithConcurrencyLimit<T, R>(
+    items: readonly T[],
+    limit: number,
+    mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+    const results = new Array<R>(items.length);
+    let nextIndex = 0;
+    const workerCount = Math.min(limit, items.length);
+    await Promise.all(
+        Array.from({ length: workerCount }, async () => {
+            while (nextIndex < items.length) {
+                const index = nextIndex;
+                nextIndex += 1;
+                results[index] = await mapper(items[index] as T);
+            }
+        }),
+    );
+    return results;
 }
 
 async function handleSingleMcpRequest(

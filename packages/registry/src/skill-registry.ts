@@ -271,28 +271,27 @@ export function validateSkillRegistry(input: SkillRegistryValidationInput): Skil
 
   snapshot.skills.forEach((skill, index) => {
     const path = `$.skills[${index}]`;
-    if (!isRecord(skill)) {
+    if (!isSkillRegistryRecordCandidate(skill)) {
       issues.push({ code: 'schema', path, message: 'skill entry must be an object' });
       return;
     }
-    const skillRecord = skill as SkillRegistryRecord;
-    if (seenSkillDefinitions.has(skillRecord.skill_definition_id)) {
+    if (seenSkillDefinitions.has(skill.skill_definition_id)) {
       issues.push({
         code: 'schema',
         path: `${path}.skill_definition_id`,
-        message: `duplicate skill definition "${skillRecord.skill_definition_id}"`,
+        message: `duplicate skill definition "${skill.skill_definition_id}"`,
       });
     }
-    seenSkillDefinitions.add(skillRecord.skill_definition_id);
-    if (seenSkillVersions.has(skillRecord.skill_version_id)) {
+    seenSkillDefinitions.add(skill.skill_definition_id);
+    if (seenSkillVersions.has(skill.skill_version_id)) {
       issues.push({
         code: 'schema',
         path: `${path}.skill_version_id`,
-        message: `duplicate skill version "${skillRecord.skill_version_id}"`,
+        message: `duplicate skill version "${skill.skill_version_id}"`,
       });
     }
-    seenSkillVersions.add(skillRecord.skill_version_id);
-    validateSkillRecord(skillRecord, index, snapshot.registry_version, modelAliases, gateResults, registryProductionEnabled, issues);
+    seenSkillVersions.add(skill.skill_version_id);
+    validateSkillRecord(skill, index, snapshot.registry_version, modelAliases, gateResults, registryProductionEnabled, issues);
   });
 
   validateNoRawContentOrSecrets(snapshot, '$', issues);
@@ -1075,6 +1074,10 @@ function assertString(value: unknown, label: string): asserts value is string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isSkillRegistryRecordCandidate(value: unknown): value is SkillRegistryRecord {
+  return isRecord(value) && typeof value.skill_definition_id === 'string' && typeof value.skill_version_id === 'string';
 }
 
 function isValidDateTime(value: string): boolean {
