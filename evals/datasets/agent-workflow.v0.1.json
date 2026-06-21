@@ -69,7 +69,13 @@
         "agent-workflow",
         "track-0",
         "synthetic"
-      ]
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      }
     },
     {
       "case_id": "agent-workflow-budget-deny",
@@ -114,7 +120,13 @@
         "agent-workflow",
         "track-0",
         "synthetic"
-      ]
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      }
     },
     {
       "case_id": "agent-workflow-delegation-contract",
@@ -159,7 +171,13 @@
         "agent-workflow",
         "track-0",
         "synthetic"
-      ]
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      }
     },
     {
       "case_id": "agent-workflow-state-persistence",
@@ -203,7 +221,13 @@
         "agent-workflow",
         "track-0",
         "synthetic"
-      ]
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      }
     }
   ]
 }

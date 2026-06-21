@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { buildHealthPayload, createControlApiServer } from './server.ts';
+import { AGENT_RUNS_BASE_PATH } from './routes/agent-runs.ts';
+import { TASK_ARTIFACTS_PATH } from './routes/artifacts.ts';
+import { SKILLS_BASE_PATH } from './routes/skills.ts';
+import { TASKS_BASE_PATH } from './routes/tasks.ts';
+import { WORKFLOWS_BASE_PATH } from './routes/workflows.ts';
 
 describe('control-api Fastify foundation', () => {
   it('reports the service name, status, and configured port', () => {
@@ -184,6 +189,14 @@ describe('control-api Fastify foundation', () => {
       assert.ok(document.paths['/api/budget-spend']);
       assert.ok(document.paths['/registry/current']);
       assert.ok(document.paths['/policy/current']);
+      assert.ok(document.paths[TASKS_BASE_PATH]);
+      assert.ok(document.paths[toOpenApiPath(`${TASKS_BASE_PATH}/:task_id`)]);
+      assert.ok(document.paths[toOpenApiPath(`${TASKS_BASE_PATH}/:task_id/cancel`)]);
+      assert.ok(document.paths[toOpenApiPath(TASK_ARTIFACTS_PATH)]);
+      assert.ok(document.paths[toOpenApiPath(`${WORKFLOWS_BASE_PATH}/:workflow_id`)]);
+      assert.ok(document.paths[toOpenApiPath(`${WORKFLOWS_BASE_PATH}/:workflow_id/events`)]);
+      assert.ok(document.paths[toOpenApiPath(`${AGENT_RUNS_BASE_PATH}/:agent_run_id`)]);
+      assert.ok(document.paths[SKILLS_BASE_PATH]);
     } finally {
       await app.close();
     }
@@ -242,16 +255,53 @@ describe('control-api Fastify foundation', () => {
     }
   });
 
-  it('does not mount Track 1 control-plane routes in production', async () => {
+  it('does not mount control-plane routes in production', async () => {
     const app = createControlApiServer({ runtimeEnvironment: 'production' });
     try {
       const virtualKeyResponse = await app.inject({ method: 'GET', url: '/api/virtual-keys' });
       const registryResponse = await app.inject({ method: 'GET', url: '/registry/current' });
+      const trackTwoResponses = await Promise.all([
+        app.inject({ method: 'POST', url: TASKS_BASE_PATH, payload: validTaskBody() }),
+        app.inject({ method: 'GET', url: `${TASKS_BASE_PATH}/task_test` }),
+        app.inject({ method: 'POST', url: `${TASKS_BASE_PATH}/task_test/cancel`, payload: {} }),
+        app.inject({ method: 'GET', url: '/api/tasks/task_test/artifacts' }),
+        app.inject({ method: 'GET', url: `${WORKFLOWS_BASE_PATH}/workflow_test` }),
+        app.inject({ method: 'GET', url: `${WORKFLOWS_BASE_PATH}/workflow_test/events` }),
+        app.inject({ method: 'GET', url: `${AGENT_RUNS_BASE_PATH}/agent_run_test` }),
+        app.inject({ method: 'GET', url: SKILLS_BASE_PATH }),
+      ]);
 
       assert.equal(virtualKeyResponse.statusCode, 404);
       assert.equal(registryResponse.statusCode, 404);
+      assert.deepEqual(
+        trackTwoResponses.map((response) => response.statusCode),
+        [404, 404, 404, 404, 404, 404, 404, 404],
+      );
     } finally {
       await app.close();
     }
   });
+
+  function toOpenApiPath(path: string): string {
+    return path.replaceAll(/:([A-Za-z0-9_]+)/gu, '{$1}');
+  }
+
+  function validTaskBody(): Record<string, unknown> {
+    return {
+      task_type: 'analysis',
+      principal_id: 'principal_test',
+      project_id: 'project_123',
+      data_class: 'internal',
+      budget_scope_id: 'budget_scope_track2',
+      policy_version: 'policy-track2-v1',
+      registry_version: 'registry-track2-v1',
+      trace_id: 'trace_track2_test',
+      request_id: 'request_track2_create',
+      objective_ref: {
+        ref_id: 'objective_track2_test',
+        ref_type: 'objective_ref',
+        scope_ref: 'project_123',
+      },
+    };
+  }
 });

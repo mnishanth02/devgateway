@@ -14,6 +14,8 @@ GATE_CONTRACT_VERSION = "0.1.0"
 DEFAULT_DATASET = "evals/datasets/acl-safety.v0.1.json"
 DEFAULT_SUITE = "acl_safety"
 SEVERITY_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+EXPECTED_OUTCOMES = {"pass", "deny"}
+ARTIFACT_REF_KEYS = ("expected_gate_result", "expected_trace_bundle", "expected_audit_event")
 
 
 class EvalRunnerError(RuntimeError):
@@ -94,7 +96,7 @@ def run_fixture_suite(
         if case_id in seen_cases:
             raise EvalRunnerError(f"duplicate case_id in dataset: {case_id}")
         seen_cases.add(case_id)
-        validate_case_shape(case, index)
+        validate_case_shape(case, index, dataset)
 
         fixtures = []
         for ref_index, fixture_ref in enumerate(case["fixture_refs"]):
@@ -192,45 +194,71 @@ def validate_dataset_header(dataset: Any, expected_suite: str) -> None:
         "fixture_root",
         "inert_fixture_mode",
         "no_live_external_calls",
-        "production_retrieval_behavior",
         "cases",
     ]:
         if field not in dataset:
             raise EvalRunnerError(f"dataset missing required field: {field}")
+    for field in ["contract_version", "dataset_id", "dataset_version", "suite", "fixture_root"]:
+        require_string(dataset, field, "dataset")
+    if dataset["contract_version"] != GATE_CONTRACT_VERSION:
+        raise EvalRunnerError(f"dataset contract_version must be {GATE_CONTRACT_VERSION}")
     if dataset["suite"] != expected_suite:
         raise EvalRunnerError(f"dataset suite {dataset['suite']!r} does not match requested suite {expected_suite!r}")
     if dataset["inert_fixture_mode"] is not True:
         raise EvalRunnerError("dataset must set inert_fixture_mode=true")
     if dataset["no_live_external_calls"] is not True:
         raise EvalRunnerError("dataset must set no_live_external_calls=true")
-    if dataset["production_retrieval_behavior"] is not False:
-        raise EvalRunnerError("dataset must set production_retrieval_behavior=false")
+    validate_non_production_flags(dataset, "dataset", require_explicit=True)
+    source_policy = dataset.get("source_data_policy")
+    if not isinstance(source_policy, dict):
+        raise EvalRunnerError("dataset source_data_policy must be an object")
+    if source_policy.get("synthetic_only") is not True:
+        raise EvalRunnerError("dataset source_data_policy.synthetic_only must be true")
+    if not (source_policy.get("no_live_external_calls") is True or source_policy.get("no_live_github_calls") is True):
+        raise EvalRunnerError("dataset source_data_policy must prohibit live external or GitHub calls")
     if not isinstance(dataset["cases"], list) or not dataset["cases"]:
         raise EvalRunnerError("dataset cases must be a non-empty array")
-    require_string(dataset, "fixture_root", "dataset")
 
 
-def validate_case_shape(case: dict[str, Any], index: int) -> None:
+def validate_case_shape(case: dict[str, Any], index: int, dataset: dict[str, Any]) -> None:
     context = f"cases[{index}]"
-    for field in ["severity", "fixture_refs", "expected", "safeguards", "audit_evidence"]:
+    if not isinstance(case, dict):
+        raise EvalRunnerError(f"{context} must be a JSON object")
+    require_string(case, "case_id", context)
+    for field in ["severity", "fixture_refs", "expected", "safeguards"]:
         if field not in case:
             raise EvalRunnerError(f"{context} missing required field: {field}")
     if case["severity"] not in SEVERITY_ORDER or case["severity"] == "none":
         raise EvalRunnerError(f"{context} has invalid severity: {case['severity']!r}")
     if not isinstance(case["fixture_refs"], list) or not case["fixture_refs"]:
         raise EvalRunnerError(f"{context} fixture_refs must be a non-empty array")
+    for ref_index, fixture_ref in enumerate(case["fixture_refs"]):
+        if not isinstance(fixture_ref, dict):
+            raise EvalRunnerError(f"{context}.fixture_refs[{ref_index}] must be an object")
+        require_string(fixture_ref, "path", f"{context}.fixture_refs[{ref_index}]")
     safeguards = case["safeguards"]
     if not isinstance(safeguards, dict):
         raise EvalRunnerError(f"{context}.safeguards must be an object")
     if safeguards.get("fixture_only") is not True or safeguards.get("no_live_external_calls") is not True:
         raise EvalRunnerError(f"{context} must require fixture-only execution with no live external calls")
-    if safeguards.get("production_retrieval_behavior") is not False:
-        raise EvalRunnerError(f"{context} must set production_retrieval_behavior=false")
+    if safeguards.get("synthetic_source_data") is not True:
+        raise EvalRunnerError(f"{context} must require synthetic_source_data=true")
+    validate_non_production_flags(safeguards, f"{context}.safeguards", require_explicit=True)
     expected = case["expected"]
-    if not isinstance(expected, dict) or expected.get("outcome") not in {"pass", "deny"}:
-        raise EvalRunnerError(f"{context}.expected.outcome must be pass or deny")
-    if not isinstance(case["audit_evidence"], list) or not case["audit_evidence"]:
-        raise EvalRunnerError(f"{context}.audit_evidence must be a non-empty array")
+    if not isinstance(expected, dict):
+        raise EvalRunnerError(f"{context}.expected must be an object")
+    expected_outcome(case, context)
+    if expected.get("no_production_enablement") not in {None, True}:
+        raise EvalRunnerError(f"{context}.expected.no_production_enablement must be true when present")
+    validate_expected_assertions(expected, context)
+    validate_optional_string_list(expected, "model_prompt_must_include", context)
+    validate_optional_string_list(expected, "model_prompt_must_not_include", context)
+    if expected.get("required_denial_reason") is not None:
+        require_string(expected, "required_denial_reason", f"{context}.expected")
+    validate_audit_evidence(case, context)
+    artifact_policy = dataset.get("artifact_ref_policy")
+    artifacts_required = isinstance(artifact_policy, dict) and artifact_policy.get("required") is True
+    validate_artifact_refs(case.get("artifact_refs"), context, artifacts_required)
 
 
 def validate_fixture(case: dict[str, Any], fixture: Any, fixture_path_ref: str) -> None:
@@ -243,16 +271,161 @@ def validate_fixture(case: dict[str, Any], fixture: Any, fixture_path_ref: str) 
         raise EvalRunnerError(f"fixture must be synthetic: {fixture_path_ref}")
     if fixture.get("live_external_calls") is not False:
         raise EvalRunnerError(f"fixture attempted to enable live external calls: {fixture_path_ref}")
-    if fixture.get("production_retrieval_behavior") is not False:
-        raise EvalRunnerError(f"fixture attempted to enable production retrieval behavior: {fixture_path_ref}")
-    decision = fixture.get("expected_engine_decision")
-    if not isinstance(decision, dict) or decision.get("decision") not in {"pass", "deny"}:
-        raise EvalRunnerError(f"fixture missing expected_engine_decision decision: {fixture_path_ref}")
+    validate_non_production_flags(fixture, f"fixture {fixture_path_ref}", require_explicit=True)
+    fixture_decision(fixture, fixture_path_ref)
+    if "expected_assertions" in fixture:
+        validate_string_list_value(fixture["expected_assertions"], f"fixture {fixture_path_ref}.expected_assertions")
+    elif isinstance(case["expected"].get("assertions"), list):
+        raise EvalRunnerError(f"fixture missing expected_assertions for asserted case: {fixture_path_ref}")
+    case_artifacts = case.get("artifact_refs")
+    fixture_artifacts = fixture.get("artifact_refs")
+    validate_artifact_refs(fixture_artifacts, f"fixture {fixture_path_ref}", isinstance(case_artifacts, dict))
+    if isinstance(case_artifacts, dict) and isinstance(fixture_artifacts, dict):
+        for key in ARTIFACT_REF_KEYS:
+            if fixture_artifacts.get(key) != case_artifacts.get(key):
+                raise EvalRunnerError(f"fixture artifact_refs.{key} must match case artifact ref: {fixture_path_ref}")
+
+
+def validate_non_production_flags(source: dict[str, Any], context: str, *, require_explicit: bool) -> None:
+    has_safe_flag = False
+    for field in ["production_retrieval_behavior", "production_enablement"]:
+        if field not in source:
+            continue
+        if source[field] is not False:
+            raise EvalRunnerError(f"{context} must set {field}=false when present")
+        has_safe_flag = True
+    if require_explicit and not has_safe_flag:
+        raise EvalRunnerError(
+            f"{context} must explicitly disable production retrieval behavior or production enablement"
+        )
+
+
+def expected_outcome(case: dict[str, Any], context: str) -> str:
+    expected = case["expected"]
+    outcome = expected.get("outcome")
+    decision = expected.get("decision")
+    if outcome is not None and outcome not in EXPECTED_OUTCOMES:
+        raise EvalRunnerError(f"{context}.expected.outcome must be pass or deny")
+    if decision is not None and decision not in EXPECTED_OUTCOMES:
+        raise EvalRunnerError(f"{context}.expected.decision must be pass or deny")
+    if outcome is not None and decision is not None and outcome != decision:
+        raise EvalRunnerError(f"{context}.expected outcome and decision must match")
+    result = outcome if outcome is not None else decision
+    if result is None:
+        raise EvalRunnerError(f"{context}.expected must include outcome or decision")
+    return result
+
+
+def fixture_decision(fixture: dict[str, Any], context: str) -> dict[str, Any]:
+    engine_decision = fixture.get("expected_engine_decision")
+    if engine_decision is not None:
+        if not isinstance(engine_decision, dict):
+            raise EvalRunnerError(f"fixture expected_engine_decision must be an object: {context}")
+        decision = engine_decision.get("decision")
+        if decision not in EXPECTED_OUTCOMES:
+            raise EvalRunnerError(f"fixture expected_engine_decision.decision must be pass or deny: {context}")
+        validate_optional_string_list(engine_decision, "prompt_context_allowed_markers", f"fixture {context}")
+        validate_optional_string_list(engine_decision, "prompt_context_forbidden_markers", f"fixture {context}")
+        if engine_decision.get("denial_reason") is not None:
+            require_string(engine_decision, "denial_reason", f"fixture {context}.expected_engine_decision")
+        return engine_decision
+
+    decision = fixture.get("expected_decision")
+    if decision not in EXPECTED_OUTCOMES:
+        raise EvalRunnerError(f"fixture must declare expected_engine_decision.decision or expected_decision: {context}")
+    normalized = {
+        "decision": decision,
+        "prompt_context_allowed_markers": [],
+        "prompt_context_forbidden_markers": [],
+    }
+    if "expected_denial_reason" in fixture:
+        normalized["denial_reason"] = require_string(fixture, "expected_denial_reason", f"fixture {context}")
+    return normalized
+
+
+def validate_expected_assertions(expected: dict[str, Any], context: str) -> None:
+    if "assertions" in expected:
+        validate_string_list_value(expected["assertions"], f"{context}.expected.assertions")
+        return
+    has_gate_conditions = any(
+        isinstance(expected.get(field), list) and len(expected[field]) > 0
+        for field in ["denial_conditions", "pass_conditions", "blocked_leak_vectors"]
+    )
+    if not has_gate_conditions:
+        raise EvalRunnerError(f"{context}.expected must declare assertions or gate conditions")
+
+
+def validate_optional_string_list(
+    source: dict[str, Any],
+    field: str,
+    context: str,
+    *,
+    allow_empty: bool = True,
+) -> list[str]:
+    if field not in source:
+        return []
+    return validate_string_list_value(source[field], f"{context}.{field}", allow_empty=allow_empty)
+
+
+def validate_string_list_value(value: Any, context: str, *, allow_empty: bool = False) -> list[str]:
+    if not isinstance(value, list) or (not allow_empty and not value):
+        raise EvalRunnerError(f"{context} must be a non-empty string array")
+    for index, item in enumerate(value):
+        if not isinstance(item, str) or not item:
+            raise EvalRunnerError(f"{context}[{index}] must be a non-empty string")
+    return value
+
+
+def validate_audit_evidence(case: dict[str, Any], context: str) -> None:
+    has_audit_evidence = False
+    if "audit_evidence" in case:
+        evidence = case["audit_evidence"]
+        if not isinstance(evidence, list) or not evidence:
+            raise EvalRunnerError(f"{context}.audit_evidence must be a non-empty array")
+        for index, item in enumerate(evidence):
+            if not isinstance(item, dict):
+                raise EvalRunnerError(f"{context}.audit_evidence[{index}] must be an object")
+            require_string(item, "field", f"{context}.audit_evidence[{index}]")
+            if "presence" in item:
+                require_string(item, "presence", f"{context}.audit_evidence[{index}]")
+        has_audit_evidence = True
+    if "audit_evidence_required" in case:
+        validate_string_list_value(case["audit_evidence_required"], f"{context}.audit_evidence_required")
+        has_audit_evidence = True
+    if not has_audit_evidence:
+        raise EvalRunnerError(f"{context} must declare audit evidence requirements")
+
+
+def audit_field_names(case: dict[str, Any], context: str) -> list[str]:
+    fields: list[str] = []
+    for evidence in case.get("audit_evidence", []):
+        if isinstance(evidence, dict):
+            field = require_string(evidence, "field", f"{context}.audit_evidence")
+            if field not in fields:
+                fields.append(field)
+    for field in case.get("audit_evidence_required", []):
+        if not isinstance(field, str) or not field:
+            raise EvalRunnerError(f"{context}.audit_evidence_required contains an invalid field")
+        if field not in fields:
+            fields.append(field)
+    return fields
+
+
+def validate_artifact_refs(artifact_refs: Any, context: str, required: bool) -> None:
+    if artifact_refs is None:
+        if required:
+            raise EvalRunnerError(f"{context}.artifact_refs must be present")
+        return
+    if not isinstance(artifact_refs, dict):
+        raise EvalRunnerError(f"{context}.artifact_refs must be an object")
+    for key in ARTIFACT_REF_KEYS:
+        require_string(artifact_refs, key, f"{context}.artifact_refs")
 
 
 def execute_case(case: dict[str, Any], fixtures: list[dict[str, Any]]) -> dict[str, Any]:
     failures: list[str] = []
     expected = case["expected"]
+    expected_decision = expected_outcome(case, case["case_id"])
     required_denial_reason = expected.get("required_denial_reason")
     must_include = expected.get("model_prompt_must_include", [])
     must_not_include = expected.get("model_prompt_must_not_include", [])
@@ -266,7 +439,7 @@ def execute_case(case: dict[str, Any], fixtures: list[dict[str, Any]]) -> dict[s
     # fixture mask others that bypass the gate.
     for index, fixture in enumerate(fixtures):
         context = f"{case['case_id']}.fixture[{index}]"
-        decision = fixture["expected_engine_decision"]
+        decision = fixture_decision(fixture, context)
         observed = decision["decision"]
         allowed = set(decision.get("prompt_context_allowed_markers", []))
         combined_forbidden.update(decision.get("prompt_context_forbidden_markers", []))
@@ -274,9 +447,9 @@ def execute_case(case: dict[str, Any], fixtures: list[dict[str, Any]]) -> dict[s
         if isinstance(fixture_assertions, list):
             combined_assertions.update(fixture_assertions)
 
-        if observed != expected["outcome"]:
-            failures.append(f"{context} produced outcome {observed!r}, expected {expected['outcome']!r}")
-        if expected["outcome"] == "deny" and required_denial_reason is not None and decision.get("denial_reason") != required_denial_reason:
+        if observed != expected_decision:
+            failures.append(f"{context} produced outcome {observed!r}, expected {expected_decision!r}")
+        if expected_decision == "deny" and required_denial_reason is not None and decision.get("denial_reason") != required_denial_reason:
             failures.append(f"{context} denial reason {decision.get('denial_reason')!r} != required {required_denial_reason!r}")
         for marker in must_include:
             if marker not in allowed:
@@ -285,7 +458,7 @@ def execute_case(case: dict[str, Any], fixtures: list[dict[str, Any]]) -> dict[s
             if marker in allowed:
                 failures.append(f"{context} included forbidden prompt marker: {marker}")
 
-    if expected["outcome"] == "pass" and required_denial_reason is not None:
+    if expected_decision == "pass" and required_denial_reason is not None:
         failures.append("pass case must not require a denial reason")
 
     # Forbidden-marker coverage: the fixtures must explicitly carry every
@@ -303,17 +476,13 @@ def execute_case(case: dict[str, Any], fixtures: list[dict[str, Any]]) -> dict[s
             if assertion not in combined_assertions:
                 failures.append(f"dataset assertion not covered by fixture expected_assertions: {assertion}")
 
-    audit_fields = [
-        require_string(evidence, "field", f"{case['case_id']}.audit_evidence")
-        for evidence in case.get("audit_evidence", [])
-        if isinstance(evidence, dict)
-    ]
+    audit_fields = audit_field_names(case, case["case_id"])
 
     return {
         "case_id": case["case_id"],
         "severity": case["severity"],
-        "expected_outcome": expected["outcome"],
-        "observed_outcome": expected["outcome"] if not failures else "fail",
+        "expected_outcome": expected_decision,
+        "observed_outcome": expected_decision if not failures else "fail",
         "pass": not failures,
         "fixture_count": len(fixtures),
         "audit_event_id": f"audit-placeholder:{case['case_id']}",

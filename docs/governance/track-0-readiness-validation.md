@@ -51,6 +51,6 @@ Interpretation:
 
 ## Phase 0.9 decision
 
-Readiness command validation passed. Track 1 production enablement remains blocked unless registry, provider-policy, auth, eval, deployment, and break-glass gates are satisfied. Owner coverage exists through explicit interim accountable roles in `docs\governance\first-release-owner-matrix.md`.
+Readiness command validation passed. Track 1 production enablement remains blocked unless registry, provider-policy, auth, eval, deployment, runtime break-glass, budget, audit, and model-route gates are satisfied. Owner coverage exists through explicit interim accountable roles in `docs\governance\first-release-owner-matrix.md`.
 
-Track 0 exit is not approved by this evidence alone because `docs\governance\break-glass-design.md` still records approval status as pending. No production routes or behavior were enabled.
+Track 0 governance exit is approved by `docs\governance\track-0-exit-decision.md` under approval record `mnishanth02-track0-approval-2026-06-21`. No production routes or behavior were enabled.

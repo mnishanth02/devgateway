@@ -128,7 +128,18 @@
     },
     "routeIntent": {
       "type": "string",
-      "enum": ["chat", "completion", "embedding", "eval", "tool_planning", "tool_execution", "policy_check"]
+      "enum": [
+        "chat",
+        "completion",
+        "embedding",
+        "eval",
+        "agent_planning",
+        "sub_agent_execution",
+        "tool_planning",
+        "tool_execution",
+        "synthesis",
+        "policy_check"
+      ]
     },
     "costMeasurement": {
       "type": "object",
@@ -180,6 +191,9 @@
         "principal_id": { "$ref": "#/$defs/nonEmptyString" },
         "virtual_key_id": { "$ref": "#/$defs/nonEmptyString" },
         "budget_scope_id": { "$ref": "#/$defs/nonEmptyString" },
+        "workflow_run_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "delegation_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "tool_class": { "$ref": "#/$defs/nullableNonEmptyString" },
         "model_alias": { "$ref": "#/$defs/nonEmptyString" },
         "provider_id": { "$ref": "#/$defs/nullableNonEmptyString" },
         "environment": { "$ref": "#/$defs/environment" },

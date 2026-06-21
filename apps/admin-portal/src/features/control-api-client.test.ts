@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   CONTROL_API_SNAPSHOT_ENDPOINTS,
+  CONTROL_API_TRACK2_TRACE_ENDPOINTS,
   fetchControlApiResult,
   fetchOperationalSnapshot,
 } from './control-api-client.js';
@@ -44,9 +45,11 @@ describe('control API client', () => {
   });
 
   it('assembles a snapshot result for every control API endpoint key', async () => {
+    const requestedPaths: string[] = [];
     const snapshot = await fetchOperationalSnapshot({
       fetchImpl: async (input) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        requestedPaths.push(url);
         if (url.includes('/api/')) return new Response(null, { status: 401 });
         return Response.json({ ok: true });
       },
@@ -58,5 +61,29 @@ describe('control API client', () => {
     }
     expect(snapshot.virtualKeys.status).toBe(401);
     expect(snapshot.registry.ok).toBe(true);
+    expect(requestedPaths).toEqual(
+      expect.arrayContaining([
+        '/api/tasks/task_demo_001',
+        '/api/tasks/task_demo_001/artifacts',
+        '/api/workflows/workflow_demo_001',
+        '/api/workflows/workflow_demo_001/events',
+        '/api/agent-runs/agent_run_demo_001',
+        '/api/skills',
+      ]),
+    );
+  });
+
+  it('keeps Track 2 trace endpoint keys represented in the operational snapshot', () => {
+    const traceKeys = Object.keys(CONTROL_API_TRACK2_TRACE_ENDPOINTS) as Array<keyof typeof CONTROL_API_TRACK2_TRACE_ENDPOINTS>;
+
+    for (const key of traceKeys) {
+      expect(CONTROL_API_SNAPSHOT_ENDPOINTS[key]).toBeDefined();
+    }
+    expect(CONTROL_API_SNAPSHOT_ENDPOINTS.task).toBe('/api/tasks/task_demo_001');
+    expect(CONTROL_API_SNAPSHOT_ENDPOINTS.taskArtifacts).toBe('/api/tasks/task_demo_001/artifacts');
+    expect(CONTROL_API_SNAPSHOT_ENDPOINTS.workflow).toBe('/api/workflows/workflow_demo_001');
+    expect(CONTROL_API_SNAPSHOT_ENDPOINTS.workflowEvents).toBe('/api/workflows/workflow_demo_001/events');
+    expect(CONTROL_API_SNAPSHOT_ENDPOINTS.agentRun).toBe('/api/agent-runs/agent_run_demo_001');
+    expect(CONTROL_API_SNAPSHOT_ENDPOINTS.skills).toBe('/api/skills');
   });
 });

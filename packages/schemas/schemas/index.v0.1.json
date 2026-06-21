@@ -17,7 +17,16 @@
     "policy_denial_reason": "https://devgateway.local/schemas/policy/denial-reason.v0.1.schema.json",
     "eval_case": "https://devgateway.local/schemas/eval/eval-case.v0.1.schema.json",
     "gate_definition": "https://devgateway.local/schemas/eval/gate-definition.v0.1.schema.json",
-    "gate_result_persistence": "https://devgateway.local/schemas/eval/gate-result-persistence.v0.1.schema.json"
+    "gate_result_persistence": "https://devgateway.local/schemas/eval/gate-result-persistence.v0.1.schema.json",
+    "agent_definition": "https://devgateway.local/schemas/agent/agent-definition.v0.1.schema.json",
+    "agent_run": "https://devgateway.local/schemas/agent/agent-run.v0.1.schema.json",
+    "delegation": "https://devgateway.local/schemas/agent/delegation.v0.1.schema.json",
+    "sub_agent_result": "https://devgateway.local/schemas/agent/sub-agent-result.v0.1.schema.json",
+    "workflow_state": "https://devgateway.local/schemas/agent/workflow-state.v0.1.schema.json",
+    "workflow_event": "https://devgateway.local/schemas/agent/workflow-event.v0.1.schema.json",
+    "task_artifact": "https://devgateway.local/schemas/agent/task-artifact.v0.1.schema.json",
+    "tool_call": "https://devgateway.local/schemas/agent/tool-call.v0.1.schema.json",
+    "skill_definition": "https://devgateway.local/schemas/agent/skill-definition.v0.1.schema.json"
   },
   "endpoints": [
     {
@@ -125,6 +134,19 @@
     "gate_definition": "https://devgateway.local/schemas/eval/gate-definition.v0.1.schema.json#/$defs/gateDefinition",
     "gate_suite_thresholds": "https://devgateway.local/schemas/eval/gate-definition.v0.1.schema.json#/$defs/suiteThresholds",
     "gate_result_persistence": "https://devgateway.local/schemas/eval/gate-result-persistence.v0.1.schema.json#/$defs/gateResultPersistenceRecord",
-    "gate_result_version_bindings": "https://devgateway.local/schemas/eval/gate-result-persistence.v0.1.schema.json#/$defs/versionBindings"
+    "gate_result_version_bindings": "https://devgateway.local/schemas/eval/gate-result-persistence.v0.1.schema.json#/$defs/versionBindings",
+    "agent_definition": "https://devgateway.local/schemas/agent/agent-definition.v0.1.schema.json",
+    "agent_definition_ref": "https://devgateway.local/schemas/agent/agent-definition.v0.1.schema.json#/$defs/agentDefinitionRef",
+    "agent_run": "https://devgateway.local/schemas/agent/agent-run.v0.1.schema.json",
+    "delegation": "https://devgateway.local/schemas/agent/delegation.v0.1.schema.json",
+    "sub_agent_result": "https://devgateway.local/schemas/agent/sub-agent-result.v0.1.schema.json",
+    "workflow_state": "https://devgateway.local/schemas/agent/workflow-state.v0.1.schema.json",
+    "workflow_event": "https://devgateway.local/schemas/agent/workflow-event.v0.1.schema.json",
+    "task_artifact": "https://devgateway.local/schemas/agent/task-artifact.v0.1.schema.json",
+    "task_artifact_ref": "https://devgateway.local/schemas/agent/task-artifact.v0.1.schema.json#/$defs/artifactRef",
+    "tool_call": "https://devgateway.local/schemas/agent/tool-call.v0.1.schema.json",
+    "tool_definition_ref": "https://devgateway.local/schemas/agent/tool-call.v0.1.schema.json#/$defs/toolDefinitionRef",
+    "tool_call_result_reference": "https://devgateway.local/schemas/agent/tool-call.v0.1.schema.json#/$defs/toolCallResultReference",
+    "skill_definition": "https://devgateway.local/schemas/agent/skill-definition.v0.1.schema.json"
   }
 }

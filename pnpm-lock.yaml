@@ -138,6 +138,8 @@ importers:
 
   packages/shared-types: {}
 
+  workers/agent-runtime: {}
+
   workers/eval-runner: {}
 
   workers/tool-integrations: {}

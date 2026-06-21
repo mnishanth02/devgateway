@@ -16,7 +16,15 @@
         "eval_gate",
         "policy_stale",
         "route_disabled",
-        "approval_required"
+        "approval_required",
+        "invalid_state",
+        "invalid_output_schema",
+        "tool_denied",
+        "artifact_denied",
+        "missing_audit_sink",
+        "context_limit",
+        "idempotency_conflict",
+        "stale_registry"
       ],
       "properties": {
         "budget": {
@@ -114,6 +122,102 @@
               }
             }
           ]
+        },
+        "invalid_state": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "invalid_state" },
+                "audit": { "properties": { "reason": { "const": "invalid_state" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "invalid_state" } } }
+              }
+            }
+          ]
+        },
+        "invalid_output_schema": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "invalid_output_schema" },
+                "audit": { "properties": { "reason": { "const": "invalid_output_schema" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "invalid_output_schema" } } }
+              }
+            }
+          ]
+        },
+        "tool_denied": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "tool_denied" },
+                "audit": { "properties": { "reason": { "const": "tool_denied" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "tool_denied" } } }
+              }
+            }
+          ]
+        },
+        "artifact_denied": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "artifact_denied" },
+                "audit": { "properties": { "reason": { "const": "artifact_denied" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "artifact_denied" } } }
+              }
+            }
+          ]
+        },
+        "missing_audit_sink": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "missing_audit_sink" },
+                "audit": { "properties": { "reason": { "const": "missing_audit_sink" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "missing_audit_sink" } } }
+              }
+            }
+          ]
+        },
+        "context_limit": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "context_limit" },
+                "audit": { "properties": { "reason": { "const": "context_limit" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "context_limit" } } }
+              }
+            }
+          ]
+        },
+        "idempotency_conflict": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "idempotency_conflict" },
+                "audit": { "properties": { "reason": { "const": "idempotency_conflict" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "idempotency_conflict" } } }
+              }
+            }
+          ]
+        },
+        "stale_registry": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "stale_registry" },
+                "audit": { "properties": { "reason": { "const": "stale_registry" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "stale_registry" } } }
+              }
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -131,7 +235,15 @@
         "eval_gate",
         "policy_stale",
         "route_disabled",
-        "approval_required"
+        "approval_required",
+        "invalid_state",
+        "invalid_output_schema",
+        "tool_denied",
+        "artifact_denied",
+        "missing_audit_sink",
+        "context_limit",
+        "idempotency_conflict",
+        "stale_registry"
       ]
     },
     "denialReasonDefinition": {

@@ -14,6 +14,17 @@ export const schemaCatalog = {
     traceContext: 'schemas/shared/trace-context.v0.1.schema.json',
     evalCase: 'schemas/eval/eval-case.v0.1.schema.json',
   },
+  agent: {
+    agentDefinition: 'schemas/agent/agent-definition.v0.1.schema.json',
+    agentRun: 'schemas/agent/agent-run.v0.1.schema.json',
+    delegation: 'schemas/agent/delegation.v0.1.schema.json',
+    subAgentResult: 'schemas/agent/sub-agent-result.v0.1.schema.json',
+    workflowState: 'schemas/agent/workflow-state.v0.1.schema.json',
+    workflowEvent: 'schemas/agent/workflow-event.v0.1.schema.json',
+    taskArtifact: 'schemas/agent/task-artifact.v0.1.schema.json',
+    toolCall: 'schemas/agent/tool-call.v0.1.schema.json',
+    skillDefinition: 'schemas/agent/skill-definition.v0.1.schema.json',
+  },
 } as const;
 
 export type SchemaCatalog = typeof schemaCatalog;

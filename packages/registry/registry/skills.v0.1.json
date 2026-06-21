@@ -1,0 +1,246 @@
+{
+  "contract_version": "0.1.0",
+  "registry_version": "skills.v0.1",
+  "created_at": "2026-06-21T10:30:00.000Z",
+  "freshness_expires_at": "2026-12-31T00:00:00.000Z",
+  "production_posture": {
+    "production_enabled": false,
+    "production_route_allowed": false,
+    "gate_result_refs": [],
+    "notes": "Static Phase 2.8 skill registry skeleton; production skill routing remains disabled until explicit gate evidence and owner approval are registered."
+  },
+  "skills": [
+    {
+      "contract_version": "0.1.0",
+      "skill_definition_id": "skill:devgateway/research-context-pack",
+      "skill_version_id": "skill-version:devgateway/research-context-pack@0.1.0-draft",
+      "status": "draft",
+      "lifecycle_status": "draft",
+      "owner_ref": {
+        "owner_type": "team",
+        "owner_id": "team:agent-platform",
+        "project_id": "project:devgateway",
+        "principal_id": "principal:skill-registry-admin"
+      },
+      "principal_id": "principal:skill-registry-admin",
+      "project_id": "project:devgateway",
+      "data_class": "internal",
+      "budget_scope_id": "budget:devgateway/agent-skills",
+      "policy_version": "policy:track2.skill-registry.v0.1",
+      "registry_version": "skills.v0.1",
+      "allowed_model_aliases": [
+        "devgateway/large-context",
+        "devgateway/retrieval-planner"
+      ],
+      "allowed_tool_refs": [
+        {
+          "tool_definition_id": "track2.catalog.schema.read",
+          "tool_version": "0.1.0",
+          "risk_tier": "read_only_low"
+        },
+        {
+          "tool_definition_id": "track2.registry.model-alias.read",
+          "tool_version": "0.1.0",
+          "risk_tier": "read_only_low"
+        }
+      ],
+      "disallowed_tool_refs": [
+        {
+          "tool_definition_id": "track2.artifact.write",
+          "tool_version": "0.1.0",
+          "risk_tier": "disallowed_write"
+        },
+        {
+          "tool_definition_id": "track2.workflow.dispatch",
+          "tool_version": "0.1.0",
+          "risk_tier": "approval_required"
+        }
+      ],
+      "tool_bundles": [
+        {
+          "bundle_id": "tool-bundle:track2/registry-readonly-context",
+          "bundle_version": "0.1.0",
+          "tool_refs": [
+            {
+              "tool_definition_id": "track2.catalog.schema.read",
+              "tool_version": "0.1.0",
+              "risk_tier": "read_only_low"
+            },
+            {
+              "tool_definition_id": "track2.registry.model-alias.read",
+              "tool_version": "0.1.0",
+              "risk_tier": "read_only_low"
+            }
+          ]
+        }
+      ],
+      "instruction_template_refs": [
+        {
+          "ref_id": "instruction-template:skill/research-context-pack.v0.1",
+          "ref_type": "instruction_template",
+          "scope_ref": "catalog:track2/skills"
+        }
+      ],
+      "input_schema_ref": {
+        "schema_id": "https://devgateway.local/schemas/agent/delegation.v0.1.schema.json",
+        "json_pointer": "#",
+        "schema_version": "0.1.0",
+        "enforcement": "validate_before_dispatch"
+      },
+      "output_schema_ref": {
+        "schema_id": "https://devgateway.local/schemas/agent/sub-agent-result.v0.1.schema.json",
+        "json_pointer": "#",
+        "schema_version": "0.1.0",
+        "enforcement": "validate_before_synthesis"
+      },
+      "approval_policy": {
+        "approval_required": false,
+        "approval_ref": null,
+        "approver_ref": null,
+        "policy_ref": "policy:track2.skill.nonproduction.v0.1"
+      },
+      "eval_suite_refs": [
+        {
+          "eval_suite_id": "track2.fixture.skill-definition.smoke.v0.1",
+          "eval_suite_version": "0.1.0",
+          "fixture_ref": {
+            "ref_id": "fixture-suite:track2/skill-definition-smoke.v0.1",
+            "ref_type": "eval_fixture_suite",
+            "scope_ref": "catalog:track2/evals"
+          },
+          "gate_result_ref": null
+        }
+      ],
+      "rollout_policy": {
+        "rollout_state": "none",
+        "production_enabled": false,
+        "allowed_project_refs": [],
+        "allowed_principal_refs": []
+      },
+      "gate_result_refs": [],
+      "artifact_refs": [],
+      "audit_refs": [],
+      "cost_refs": [],
+      "created_at": "2026-06-21T10:30:00.000Z",
+      "updated_at": "2026-06-21T10:30:00.000Z"
+    },
+    {
+      "contract_version": "0.1.0",
+      "skill_definition_id": "skill:devgateway/tool-call-summarizer",
+      "skill_version_id": "skill-version:devgateway/tool-call-summarizer@0.1.0-eval.1",
+      "status": "eval_ready",
+      "lifecycle_status": "eval_ready",
+      "owner_ref": {
+        "owner_type": "team",
+        "owner_id": "team:agent-platform",
+        "project_id": "project:devgateway",
+        "principal_id": "principal:skill-registry-admin"
+      },
+      "principal_id": "principal:skill-registry-admin",
+      "project_id": "project:devgateway",
+      "data_class": "internal",
+      "budget_scope_id": "budget:devgateway/agent-skills",
+      "policy_version": "policy:track2.skill-registry.v0.1",
+      "registry_version": "skills.v0.1",
+      "allowed_model_aliases": [
+        "devgateway/fast",
+        "devgateway/code-review"
+      ],
+      "allowed_tool_refs": [
+        {
+          "tool_definition_id": "track2.artifact.read",
+          "tool_version": "0.1.0",
+          "risk_tier": "read_only_medium"
+        },
+        {
+          "tool_definition_id": "track2.audit.events.read",
+          "tool_version": "0.1.0",
+          "risk_tier": "read_only_low"
+        }
+      ],
+      "disallowed_tool_refs": [
+        {
+          "tool_definition_id": "track2.artifact.write",
+          "tool_version": "0.1.0",
+          "risk_tier": "disallowed_write"
+        },
+        {
+          "tool_definition_id": "track2.tool.execute",
+          "tool_version": "0.1.0",
+          "risk_tier": "approval_required"
+        }
+      ],
+      "tool_bundles": [
+        {
+          "bundle_id": "tool-bundle:track2/tool-call-observation-readonly",
+          "bundle_version": "0.1.0",
+          "tool_refs": [
+            {
+              "tool_definition_id": "track2.artifact.read",
+              "tool_version": "0.1.0",
+              "risk_tier": "read_only_medium"
+            },
+            {
+              "tool_definition_id": "track2.audit.events.read",
+              "tool_version": "0.1.0",
+              "risk_tier": "read_only_low"
+            }
+          ]
+        }
+      ],
+      "instruction_template_refs": [
+        {
+          "ref_id": "instruction-template:skill/tool-call-summarizer.v0.1",
+          "ref_type": "instruction_template",
+          "scope_ref": "catalog:track2/skills"
+        }
+      ],
+      "input_schema_ref": {
+        "schema_id": "https://devgateway.local/schemas/agent/tool-call.v0.1.schema.json",
+        "json_pointer": "#",
+        "schema_version": "0.1.0",
+        "enforcement": "validate_before_execution"
+      },
+      "output_schema_ref": {
+        "schema_id": "https://devgateway.local/schemas/agent/task-artifact.v0.1.schema.json",
+        "json_pointer": "#",
+        "schema_version": "0.1.0",
+        "enforcement": "validate_before_persist"
+      },
+      "approval_policy": {
+        "approval_required": false,
+        "approval_ref": null,
+        "approver_ref": null,
+        "policy_ref": "policy:track2.skill.nonproduction.v0.1"
+      },
+      "eval_suite_refs": [
+        {
+          "eval_suite_id": "track2.fixture.tool-call.policy.v0.1",
+          "eval_suite_version": "0.1.0",
+          "fixture_ref": {
+            "ref_id": "fixture-suite:track2/tool-call-policy.v0.1",
+            "ref_type": "eval_fixture_suite",
+            "scope_ref": "catalog:track2/evals"
+          },
+          "gate_result_ref": null
+        }
+      ],
+      "rollout_policy": {
+        "rollout_state": "limited",
+        "production_enabled": false,
+        "allowed_project_refs": [
+          "project:devgateway"
+        ],
+        "allowed_principal_refs": [
+          "principal:skill-registry-admin"
+        ]
+      },
+      "gate_result_refs": [],
+      "artifact_refs": [],
+      "audit_refs": [],
+      "cost_refs": [],
+      "created_at": "2026-06-21T10:30:00.000Z",
+      "updated_at": "2026-06-21T10:30:00.000Z"
+    }
+  ]
+}

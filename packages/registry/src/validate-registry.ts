@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import registrySnapshotJson from '../registry/model-aliases.v0.1.json' with { type: 'json' };
 import {
   validateGateResultReferenceMatch,
@@ -5,6 +7,12 @@ import {
   type GateResultMatchIssue,
   type GateResultTargetExpectation,
 } from './gate-result-contract.ts';
+import {
+  getBundledSkillRegistrySnapshot,
+  validateSkillRegistry,
+  validateSkillRegistryNegativeFixtures,
+  type SkillRegistryValidationIssueCode,
+} from './skill-registry.ts';
 import {
   dataClasses,
   gateStatuses,
@@ -30,6 +38,7 @@ declare const console: {
 };
 declare const process: {
   argv: string[];
+  env: Readonly<Record<string, string | undefined>>;
   exitCode?: number;
 };
 
@@ -41,7 +50,8 @@ export interface RegistryValidationIssue {
     | 'eval_gate'
     | 'route_disabled'
     | 'approval_required'
-    | 'fixture';
+    | 'fixture'
+    | SkillRegistryValidationIssueCode;
   path: string;
   message: string;
 }
@@ -55,6 +65,14 @@ interface RegistryValidationInput {
   snapshot: ModelProviderRegistrySnapshot;
   gateResults?: readonly GateResultRecord[];
   now?: Date;
+}
+
+export interface RegistryValidationCliOptions {
+  readonly argv?: readonly string[];
+  readonly env?: Readonly<Record<string, string | undefined>>;
+  readonly gateResults?: readonly GateResultRecord[];
+  readonly readFileText?: (path: string) => string;
+  readonly snapshot?: ModelProviderRegistrySnapshot;
 }
 
 type GateTargetExpectation = GateResultTargetExpectation;
@@ -145,10 +163,28 @@ export function validateRegistryNegativeFixtures(): RegistryValidationResult {
   return { ok: true, issues: [] };
 }
 
-export function validateRegistryCli(): RegistryValidationResult {
-  const validation = validateRegistry({ snapshot: registrySnapshot });
+export function validateRegistryCli(options: RegistryValidationCliOptions = {}): RegistryValidationResult {
+  const snapshot = options.snapshot ?? registrySnapshot;
+  const gateResultLoad = loadRegistryCliGateResults(options);
+  const validation = validateRegistry({ snapshot, gateResults: gateResultLoad.gateResults });
   const negativeFixture = validateRegistryNegativeFixtures();
-  const issues = [...validation.issues, ...negativeFixture.issues];
+  const skillRegistry = getBundledSkillRegistrySnapshot();
+  const skillValidation = validateSkillRegistry({
+    snapshot: skillRegistry,
+    modelRegistry: snapshot,
+    gateResults: gateResultLoad.gateResults,
+  });
+  const skillNegativeFixture = validateSkillRegistryNegativeFixtures({
+    modelRegistry: snapshot,
+    gateResults: gateResultLoad.gateResults,
+  });
+  const issues: RegistryValidationIssue[] = [
+    ...gateResultLoad.issues,
+    ...validation.issues,
+    ...negativeFixture.issues,
+    ...skillValidation.issues,
+    ...skillNegativeFixture.issues,
+  ];
   const result = { ok: issues.length === 0, issues };
 
   if (!result.ok) {
@@ -162,6 +198,118 @@ export function validateRegistryCli(): RegistryValidationResult {
 
   console.log('Registry validation passed.');
   return result;
+}
+
+function loadRegistryCliGateResults(options: RegistryValidationCliOptions): {
+  readonly gateResults: readonly GateResultRecord[];
+  readonly issues: readonly RegistryValidationIssue[];
+} {
+  if (options.gateResults !== undefined) {
+    return { gateResults: options.gateResults, issues: [] };
+  }
+
+  const issues: RegistryValidationIssue[] = [];
+  const path = getCliGateResultsPath(options.argv ?? process.argv, options.env ?? process.env, issues);
+  if (path === undefined) {
+    return { gateResults: [], issues };
+  }
+
+  const readFileText = options.readFileText ?? ((filePath: string) => readFileSync(filePath, 'utf8'));
+  try {
+    const parsed = JSON.parse(readFileText(path)) as unknown;
+    return parseGateResultsPayload(parsed);
+  } catch (error) {
+    return {
+      gateResults: [],
+      issues: [
+        {
+          code: 'schema',
+          path: '$.gate_results',
+          message: `could not read gate-result JSON from ${path}: ${error instanceof Error ? error.message : 'unknown error'}`,
+        },
+      ],
+    };
+  }
+}
+
+function getCliGateResultsPath(
+  argv: readonly string[],
+  env: Readonly<Record<string, string | undefined>>,
+  issues: RegistryValidationIssue[],
+): string | undefined {
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--gate-results' || arg === '--gate-results-path') {
+      const next = argv[index + 1];
+      if (next === undefined || next.startsWith('--') || next.trim() === '') {
+        issues.push({
+          code: 'schema',
+          path: '$.gate_results',
+          message: `${arg} requires a gate-result JSON file path`,
+        });
+        return undefined;
+      }
+      return next;
+    }
+    const gateResultsPath = readFlagValue(arg, '--gate-results=') ?? readFlagValue(arg, '--gate-results-path=');
+    if (gateResultsPath !== undefined) {
+      if (gateResultsPath.trim() === '') {
+        issues.push({
+          code: 'schema',
+          path: '$.gate_results',
+          message: 'gate-result JSON file path must not be empty',
+        });
+        return undefined;
+      }
+      return gateResultsPath;
+    }
+  }
+
+  return firstString([
+    env.DEVGATEWAY_REGISTRY_GATE_RESULTS,
+    env.DEVGATEWAY_REGISTRY_GATE_RESULTS_PATH,
+    env.REGISTRY_GATE_RESULTS_PATH,
+  ]);
+}
+
+function readFlagValue(arg: string | undefined, prefix: string): string | undefined {
+  return arg?.startsWith(prefix) === true ? arg.slice(prefix.length) : undefined;
+}
+
+function parseGateResultsPayload(parsed: unknown): {
+  readonly gateResults: readonly GateResultRecord[];
+  readonly issues: readonly RegistryValidationIssue[];
+} {
+  const gateResults = Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && Array.isArray(parsed.gate_results)
+      ? parsed.gate_results
+      : isRecord(parsed) && Array.isArray(parsed.gateResults)
+        ? parsed.gateResults
+        : undefined;
+
+  if (gateResults === undefined) {
+    return {
+      gateResults: [],
+      issues: [{ code: 'schema', path: '$.gate_results', message: 'gate-result JSON must be an array or object with gate_results' }],
+    };
+  }
+
+  const issues: RegistryValidationIssue[] = [];
+  gateResults.forEach((gateResult, index) => {
+    if (!isGateResultRecordShape(gateResult)) {
+      issues.push({
+        code: 'schema',
+        path: `$.gate_results[${index}]`,
+        message: 'gate-result record is missing required contract, target, metric, or audit fields',
+      });
+    }
+  });
+
+  return {
+    gateResults: issues.length === 0 ? (gateResults as readonly GateResultRecord[]) : [],
+    issues,
+  };
 }
 
 function validateSnapshotEnvelope(
@@ -402,6 +550,42 @@ function mapGateResultMatchIssueCode(code: GateResultMatchIssue['code']): Regist
     return 'approval_required';
   }
   return 'production_gate';
+}
+
+function isGateResultRecordShape(value: unknown): value is GateResultRecord {
+  if (!isRecord(value) || !isRecord(value.target)) {
+    return false;
+  }
+  return isNonEmptyStringValue(value.contract_version)
+    && isNonEmptyStringValue(value.gate_result_id)
+    && isNonEmptyStringValue(value.change_id)
+    && isNonEmptyStringValue(value.dataset_version)
+    && isNonEmptyStringValue(value.eval_suite_version)
+    && isNonEmptyStringValue(value.runner_version)
+    && isNonEmptyStringValue(value.target.kind)
+    && isNonEmptyStringValue(value.target.artifact_version)
+    && isRecord(value.metrics)
+    && isRecord(value.thresholds)
+    && typeof value.pass === 'boolean'
+    && isNonEmptyStringValue(value.blocking_severity)
+    && Array.isArray(value.artifact_refs)
+    && isNonEmptyStringValue(value.audit_event_id)
+    && isNonEmptyStringValue(value.created_at);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isNonEmptyStringValue(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function firstString(values: readonly (string | undefined)[]): string | undefined {
+  for (const value of values) {
+    if (isNonEmptyStringValue(value)) return value.trim();
+  }
+  return undefined;
 }
 
 function isNonEmptyString(value: string): boolean {

@@ -1,0 +1,13 @@
+{
+  "name": "@devgateway/agent-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Fixture-safe Python workflow runtime skeleton for DevGateway agents.",
+  "scripts": {
+    "build": "python -m compileall -q src",
+    "lint": "python -m compileall -q src tests",
+    "test": "python -m unittest discover -s tests -p \"*_test.py\"",
+    "transit": "python -c \"import sys; sys.path.insert(0, 'src'); from devgateway_agent_runtime.cli import main; raise SystemExit(main(['--mode', 'fixture', '--format', 'json']))\"",
+    "typecheck": "python -m compileall -q src tests"
+  }
+}

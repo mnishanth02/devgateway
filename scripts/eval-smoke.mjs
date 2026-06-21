@@ -25,6 +25,21 @@ const smokeSuites = [
     dataset: 'evals/datasets/degraded-mode.v0.1.json',
     suite: 'degraded_mode',
     changeId: 'phase-1.7-degraded-mode'
+  },
+  {
+    dataset: 'evals/datasets/agent-workflow.v0.1.json',
+    suite: 'agent_workflow',
+    changeId: 'phase-2.10-agent-workflow'
+  },
+  {
+    dataset: 'evals/datasets/tool-safety.v0.1.json',
+    suite: 'tool_safety',
+    changeId: 'phase-2.10-tool-safety'
+  },
+  {
+    dataset: 'evals/datasets/prompt-injection-tainted-context.v0.1.json',
+    suite: 'prompt_injection_tainted_context',
+    changeId: 'phase-2.10-prompt-injection-tainted-context'
   }
 ];
 

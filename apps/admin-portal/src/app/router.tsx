@@ -7,6 +7,7 @@ import {
 import type { QueryClient } from '@tanstack/react-query';
 import { AuthenticatedAdminLayout } from './routes/authenticated-admin-layout.js';
 import { OperationsHome } from './routes/operations-home.js';
+import { TaskTraceView } from './routes/task-trace-view.js';
 
 export interface AdminRouterContext {
   readonly queryClient: QueryClient;
@@ -22,7 +23,7 @@ const rootRoute = createRootRouteWithContext<AdminRouterContext>()({
     <main className="auth-state">
       <p className="eyebrow">Route not found</p>
       <h1>Unknown admin surface.</h1>
-      <p>The Phase 1.6 shell only exposes the Track 1 command board.</p>
+      <p>The admin shell exposes the command board and the Phase 2.9 task trace lab.</p>
     </main>
   ),
 });
@@ -33,7 +34,13 @@ const indexRoute = createRoute({
   component: OperationsHome,
 });
 
-export const routeTree = rootRoute.addChildren([indexRoute]);
+const traceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/trace',
+  component: TaskTraceView,
+});
+
+export const routeTree = rootRoute.addChildren([indexRoute, traceRoute]);
 
 export function createAdminRouter(options: CreateAdminRouterOptions) {
   const routerOptions = {

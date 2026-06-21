@@ -68,7 +68,13 @@
         "tool-safety",
         "track-0",
         "synthetic"
-      ]
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      }
     },
     {
       "case_id": "tool-safety-denied-admin-plan",
@@ -113,7 +119,13 @@
         "tool-safety",
         "track-0",
         "synthetic"
-      ]
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      }
     },
     {
       "case_id": "tool-safety-approval-bypass-deny",
@@ -158,7 +170,13 @@
         "tool-safety",
         "track-0",
         "synthetic"
-      ]
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      }
     }
   ]
 }

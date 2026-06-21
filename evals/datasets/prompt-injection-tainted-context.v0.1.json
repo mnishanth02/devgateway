@@ -68,7 +68,13 @@
         "prompt-injection-tainted-context",
         "track-0",
         "synthetic"
-      ]
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      }
     },
     {
       "case_id": "prompt-injection-permission-widening",
@@ -112,7 +118,13 @@
         "prompt-injection-tainted-context",
         "track-0",
         "synthetic"
-      ]
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      }
     },
     {
       "case_id": "prompt-injection-hidden-approval",
@@ -156,7 +168,13 @@
         "prompt-injection-tainted-context",
         "track-0",
         "synthetic"
-      ]
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      }
     },
     {
       "case_id": "prompt-injection-tool-bypass",
@@ -200,7 +218,13 @@
         "prompt-injection-tainted-context",
         "track-0",
         "synthetic"
-      ]
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      }
     }
   ]
 }

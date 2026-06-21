@@ -1,9 +1,19 @@
 # Break-glass provider access runbook
 
-Status: Draft; approval status pending.  
+Status: Approved governance runbook under `mnishanth02-track0-approval-2026-06-21`.
 Scope: emergency model-provider access only. This runbook does not grant credentials, enable production routes, or approve real provider use.
 
 Break-glass design approval is required before Track 1 may enable gateway or model routes.
+
+## Approval record
+
+| Field | Value |
+|---|---|
+| Approval record ID | `mnishanth02-track0-approval-2026-06-21` |
+| Approval timestamp | `2026-06-21T20:47:32.272+05:30` |
+| Approver / accountable principal | `@mnishanth02` |
+| Approved scope | Emergency-provider-access request fields, activation procedure, recovery checklist, degraded-mode tests, TTL cap, audit requirements, and provider-key rotation requirement. |
+| Production enablement | Not enabled; every real activation remains incident-scoped and pending until its own required approvals are recorded. |
 
 ## Request fields
 
@@ -12,7 +22,7 @@ Break-glass design approval is required before Track 1 may enable gateway or mod
 | Trigger | Bifrost/gateway outage, provider-route failure, severe incident triage, or other documented emergency where normal gated provider access is unavailable. |
 | Requester | Named internal user, team, project, trace or incident context, and business justification. |
 | Approvers | Platform lead plus engineering lead; Platform security owner for all provider access; CTO/founder approval for production-impacting tools. |
-| Approval status | `pending` until all required approvals are recorded. Missing approval denies provider access. |
+| Approval status | Per-activation approval remains `pending` until all required incident-scoped approvals are recorded. Missing activation approval denies provider access. |
 | Scope | Project, tenant, environment, route intent, data classes, allowed aliases, allowed operation types, and explicit exclusions. |
 | Provider/model aliases allowed | Explicit alias allowlist for this activation only; default is none. Production aliases still require registry, policy, audit, budget, and eval gates. |
 | Data classes allowed | `public`, `internal`, or `confidential` only when approved. `restricted` remains denied unless explicitly approved, scoped, and audited for this activation. |
@@ -28,7 +38,7 @@ Break-glass design approval is required before Track 1 may enable gateway or mod
 
 1. Open an incident record and assign an activation ID.
 2. Record the trigger, requester, scope, aliases, data classes, TTL, and incident link.
-3. Collect required approvals. Leave approval status as `pending` until approval evidence exists.
+3. Collect required activation approvals. Leave activation approval status as `pending` until incident-scoped approval evidence exists.
 4. Security owner verifies data-class and alias scope. Restricted data remains denied unless explicitly allowed and audited.
 5. Mint a short-lived emergency service principal and Bifrost virtual key through the Control API path only.
 6. Execute only approved read-only provider calls within scope and TTL.

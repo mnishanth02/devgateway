@@ -1,8 +1,28 @@
 export const gatewayControlContractVersion = '0.1.0' as const;
 
 export const dataClasses = ['public', 'internal', 'confidential', 'restricted'] as const;
-export const routeIntents = ['chat', 'completion', 'embedding', 'eval', 'tool_planning', 'tool_execution', 'policy_check'] as const;
-export const budgetScopeTypes = ['org', 'team', 'project', 'principal', 'virtual_key'] as const;
+export const routeIntents = [
+  'chat',
+  'completion',
+  'embedding',
+  'eval',
+  'agent_planning',
+  'sub_agent_execution',
+  'tool_planning',
+  'tool_execution',
+  'synthesis',
+  'policy_check',
+] as const;
+export const budgetScopeTypes = [
+  'org',
+  'team',
+  'project',
+  'principal',
+  'virtual_key',
+  'workflow',
+  'delegation',
+  'tool_class',
+] as const;
 export const bifrostVirtualKeyMetadataForbiddenFields = [
   'one_time_secret',
   'raw_secret',
@@ -27,6 +47,29 @@ export const denialReasonCodes = [
   'policy_stale',
   'route_disabled',
   'approval_required',
+  'invalid_state',
+  'invalid_output_schema',
+  'tool_denied',
+  'artifact_denied',
+  'missing_audit_sink',
+  'context_limit',
+  'idempotency_conflict',
+  'stale_registry',
+] as const;
+export const traceComponents = [
+  'control_api',
+  'bifrost',
+  'provider',
+  'audit',
+  'cost',
+  'eval',
+  'tool_broker',
+  'admin_portal',
+  'workflow_runtime',
+  'agent_runtime',
+  'supervisor_agent',
+  'sub_agent_executor',
+  'tool_integrations',
 ] as const;
 
 export type GatewayControlContractVersion = typeof gatewayControlContractVersion;
@@ -53,7 +96,7 @@ export type CostMeasurementSource =
   | 'not_available';
 export type GatewayDecision = 'allow' | 'deny';
 export type SamplingDecision = 'record' | 'drop' | 'defer';
-export type TraceComponent = 'control_api' | 'bifrost' | 'provider' | 'audit' | 'cost' | 'eval' | 'tool_broker' | 'admin_portal';
+export type TraceComponent = (typeof traceComponents)[number];
 
 export interface ProductionDisabledPosture {
   readonly production_enabled: false;
@@ -337,6 +380,9 @@ export interface CostAggregationTargets {
   readonly principal_id: string;
   readonly virtual_key_id: string;
   readonly budget_scope_id: string;
+  readonly workflow_run_id?: string | null;
+  readonly delegation_id?: string | null;
+  readonly tool_class?: string | null;
   readonly model_alias: string;
   readonly provider_id: string | null;
   readonly environment: EnvironmentName;

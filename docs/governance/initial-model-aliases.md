@@ -35,3 +35,9 @@ Each initial alias must keep all of these values until a later approved producti
 ## Future enablement gate
 
 Disabled entries may be used only as registry placeholders and non-production route metadata. Production enablement requires a separate change that adds verified policy eligibility, pricing, limits, eval suite versions, approvals, and a matching passing gate-result reference. A future `devgateway/large-context` Google Vertex candidate additionally requires explicit manual approval before it can be configured.
+
+## Approved initial production provider families
+
+Approval record `mnishanth02-track0-approval-2026-06-21` selects OpenAI-class and Anthropic-class providers as the first production provider families to configure later. This is provider-family direction only; it does not add provider keys, choose exact model IDs, enable Bifrost production routes, or flip any alias to `production_enabled=true`.
+
+Before any alias can become production-enabled, the implementation must record exact provider/model IDs, pricing and rate limits, data-class eligibility, provider-key secret references, Bifrost route evidence, budget/audit/cost wiring, and matching passing eval-gate records.

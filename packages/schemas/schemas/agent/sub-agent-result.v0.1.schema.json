@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/agent/sub-agent-result.v0.1.schema.json",
+  "title": "DevGateway Sub-Agent Result Contract v0.1",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "sub_agent_result_id",
+    "delegation_id",
+    "workflow_run_id",
+    "agent_run_id",
+    "status",
+    "principal_id",
+    "project_id",
+    "data_class",
+    "budget_scope_id",
+    "policy_version",
+    "registry_version",
+    "trace_id",
+    "trace_context_ref",
+    "output_schema_ref",
+    "validation_status",
+    "confidence",
+    "structured_result_ref",
+    "citation_refs",
+    "artifact_refs",
+    "usage_ref",
+    "policy_ref",
+    "audit_refs",
+    "cost_refs",
+    "failure_ref",
+    "idempotency",
+    "created_at",
+    "completed_at"
+  ],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "sub_agent_result_id": { "$ref": "#/$defs/nonEmptyString" },
+    "delegation_id": { "$ref": "#/$defs/nonEmptyString" },
+    "workflow_run_id": { "$ref": "#/$defs/nonEmptyString" },
+    "agent_run_id": { "$ref": "#/$defs/nonEmptyString" },
+    "status": { "$ref": "#/$defs/resultStatus" },
+    "principal_id": { "$ref": "#/$defs/nonEmptyString" },
+    "project_id": { "$ref": "#/$defs/nonEmptyString" },
+    "data_class": { "$ref": "#/$defs/dataClass" },
+    "budget_scope_id": { "$ref": "#/$defs/nonEmptyString" },
+    "policy_version": { "$ref": "#/$defs/nonEmptyString" },
+    "registry_version": { "$ref": "#/$defs/nonEmptyString" },
+    "trace_id": { "$ref": "#/$defs/nonEmptyString" },
+    "trace_context_ref": { "$ref": "#/$defs/traceContextRef" },
+    "output_schema_ref": { "$ref": "#/$defs/schemaRef" },
+    "validation_status": { "$ref": "#/$defs/validationStatus" },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "structured_result_ref": { "anyOf": [{ "$ref": "#/$defs/structuredResultRef" }, { "type": "null" }] },
+    "citation_refs": { "type": "array", "items": { "$ref": "#/$defs/citationRef" }, "uniqueItems": true },
+    "artifact_refs": { "type": "array", "items": { "$ref": "#/$defs/artifactRef" }, "uniqueItems": true },
+    "usage_ref": { "$ref": "#/$defs/usageRef" },
+    "policy_ref": { "$ref": "#/$defs/policyRef" },
+    "audit_refs": { "type": "array", "items": { "$ref": "#/$defs/auditRef" }, "uniqueItems": true },
+    "cost_refs": { "type": "array", "items": { "$ref": "#/$defs/costRef" }, "uniqueItems": true },
+    "failure_ref": { "anyOf": [{ "$ref": "#/$defs/failureRef" }, { "type": "null" }] },
+    "idempotency": { "$ref": "#/$defs/idempotencyRef" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "$ref": "#/$defs/nullableDateTime" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "succeeded" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "validation_status": { "const": "valid" },
+          "structured_result_ref": { "$ref": "#/$defs/structuredResultRef" },
+          "failure_ref": { "type": "null" }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "nullableDateTime": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
+    "resultStatus": { "type": "string", "enum": ["succeeded", "failed", "cancelled", "timed_out", "denied", "invalid_output"] },
+    "validationStatus": { "type": "string", "enum": ["not_validated", "valid", "invalid"] },
+    "dataClass": { "type": "string", "enum": ["public", "internal", "confidential", "restricted"] },
+    "traceContextRef": {
+      "type": "object",
+      "required": ["trace_context_id", "span_id", "propagation_ref"],
+      "properties": {
+        "trace_context_id": { "$ref": "#/$defs/nonEmptyString" },
+        "span_id": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+        "propagation_ref": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "schemaRef": {
+      "type": "object",
+      "required": ["schema_id", "json_pointer", "schema_version", "enforcement"],
+      "properties": {
+        "schema_id": { "$ref": "#/$defs/nonEmptyString" },
+        "json_pointer": { "type": "string", "pattern": "^#(/.*)?$" },
+        "schema_version": { "$ref": "#/$defs/nonEmptyString" },
+        "enforcement": { "type": "string", "enum": ["validate_before_dispatch", "validate_before_execution", "validate_before_synthesis", "validate_before_persist"] }
+      },
+      "additionalProperties": false
+    },
+    "artifactRef": {
+      "type": "object",
+      "required": ["artifact_id", "artifact_kind", "data_class", "sha256", "size_bytes"],
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/nonEmptyString" },
+        "artifact_kind": { "$ref": "#/$defs/nonEmptyString" },
+        "data_class": { "$ref": "#/$defs/dataClass" },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "size_bytes": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "structuredResultRef": {
+      "type": "object",
+      "required": ["result_ref_id", "schema_ref", "artifact_ref", "validation_status"],
+      "properties": {
+        "result_ref_id": { "$ref": "#/$defs/nonEmptyString" },
+        "schema_ref": { "$ref": "#/$defs/schemaRef" },
+        "artifact_ref": { "$ref": "#/$defs/artifactRef" },
+        "validation_status": { "$ref": "#/$defs/validationStatus" }
+      },
+      "additionalProperties": false
+    },
+    "citationRef": {
+      "type": "object",
+      "required": ["citation_ref_id", "artifact_ref", "locator_ref", "source_class", "retrieved_at"],
+      "properties": {
+        "citation_ref_id": { "$ref": "#/$defs/nonEmptyString" },
+        "artifact_ref": { "$ref": "#/$defs/artifactRef" },
+        "locator_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "source_class": { "type": "string", "enum": ["public", "internal", "confidential", "restricted", "verified_tool", "system"] },
+        "retrieved_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "usageRef": {
+      "type": "object",
+      "required": ["usage_id", "measurement_ref", "cost_refs"],
+      "properties": {
+        "usage_id": { "$ref": "#/$defs/nonEmptyString" },
+        "measurement_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "cost_refs": { "type": "array", "items": { "$ref": "#/$defs/costRef" }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "policyRef": {
+      "type": "object",
+      "required": ["policy_version", "policy_decision_ref", "evaluated_at"],
+      "properties": {
+        "policy_version": { "$ref": "#/$defs/nonEmptyString" },
+        "policy_decision_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "evaluated_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "auditRef": {
+      "type": "object",
+      "required": ["audit_event_id", "audit_stream", "recorded_at"],
+      "properties": {
+        "audit_event_id": { "$ref": "#/$defs/nonEmptyString" },
+        "audit_stream": { "$ref": "#/$defs/nonEmptyString" },
+        "recorded_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "costRef": {
+      "type": "object",
+      "required": ["cost_event_id", "budget_scope_id", "cost_phase", "recorded_at"],
+      "properties": {
+        "cost_event_id": { "$ref": "#/$defs/nonEmptyString" },
+        "budget_scope_id": { "$ref": "#/$defs/nonEmptyString" },
+        "cost_phase": { "type": "string", "enum": ["estimate", "reservation", "settlement", "release", "reconciliation"] },
+        "recorded_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "failureRef": {
+      "type": "object",
+      "required": ["failure_type", "failure_code", "failure_ref", "retryable"],
+      "properties": {
+        "failure_type": { "type": "string", "enum": ["policy_denial", "budget_denial", "timeout", "validation_error", "tool_denial", "runtime_error", "cancelled"] },
+        "failure_code": { "$ref": "#/$defs/nonEmptyString" },
+        "failure_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "retryable": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "idempotencyRef": {
+      "type": "object",
+      "required": ["idempotency_key", "scope", "dedupe_ref", "expires_at"],
+      "properties": {
+        "idempotency_key": { "$ref": "#/$defs/nonEmptyString" },
+        "scope": { "type": "string", "enum": ["workflow", "step", "delegation", "agent_run", "tool_call", "artifact_write"] },
+        "dedupe_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "expires_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  }
+}
