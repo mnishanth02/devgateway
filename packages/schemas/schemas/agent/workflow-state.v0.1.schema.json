@@ -58,9 +58,9 @@
   "additionalProperties": false,
   "$defs": {
     "nonEmptyString": { "type": "string", "minLength": 1 },
-    "nullableNonEmptyString": { "type": ["string", "null"], "minLength": 1 },
+    "nullableNonEmptyString": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
     "nullableDateTime": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
-    "workflowStatus": { "type": "string", "enum": ["created", "queued", "planning", "running", "waiting_on_child", "synthesizing", "succeeded", "failed", "cancelled", "timed_out", "denied"] },
+    "workflowStatus": { "type": "string", "enum": ["created", "draft", "queued", "planning", "delegating", "dispatched", "leased", "running", "waiting", "waiting_on_child", "synthesizing", "succeeded", "completed", "failed", "authorized", "denied", "invalid_output", "skipped", "cancel_requested", "cancelled", "timed_out"] },
     "dataClass": { "type": "string", "enum": ["public", "internal", "confidential", "restricted"] },
     "traceContextRef": {
       "type": "object",
@@ -77,7 +77,7 @@
       "required": ["step_id", "step_type", "step_status", "agent_run_id", "delegation_id"],
       "properties": {
         "step_id": { "$ref": "#/$defs/nonEmptyString" },
-        "step_type": { "type": "string", "enum": ["planning", "delegation", "tool_call", "model_call", "synthesis", "terminalization"] },
+        "step_type": { "type": "string", "enum": ["plan", "delegate", "agent", "tool", "synthesize", "review", "artifact"] },
         "step_status": { "$ref": "#/$defs/workflowStatus" },
         "agent_run_id": { "$ref": "#/$defs/nullableNonEmptyString" },
         "delegation_id": { "$ref": "#/$defs/nullableNonEmptyString" }

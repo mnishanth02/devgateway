@@ -80,7 +80,13 @@
           "approval_policy": {
             "allOf": [
               { "$ref": "#/$defs/approvalPolicy" },
-              { "properties": { "approval_required": { "const": true } } }
+              {
+                "properties": {
+                  "approval_required": { "const": true },
+                  "approval_ref": { "$ref": "#/$defs/nonEmptyString" },
+                  "approver_ref": { "$ref": "#/$defs/nonEmptyString" }
+                }
+              }
             ]
           }
         }
@@ -90,7 +96,7 @@
   "additionalProperties": false,
   "$defs": {
     "nonEmptyString": { "type": "string", "minLength": 1 },
-    "nullableNonEmptyString": { "type": ["string", "null"], "minLength": 1 },
+    "nullableNonEmptyString": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
     "lifecycleStatus": { "type": "string", "enum": ["draft", "eval_ready", "approved", "limited_rollout", "production", "disabled"] },
     "dataClass": { "type": "string", "enum": ["public", "internal", "confidential", "restricted"] },
     "traceContextRef": {

@@ -213,9 +213,14 @@ function migrationDefinesAppendOnlyTrigger(statements: readonly string[], tableN
   );
 
   return statements.some((statement) => {
-    const events = statement.replace(/\s+/g, ' ').match(triggerPattern)?.[1]?.toUpperCase();
+    const normalizedStatement = statement.replace(/\s+/g, ' ');
+    const events = normalizedStatement.match(triggerPattern)?.[1]?.toUpperCase();
 
-    return events !== undefined && ['UPDATE', 'DELETE', 'TRUNCATE'].every((event) => events.includes(event));
+    return (
+      events !== undefined &&
+      ['UPDATE', 'DELETE', 'TRUNCATE'].every((event) => events.includes(event)) &&
+      /\bFOR\s+EACH\s+STATEMENT\b/i.test(normalizedStatement)
+    );
   });
 }
 

@@ -542,7 +542,10 @@ export async function handleMcpJsonRpc(
         if (body.length === 0) {
             return { statusCode: 400, body: jsonRpcError(null, -32600, 'JSON-RPC batch must not be empty.', { code: 'INVALID_REQUEST' }) };
         }
-        const responses = await Promise.all(body.map((item) => handleSingleMcpRequest(item, request, options)));
+        const responses: Record<string, unknown>[] = [];
+        for (const item of body) {
+            responses.push(await handleSingleMcpRequest(item, request, options));
+        }
         return { statusCode: responses.some((item) => 'error' in item) ? 400 : 200, body: responses };
     }
     const response = await handleSingleMcpRequest(body, request, options);
@@ -635,6 +638,8 @@ function finalizeToolCallResult(
     options: Required<BrokerServerOptions>,
 ): BrokerToolCallResponse {
     if (result.ok) {
+        const sanitizedArtifacts = (result.artifacts ?? []).map(toAuditArtifactRef);
+        const sanitizedMetadata = sanitizeToolMetadata(result.metadata ?? {});
         const auditRecord = createAuditRecord({
             toolCallId,
             toolId: result.toolId,
@@ -657,8 +662,8 @@ function finalizeToolCallResult(
                 trace_id: auditRecord.trace_id,
                 request_id: auditRecord.request_id,
                 result: result.data,
-                artifacts: result.artifacts,
-                metadata: result.metadata,
+                artifacts: sanitizedArtifacts,
+                metadata: sanitizedMetadata,
             },
         };
     }
@@ -849,7 +854,12 @@ function toMcpToolCallResult(body: unknown): Record<string, unknown> {
 }
 
 function isReadOnlyDefinition(definition: ReadOnlyToolDefinition): boolean {
-    return definition.readOnly === true && definition.effect === 'read' && definition.externalNetworkAccess === false;
+    return (
+        definition.readOnly === true &&
+        definition.effect === 'read' &&
+        definition.externalNetworkAccess === false &&
+        definition.outputContainsRawContent === false
+    );
 }
 
 function isToolVisibleForContext(definition: ReadOnlyToolDefinition, context: BrokerPolicyContext): boolean {

@@ -32,6 +32,14 @@ CREATE TABLE "budget_reservation" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "budget_reservation_status_check" CHECK ("budget_reservation"."status" IN ('reserved', 'settled', 'released')),
 	CONSTRAINT "budget_reservation_currency_check" CHECK ("budget_reservation"."currency" ~ '^[A-Z]{3}$'),
+	CONSTRAINT "budget_reservation_reserved_amount_non_negative" CHECK ("budget_reservation"."reserved_amount" >= 0),
+	CONSTRAINT "budget_reservation_actual_amount_non_negative" CHECK ("budget_reservation"."actual_amount" IS NULL OR "budget_reservation"."actual_amount" >= 0),
+	CONSTRAINT "budget_reservation_reserved_input_tokens_non_negative" CHECK ("budget_reservation"."reserved_input_tokens" IS NULL OR "budget_reservation"."reserved_input_tokens" >= 0),
+	CONSTRAINT "budget_reservation_reserved_output_tokens_non_negative" CHECK ("budget_reservation"."reserved_output_tokens" IS NULL OR "budget_reservation"."reserved_output_tokens" >= 0),
+	CONSTRAINT "budget_reservation_reserved_total_tokens_non_negative" CHECK ("budget_reservation"."reserved_total_tokens" IS NULL OR "budget_reservation"."reserved_total_tokens" >= 0),
+	CONSTRAINT "budget_reservation_actual_input_tokens_non_negative" CHECK ("budget_reservation"."actual_input_tokens" IS NULL OR "budget_reservation"."actual_input_tokens" >= 0),
+	CONSTRAINT "budget_reservation_actual_output_tokens_non_negative" CHECK ("budget_reservation"."actual_output_tokens" IS NULL OR "budget_reservation"."actual_output_tokens" >= 0),
+	CONSTRAINT "budget_reservation_actual_total_tokens_non_negative" CHECK ("budget_reservation"."actual_total_tokens" IS NULL OR "budget_reservation"."actual_total_tokens" >= 0),
 	CONSTRAINT "budget_reservation_production_enabled_false" CHECK ("budget_reservation"."production_enabled" = false)
 );
 --> statement-breakpoint

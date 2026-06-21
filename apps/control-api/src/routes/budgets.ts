@@ -359,7 +359,7 @@ export class InMemoryBudgetStore implements BudgetStore {
 
     const scope = this.#getExistingScope(input.budget_scope_id);
     assertScopeAcceptsReservation(scope, input);
-    assertBudgetHeadroomForReservation(scope, input.amount);
+    assertBudgetHeadroomForReservation(scope, input);
 
     const now = new Date().toISOString();
     const reservationId = `br_${randomUUID()}`;
@@ -718,25 +718,38 @@ function isBudgetExhausted(scope: BudgetScopeRecord): boolean {
   );
 }
 
-function assertBudgetHeadroomForReservation(scope: BudgetScopeRecord, requestedAmount: number): void {
+function assertBudgetHeadroomForReservation(scope: BudgetScopeRecord, input: ReserveBudgetReservationRequest): void {
   const hardCapAmount = scope.limits.hard_cap_amount;
-  if (hardCapAmount === null) return;
-  const committedAmount = scope.spend_state.actual_spend_amount + scope.reservation_state.reserved_amount;
-  if (committedAmount + requestedAmount > hardCapAmount) {
-    throw budgetExhaustedControlError({
-      budget_scope_id: scope.budget_scope_id,
-      hard_cap_amount: hardCapAmount,
-      actual_spend_amount: scope.spend_state.actual_spend_amount,
-      reserved_amount: scope.reservation_state.reserved_amount,
-      requested_amount: requestedAmount,
-      remaining_amount: Math.max(0, hardCapAmount - committedAmount),
-      reset_period: scope.period.reset_period,
-      policy_version: scope.policy_version,
-    });
+  if (hardCapAmount !== null) {
+    const committedAmount = scope.spend_state.actual_spend_amount + scope.reservation_state.reserved_amount;
+    if (committedAmount + input.amount > hardCapAmount) {
+      throw budgetExhaustedControlError({
+        budget_scope_id: scope.budget_scope_id,
+        hard_cap_amount: hardCapAmount,
+        actual_spend_amount: scope.spend_state.actual_spend_amount,
+        reserved_amount: scope.reservation_state.reserved_amount,
+        requested_amount: input.amount,
+        remaining_amount: Math.max(0, hardCapAmount - committedAmount),
+        reset_period: scope.period.reset_period,
+        policy_version: scope.policy_version,
+      });
+    }
   }
+  assertReservationLimit(scope, 'input_token_limit', scope.spend_state.actual_input_tokens, scope.reservation_state.reserved_input_tokens, input.input_tokens);
+  assertReservationLimit(
+    scope,
+    'output_token_limit',
+    scope.spend_state.actual_output_tokens,
+    scope.reservation_state.reserved_output_tokens,
+    input.output_tokens,
+  );
+  assertReservationLimit(scope, 'request_limit', scope.spend_state.actual_request_count, scope.reservation_state.reservation_count, 1);
 }
 
 function assertScopeAcceptsReservation(scope: BudgetScopeRecord, input: ReserveBudgetReservationRequest): void {
+  if (scope.status !== 'active') {
+    throw new BudgetRouteValidationError(`budget_scope_id ${scope.budget_scope_id} must be active to reserve budget.`);
+  }
   if (scope.currency !== input.currency) {
     throw new BudgetRouteValidationError(
       `currency must match budget scope currency ${scope.currency} for budget_scope_id: ${scope.budget_scope_id}`,
@@ -748,6 +761,22 @@ function assertScopeAcceptsReservation(scope: BudgetScopeRecord, input: ReserveB
       expected_policy_version: scope.policy_version,
       actual_policy_version: input.policy_version,
     });
+  }
+}
+
+function assertReservationLimit(
+  scope: BudgetScopeRecord,
+  limitName: 'input_token_limit' | 'output_token_limit' | 'request_limit',
+  actual: number,
+  reserved: number,
+  requested: number,
+): void {
+  const limit = scope.limits[limitName];
+  if (limit === null) return;
+  if (actual + reserved + requested > limit) {
+    throw new BudgetRouteValidationError(
+      `${limitName} exceeded for budget_scope_id ${scope.budget_scope_id}: requested reservation would exceed ${limit}.`,
+    );
   }
 }
 

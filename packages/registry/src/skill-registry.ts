@@ -271,23 +271,28 @@ export function validateSkillRegistry(input: SkillRegistryValidationInput): Skil
 
   snapshot.skills.forEach((skill, index) => {
     const path = `$.skills[${index}]`;
-    if (seenSkillDefinitions.has(skill.skill_definition_id)) {
+    if (!isRecord(skill)) {
+      issues.push({ code: 'schema', path, message: 'skill entry must be an object' });
+      return;
+    }
+    const skillRecord = skill as SkillRegistryRecord;
+    if (seenSkillDefinitions.has(skillRecord.skill_definition_id)) {
       issues.push({
         code: 'schema',
         path: `${path}.skill_definition_id`,
-        message: `duplicate skill definition "${skill.skill_definition_id}"`,
+        message: `duplicate skill definition "${skillRecord.skill_definition_id}"`,
       });
     }
-    seenSkillDefinitions.add(skill.skill_definition_id);
-    if (seenSkillVersions.has(skill.skill_version_id)) {
+    seenSkillDefinitions.add(skillRecord.skill_definition_id);
+    if (seenSkillVersions.has(skillRecord.skill_version_id)) {
       issues.push({
         code: 'schema',
         path: `${path}.skill_version_id`,
-        message: `duplicate skill version "${skill.skill_version_id}"`,
+        message: `duplicate skill version "${skillRecord.skill_version_id}"`,
       });
     }
-    seenSkillVersions.add(skill.skill_version_id);
-    validateSkillRecord(skill, index, snapshot.registry_version, modelAliases, gateResults, registryProductionEnabled, issues);
+    seenSkillVersions.add(skillRecord.skill_version_id);
+    validateSkillRecord(skillRecord, index, snapshot.registry_version, modelAliases, gateResults, registryProductionEnabled, issues);
   });
 
   validateNoRawContentOrSecrets(snapshot, '$', issues);
@@ -389,10 +394,11 @@ function validateSkillRegistryEnvelope(
       message: 'skill registry must include at least two non-production skills',
     });
   }
-  if (!snapshot.skills.some((skill) => skill.status === 'draft')) {
+  const skillRecords = snapshot.skills.filter(isRecord);
+  if (!skillRecords.some((skill) => skill.status === 'draft')) {
     issues.push({ code: 'schema', path: '$.skills', message: 'skill registry must include a draft skill' });
   }
-  if (!snapshot.skills.some((skill) => skill.status === 'eval_ready')) {
+  if (!skillRecords.some((skill) => skill.status === 'eval_ready')) {
     issues.push({ code: 'schema', path: '$.skills', message: 'skill registry must include an eval_ready skill' });
   }
 }
@@ -572,6 +578,7 @@ function validateToolRefs(
   refs.forEach((ref, index) => {
     const refPath = `${path}[${index}]`;
     validateToolRef(ref, refPath, mode, issues);
+    if (!isRecord(ref)) return;
     const key = `${ref.tool_definition_id}@${ref.tool_version}`;
     if (seen.has(key)) {
       issues.push({ code: 'tool_ref', path: refPath, message: `duplicate tool ref "${key}"` });

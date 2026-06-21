@@ -120,6 +120,7 @@ export const createTaskSchema = {
     201: taskEnvelopeSchema,
     400: errorResponseSchema,
     401: errorResponseSchema,
+    403: errorResponseSchema,
     409: errorResponseSchema,
     503: errorResponseSchema,
   },
