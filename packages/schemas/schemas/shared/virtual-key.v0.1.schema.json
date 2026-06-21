@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/shared/virtual-key.v0.1.schema.json",
+  "title": "DevGateway Shared Virtual Key Contract v0.1",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "virtual_key_id",
+    "external_key_id",
+    "key_prefix",
+    "key_fingerprint_sha256",
+    "key_hash_ref",
+    "status",
+    "production_posture",
+    "principal_binding",
+    "project_binding",
+    "scope_constraints",
+    "budget_scope_ref",
+    "policy_version",
+    "registry_version",
+    "issued_at",
+    "not_before",
+    "expires_at",
+    "rotation",
+    "revocation",
+    "audit_correlation",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "virtual_key_id": { "$ref": "#/$defs/nonEmptyString" },
+    "external_key_id": { "$ref": "#/$defs/nonEmptyString" },
+    "key_prefix": { "$ref": "#/$defs/nonEmptyString" },
+    "key_fingerprint_sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "key_hash_ref": { "$ref": "#/$defs/nonEmptyString" },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "active", "rotating", "revoked", "expired", "disabled"]
+    },
+    "production_posture": { "$ref": "#/$defs/productionPosture" },
+    "principal_binding": { "$ref": "#/$defs/principalBinding" },
+    "project_binding": { "$ref": "#/$defs/projectBinding" },
+    "scope_constraints": { "$ref": "#/$defs/scopeConstraints" },
+    "budget_scope_ref": { "$ref": "#/$defs/budgetScopeRef" },
+    "policy_version": { "$ref": "#/$defs/nonEmptyString" },
+    "registry_version": { "$ref": "#/$defs/nonEmptyString" },
+    "policy_snapshot_checksum": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "registry_snapshot_checksum": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "issued_at": { "type": "string", "format": "date-time" },
+    "not_before": { "$ref": "#/$defs/nullableDateTime" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "rotation": { "$ref": "#/$defs/rotationState" },
+    "revocation": { "$ref": "#/$defs/revocationState" },
+    "last_used": { "$ref": "#/$defs/lastUsedMetadata" },
+    "audit_correlation": { "$ref": "#/$defs/auditCorrelation" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "active" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "revocation": { "properties": { "revoked_at": { "type": "null" } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "revoked" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "revocation": {
+            "properties": {
+              "revoked_at": { "type": "string", "format": "date-time" },
+              "revoked_by_principal_id": { "$ref": "#/$defs/nonEmptyString" },
+              "revocation_reason": { "$ref": "#/$defs/nonEmptyString" }
+            },
+            "required": ["revoked_at", "revoked_by_principal_id", "revocation_reason"]
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "nullableNonEmptyString": {
+      "anyOf": [
+        { "$ref": "#/$defs/nonEmptyString" },
+        { "type": "null" }
+      ]
+    },
+    "nullableDateTime": {
+      "anyOf": [
+        { "type": "string", "format": "date-time" },
+        { "type": "null" }
+      ]
+    },
+    "productionPosture": {
+      "type": "object",
+      "required": ["production_enabled", "fail_closed_without_policy", "success_fallback_allowed"],
+      "properties": {
+        "production_enabled": { "const": false },
+        "fail_closed_without_policy": { "const": true },
+        "success_fallback_allowed": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "principalBinding": {
+      "type": "object",
+      "required": ["principal_id", "principal_type", "auth_subject_ref"],
+      "properties": {
+        "principal_id": { "$ref": "#/$defs/nonEmptyString" },
+        "principal_type": { "type": "string", "enum": ["user", "service_account", "automation", "system"] },
+        "auth_subject_ref": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "projectBinding": {
+      "type": "object",
+      "required": ["project_id", "tenant_id", "org_id", "team_ids", "environment"],
+      "properties": {
+        "project_id": { "$ref": "#/$defs/nonEmptyString" },
+        "tenant_id": { "$ref": "#/$defs/nonEmptyString" },
+        "org_id": { "$ref": "#/$defs/nonEmptyString" },
+        "team_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "environment": { "type": "string", "enum": ["development", "test", "staging", "production"] }
+      },
+      "additionalProperties": false
+    },
+    "scopeConstraints": {
+      "type": "object",
+      "required": ["route_intents", "data_classes", "model_aliases", "provider_candidates", "max_expires_at"],
+      "properties": {
+        "route_intents": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/routeIntent" },
+          "uniqueItems": true
+        },
+        "data_classes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/dataClass" },
+          "uniqueItems": true
+        },
+        "model_aliases": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "provider_candidates": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "max_expires_at": { "$ref": "#/$defs/nullableDateTime" }
+      },
+      "additionalProperties": false
+    },
+    "budgetScopeRef": {
+      "type": "object",
+      "required": ["budget_scope_id", "budget_scope_type"],
+      "properties": {
+        "budget_scope_id": { "$ref": "#/$defs/nonEmptyString" },
+        "budget_scope_type": { "$ref": "#/$defs/budgetScopeType" }
+      },
+      "additionalProperties": false
+    },
+    "rotationState": {
+      "type": "object",
+      "required": ["rotation_state", "rotated_from_virtual_key_id", "rotated_to_virtual_key_id", "rotation_due_at"],
+      "properties": {
+        "rotation_state": { "type": "string", "enum": ["not_scheduled", "scheduled", "in_progress", "completed"] },
+        "rotated_from_virtual_key_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "rotated_to_virtual_key_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "rotation_due_at": { "$ref": "#/$defs/nullableDateTime" }
+      },
+      "additionalProperties": false
+    },
+    "revocationState": {
+      "type": "object",
+      "required": ["revoked_at", "revoked_by_principal_id", "revocation_reason"],
+      "properties": {
+        "revoked_at": { "$ref": "#/$defs/nullableDateTime" },
+        "revoked_by_principal_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "revocation_reason": { "$ref": "#/$defs/nullableNonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "lastUsedMetadata": {
+      "type": "object",
+      "required": ["last_used_at", "last_used_trace_id", "last_used_request_id", "last_used_gateway_instance"],
+      "properties": {
+        "last_used_at": { "$ref": "#/$defs/nullableDateTime" },
+        "last_used_trace_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "last_used_request_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "last_used_gateway_instance": { "$ref": "#/$defs/nullableNonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "auditCorrelation": {
+      "type": "object",
+      "required": ["created_audit_event_id", "last_audit_event_id", "trace_id"],
+      "properties": {
+        "created_audit_event_id": { "$ref": "#/$defs/nonEmptyString" },
+        "last_audit_event_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "trace_id": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "routeIntent": {
+      "type": "string",
+      "enum": ["chat", "completion", "embedding", "eval", "tool_planning", "tool_execution", "policy_check"]
+    },
+    "dataClass": {
+      "type": "string",
+      "enum": ["public", "internal", "confidential", "restricted"]
+    },
+    "budgetScopeType": {
+      "type": "string",
+      "enum": ["org", "team", "project", "principal", "virtual_key", "environment", "composite"]
+    }
+  }
+}

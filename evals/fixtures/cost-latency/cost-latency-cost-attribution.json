@@ -1,0 +1,60 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "cost-latency-cost-attribution",
+  "category": "cost_attribution",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "request": {},
+  "gateway_context": {
+    "trace_id": "trace-cost-latency-cost-attribution",
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "virtual_key_id": "vk_synthetic_alpha",
+    "model_alias": "track0-public-chat",
+    "provider_candidate_id": "fixture-openai-primary",
+    "provider_attempt_count": 1
+  },
+  "synthetic_shape": {},
+  "synthetic_measurement": {
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "budget_scope": "project-alpha:dev",
+    "input_tokens": 120,
+    "output_tokens": 80,
+    "total_tokens": 200,
+    "unit_price_input_usd": "0.000001",
+    "unit_price_output_usd": "0.000004",
+    "estimated_cost_usd": "0.000440",
+    "synthetic_non_billable": true
+  },
+  "expected_engine_decision": {
+    "decision": "pass",
+    "prompt_context_allowed_markers": [
+      "SYNTHETIC_COST_ATTRIBUTION"
+    ],
+    "prompt_context_forbidden_markers": []
+  },
+  "expected_assertions": [
+    "Cost artifact includes model_alias, provider_candidate_id, input/output tokens, unit prices, and estimated_cost_usd.",
+    "Cost is attributed to principal_id, project_id, budget_scope, and trace_id.",
+    "Fixture cost is marked synthetic_non_billable."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/cost-latency/cost-latency-cost-attribution/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/cost-latency/cost-latency-cost-attribution/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/cost-latency/cost-latency-cost-attribution/audit-event.json"
+  },
+  "audit_expectations": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "usage_event_id",
+    "estimated_cost_usd"
+  ]
+}

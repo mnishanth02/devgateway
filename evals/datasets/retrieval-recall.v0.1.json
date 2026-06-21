@@ -1,0 +1,122 @@
+{
+  "contract_version": "0.1.0",
+  "dataset_id": "retrieval-recall.v0.1",
+  "dataset_version": "0.1.0",
+  "suite": "retrieval_recall",
+  "schema_status": "layout_stub_until_shared_eval_schema_generalizes_beyond_acl_safety",
+  "fixture_root": "evals/fixtures/retrieval-recall",
+  "inert_fixture_mode": true,
+  "no_live_external_calls": true,
+  "production_enablement": false,
+  "source_data_policy": {
+    "synthetic_only": true,
+    "no_real_customer_data": true,
+    "no_real_repo_data": true,
+    "no_live_external_calls": true,
+    "fixture_review_required": true
+  },
+  "categories": [
+    "known_answer_placeholder",
+    "citation_requirements"
+  ],
+  "artifact_ref_policy": {
+    "required": true,
+    "description": "Each case declares expected gate-result, trace, and audit artifacts that a future runner must write."
+  },
+  "cases": [
+    {
+      "case_id": "retrieval-recall-known-answer-placeholder",
+      "category": "known_answer_placeholder",
+      "title": "Return the synthetic known answer with required citation",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/retrieval-recall/retrieval-recall-known-answer-placeholder.json",
+          "sha256_required": true,
+          "description": "Inert fixture for retrieval-recall-known-answer-placeholder."
+        }
+      ],
+      "inputs": {
+        "question": "What is the synthetic launch color?",
+        "expected_chunk_ids": [
+          "chunk-fixture-recall-001"
+        ]
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Answer contains SYNTHETIC_RECALL_KNOWN_ANSWER.",
+          "At least one citation references doc-fixture-recall-001 and chunk-fixture-recall-001.",
+          "Recall metric placeholder records expected_relevant_chunk_ids and retrieved_chunk_ids."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/retrieval-recall/retrieval-recall-known-answer-placeholder/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/retrieval-recall/retrieval-recall-known-answer-placeholder/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/retrieval-recall/retrieval-recall-known-answer-placeholder/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "retrieval-recall",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "retrieval-recall-citation-required",
+      "category": "citation_requirements",
+      "title": "Fail answer that lacks required citation for retrieved fact",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/retrieval-recall/retrieval-recall-citation-required.json",
+          "sha256_required": true,
+          "description": "Inert fixture for retrieval-recall-citation-required."
+        }
+      ],
+      "inputs": {
+        "question": "Name the synthetic launch color without citations.",
+        "required_citations": [
+          "doc-fixture-recall-001#chunk-fixture-recall-001"
+        ]
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "A factual answer without citation is rejected even when the answer text matches the known answer.",
+          "Artifact records missing_citation_ids and citation_requirement_version.",
+          "No uncited context marker reaches final accepted answer."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/retrieval-recall/retrieval-recall-citation-required/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/retrieval-recall/retrieval-recall-citation-required/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/retrieval-recall/retrieval-recall-citation-required/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "retrieval-recall",
+        "track-0",
+        "synthetic"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,963 @@
+{
+  "$schema": "https://devgateway.local/schemas/eval/eval-case.v0.1.schema.json",
+  "contract_version": "0.1.0",
+  "dataset_id": "acl-safety.v0.1",
+  "dataset_version": "0.1.0",
+  "suite": "acl_safety",
+  "schema_ref": "https://devgateway.local/schemas/eval/eval-case.v0.1.schema.json#/$defs/evalDataset",
+  "fixture_root": "evals/fixtures/acl-safety",
+  "inert_fixture_mode": true,
+  "no_live_external_calls": true,
+  "production_retrieval_behavior": false,
+  "source_data_policy": {
+    "synthetic_only": true,
+    "no_real_repo_data": true,
+    "no_live_github_calls": true,
+    "fixture_review_required": true
+  },
+  "categories": [
+    "cross_project_leak_prevention",
+    "cross_principal_leak_prevention",
+    "semantic_cache_acl_scope_leak_prevention",
+    "context_ref_leak_prevention",
+    "stale_permission_sync_default_deny",
+    "acl_recheck_before_prompt_assembly",
+    "semantic_cache_preenablement_default_deny"
+  ],
+  "cases": [
+    {
+      "contract_version": "0.1.0",
+      "case_id": "acl-safety-cross-project-deny",
+      "category": "cross_project_leak_prevention",
+      "title": "Deny retrieval candidate from another project before prompt use",
+      "severity": "critical",
+      "intent": "A principal scoped to project-alpha attempts to retrieve a synthetic repository chunk owned by project-beta.",
+      "fixture_refs": [
+        {
+          "kind": "retrieval_snapshot",
+          "path": "evals/fixtures/acl-safety/cross-project-deny.json",
+          "sha256_required": true,
+          "description": "Synthetic cross-project retrieval candidates and ACL metadata."
+        }
+      ],
+      "actors": [
+        {
+          "principal_id": "principal-alpha-reader",
+          "principal_type": "user",
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-readers"
+          ]
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-reader",
+        "project_id": "project-alpha",
+        "route_intent": "repo_retrieval",
+        "acl_scope_hash": "acl-alpha-read",
+        "index_version": "idx-fixture-2026-06-20",
+        "sync_state_ref": "sync-fresh-alpha",
+        "trace_id": "trace-acl-001"
+      },
+      "input": {
+        "prompt": "Summarize the deployment notes from repo-beta.",
+        "requested_context_refs": [],
+        "requested_repo_refs": [
+          "repo-beta-private"
+        ],
+        "cache_lookup": {
+          "enabled": false,
+          "cache_key": "cache-none",
+          "acl_scope_hash": "acl-alpha-read"
+        }
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision_point": "retrieval_candidate_filter",
+        "denial_conditions": [
+          {
+            "condition_id": "project-boundary",
+            "assertion": "No candidate with project_id=project-beta reaches reranking, prompt assembly, display, or model input for project-alpha requests."
+          }
+        ],
+        "pass_conditions": [
+          {
+            "condition_id": "authorized-baseline",
+            "assertion": "A fixture candidate from project-alpha with acl_scope_hash=acl-alpha-read remains eligible in the control path."
+          }
+        ],
+        "blocked_leak_vectors": [
+          "retrieval_candidate",
+          "citation",
+          "prompt_context"
+        ],
+        "required_denial_reason": "project_mismatch",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_BETA_SECRET_DEPLOYMENT_NOTE"
+        ]
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Correlate the fixture request, policy decision, and prompt assembly attempt.",
+          "presence": "required"
+        },
+        {
+          "field": "principal_id",
+          "requirement": "Record the requesting principal used for ACL evaluation.",
+          "presence": "required"
+        },
+        {
+          "field": "project_id",
+          "requirement": "Record the project boundary used for retrieval and cache scoping.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record the allow/deny decision from the enforcement point.",
+          "presence": "required"
+        },
+        {
+          "field": "acl_scope_hash",
+          "requirement": "Record the ACL scope hash compared against candidates, refs, or cache entries.",
+          "presence": "required"
+        },
+        {
+          "field": "index_version",
+          "requirement": "Record the synthetic index version used by the fixture.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Emit project_mismatch for the rejected candidate.",
+          "presence": "required"
+        },
+        {
+          "field": "retrieval_candidate_ids",
+          "requirement": "Record rejected candidate id chunk-beta-deploy-note without content body.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "acl",
+        "github-permissions",
+        "retrieval",
+        "synthetic"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "acl-safety-cross-principal-deny",
+      "category": "cross_principal_leak_prevention",
+      "title": "Deny same-project content when principal ACL scopes differ",
+      "severity": "critical",
+      "intent": "Two principals share project-alpha visibility but only principal-owner has CODEOWNER-derived access to a restricted synthetic design note.",
+      "fixture_refs": [
+        {
+          "kind": "permission_snapshot",
+          "path": "evals/fixtures/acl-safety/cross-principal-deny.json",
+          "sha256_required": true,
+          "description": "Synthetic same-project principal grants and restricted content ACL scope."
+        }
+      ],
+      "actors": [
+        {
+          "principal_id": "principal-alpha-reader",
+          "principal_type": "user",
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-readers"
+          ]
+        },
+        {
+          "principal_id": "principal-alpha-owner",
+          "principal_type": "user",
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-codeowners"
+          ]
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-reader",
+        "project_id": "project-alpha",
+        "route_intent": "repo_retrieval",
+        "acl_scope_hash": "acl-alpha-read",
+        "index_version": "idx-fixture-2026-06-20",
+        "sync_state_ref": "sync-fresh-alpha",
+        "trace_id": "trace-acl-002"
+      },
+      "input": {
+        "prompt": "Show the restricted architecture decision.",
+        "requested_context_refs": [
+          "ctx-alpha-restricted-design"
+        ],
+        "requested_repo_refs": [
+          "repo-alpha-private"
+        ],
+        "cache_lookup": {
+          "enabled": false,
+          "cache_key": "cache-none",
+          "acl_scope_hash": "acl-alpha-read"
+        }
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision_point": "retrieval_candidate_filter",
+        "denial_conditions": [
+          {
+            "condition_id": "principal-boundary",
+            "assertion": "Candidate chunk-alpha-owner-note requires acl_scope_hash=acl-alpha-codeowner and is denied for principal-alpha-reader."
+          }
+        ],
+        "pass_conditions": [
+          {
+            "condition_id": "owner-baseline",
+            "assertion": "The same candidate is eligible only in the control fixture for principal-alpha-owner with acl-alpha-codeowner."
+          }
+        ],
+        "blocked_leak_vectors": [
+          "retrieval_candidate",
+          "context_ref",
+          "prompt_context"
+        ],
+        "required_denial_reason": "principal_not_authorized",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_ALPHA_CODEOWNER_ONLY_DECISION"
+        ]
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Correlate the fixture request, policy decision, and prompt assembly attempt.",
+          "presence": "required"
+        },
+        {
+          "field": "principal_id",
+          "requirement": "Record the requesting principal used for ACL evaluation.",
+          "presence": "required"
+        },
+        {
+          "field": "project_id",
+          "requirement": "Record the project boundary used for retrieval and cache scoping.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record the allow/deny decision from the enforcement point.",
+          "presence": "required"
+        },
+        {
+          "field": "acl_scope_hash",
+          "requirement": "Record the ACL scope hash compared against candidates, refs, or cache entries.",
+          "presence": "required"
+        },
+        {
+          "field": "index_version",
+          "requirement": "Record the synthetic index version used by the fixture.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Emit principal_not_authorized for the rejected same-project candidate.",
+          "presence": "required"
+        },
+        {
+          "field": "retrieval_candidate_ids",
+          "requirement": "Record rejected candidate id chunk-alpha-owner-note without content body.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "acl",
+        "principal-isolation",
+        "codeowners",
+        "synthetic"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "acl-safety-semantic-cache-scope-deny",
+      "category": "semantic_cache_acl_scope_leak_prevention",
+      "title": "Deny semantic cache hit created under a different ACL scope",
+      "severity": "critical",
+      "intent": "A semantically similar prompt must not reuse a cached answer produced for another project or principal ACL scope.",
+      "fixture_refs": [
+        {
+          "kind": "semantic_cache_snapshot",
+          "path": "evals/fixtures/acl-safety/semantic-cache-scope-deny.json",
+          "sha256_required": true,
+          "description": "Synthetic cache entries with explicit project and ACL scope hashes."
+        }
+      ],
+      "actors": [
+        {
+          "principal_id": "principal-alpha-reader",
+          "principal_type": "user",
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-readers"
+          ]
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-reader",
+        "project_id": "project-alpha",
+        "route_intent": "semantic_cache",
+        "acl_scope_hash": "acl-alpha-read",
+        "index_version": "idx-fixture-2026-06-20",
+        "sync_state_ref": "sync-fresh-alpha",
+        "trace_id": "trace-acl-003"
+      },
+      "input": {
+        "prompt": "What is the migration sequence?",
+        "requested_context_refs": [],
+        "requested_repo_refs": [
+          "repo-alpha-private"
+        ],
+        "cache_lookup": {
+          "enabled": true,
+          "cache_key": "semantic:what-is-migration-sequence",
+          "acl_scope_hash": "acl-beta-read"
+        }
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision_point": "semantic_cache_lookup",
+        "denial_conditions": [
+          {
+            "condition_id": "cache-scope-boundary",
+            "assertion": "Cache entry cache-beta-migration-plan is ignored because project_id and acl_scope_hash do not match the request context."
+          }
+        ],
+        "pass_conditions": [
+          {
+            "condition_id": "cache-miss-safe",
+            "assertion": "The runner records a scoped miss or denied hit and continues only to fixture-mode retrieval candidates authorized for acl-alpha-read."
+          }
+        ],
+        "blocked_leak_vectors": [
+          "semantic_cache_answer",
+          "cached_citation",
+          "prompt_context"
+        ],
+        "required_denial_reason": "cache_acl_scope_mismatch",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_BETA_CACHED_MIGRATION_SEQUENCE"
+        ]
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Correlate the fixture request, policy decision, and prompt assembly attempt.",
+          "presence": "required"
+        },
+        {
+          "field": "principal_id",
+          "requirement": "Record the requesting principal used for ACL evaluation.",
+          "presence": "required"
+        },
+        {
+          "field": "project_id",
+          "requirement": "Record the project boundary used for retrieval and cache scoping.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record the allow/deny decision from the enforcement point.",
+          "presence": "required"
+        },
+        {
+          "field": "acl_scope_hash",
+          "requirement": "Record the ACL scope hash compared against candidates, refs, or cache entries.",
+          "presence": "required"
+        },
+        {
+          "field": "index_version",
+          "requirement": "Record the synthetic index version used by the fixture.",
+          "presence": "required"
+        },
+        {
+          "field": "cache_key",
+          "requirement": "Record denied cache key semantic:what-is-migration-sequence and stored scope acl-beta-read.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Emit cache_acl_scope_mismatch for the denied semantic cache hit.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "acl",
+        "semantic-cache",
+        "cache-isolation",
+        "synthetic"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "acl-safety-semantic-cache-preenablement-deny",
+      "category": "semantic_cache_preenablement_default_deny",
+      "title": "Deny semantic cache use before scoped-cache enablement gate",
+      "severity": "critical",
+      "intent": "Before semantic cache enablement, deny all cache probing and writes; cross-scope leak behavior is covered by acl-safety-semantic-cache-scope-deny.",
+      "fixture_refs": [
+        {
+          "kind": "semantic_cache_snapshot",
+          "path": "evals/fixtures/acl-safety/semantic-cache-preenablement-deny.json",
+          "sha256_required": true,
+          "description": "Synthetic pre-enablement semantic-cache entry and request metadata proving default-deny behavior."
+        }
+      ],
+      "actors": [
+        {
+          "principal_id": "principal-alpha-reader",
+          "principal_type": "user",
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-readers"
+          ]
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-reader",
+        "project_id": "project-alpha",
+        "route_intent": "semantic_cache",
+        "acl_scope_hash": "acl-alpha-read",
+        "index_version": "idx-fixture-2026-06-20",
+        "sync_state_ref": "sync-fresh-alpha",
+        "trace_id": "trace-acl-007",
+        "semantic_cache_enablement_state": "disabled_pending_scope_gate"
+      },
+      "input": {
+        "prompt": "Reuse the cached incident summary if available.",
+        "requested_context_refs": [],
+        "requested_repo_refs": [
+          "repo-alpha-private"
+        ],
+        "cache_lookup": {
+          "enabled": false,
+          "cache_key": "semantic:incident-summary",
+          "acl_scope_hash": "acl-alpha-read",
+          "enablement_gate": "disabled_pending_scope_gate"
+        }
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision_point": "semantic_cache_enablement_gate",
+        "denial_conditions": [
+          {
+            "condition_id": "cache-preenablement-default-deny",
+            "assertion": "Semantic cache lookup and write are denied until scope isolation, ACL hash binding, and audit fields are enabled."
+          },
+          {
+            "condition_id": "cache-scope-probe-blocked",
+            "assertion": "The runner cannot disclose whether any cross-project or cross-principal semantic cache entry exists."
+          }
+        ],
+        "pass_conditions": [
+          {
+            "condition_id": "retrieval-only-safe-fallback",
+            "assertion": "A future runner may continue only to fixture-mode retrieval candidates authorized for project-alpha and acl-alpha-read."
+          }
+        ],
+        "blocked_leak_vectors": [
+          "semantic_cache_answer",
+          "cache_existence_probe",
+          "cached_citation",
+          "prompt_context"
+        ],
+        "required_denial_reason": "semantic_cache_not_enabled",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_BETA_CACHED_INCIDENT_SUMMARY"
+        ]
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Correlate request, enablement gate decision, and prompt assembly attempt.",
+          "presence": "required"
+        },
+        {
+          "field": "principal_id",
+          "requirement": "Record the requesting principal used for cache enablement and ACL evaluation.",
+          "presence": "required"
+        },
+        {
+          "field": "project_id",
+          "requirement": "Record the project boundary used for semantic cache scoping.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record the deny decision from the cache enablement gate.",
+          "presence": "required"
+        },
+        {
+          "field": "acl_scope_hash",
+          "requirement": "Record the request ACL hash; do not expose stored cross-scope hashes in user output.",
+          "presence": "required"
+        },
+        {
+          "field": "semantic_cache_enablement_state",
+          "requirement": "Record disabled_pending_scope_gate before semantic cache enablement.",
+          "presence": "required"
+        },
+        {
+          "field": "cache_key",
+          "requirement": "Record denied cache key semantic:incident-summary without disclosing matching entry bodies.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Emit semantic_cache_not_enabled for pre-enablement default-deny.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "acl",
+        "semantic-cache",
+        "cache-isolation",
+        "pre-enablement",
+        "synthetic",
+        "default-deny"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "acl-safety-context-ref-deny",
+      "category": "context_ref_leak_prevention",
+      "title": "Deny unauthorized opaque context-ref resolution",
+      "severity": "critical",
+      "intent": "A user-supplied context reference for another principal's synthetic context pack must be resolved through ACL checks before use.",
+      "fixture_refs": [
+        {
+          "kind": "context_pack",
+          "path": "evals/fixtures/acl-safety/context-ref-deny.json",
+          "sha256_required": true,
+          "description": "Synthetic context-pack refs and owner ACL metadata."
+        }
+      ],
+      "actors": [
+        {
+          "principal_id": "principal-alpha-reader",
+          "principal_type": "user",
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-readers"
+          ]
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-reader",
+        "project_id": "project-alpha",
+        "route_intent": "context_ref_resolution",
+        "acl_scope_hash": "acl-alpha-read",
+        "index_version": "idx-fixture-2026-06-20",
+        "sync_state_ref": "sync-fresh-alpha",
+        "trace_id": "trace-acl-004"
+      },
+      "input": {
+        "prompt": "Use ctxpack-beta-incident to explain the incident.",
+        "requested_context_refs": [
+          "ctxpack-beta-incident"
+        ],
+        "requested_repo_refs": [],
+        "cache_lookup": {
+          "enabled": false,
+          "cache_key": "cache-none",
+          "acl_scope_hash": "acl-alpha-read"
+        }
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision_point": "context_ref_resolution",
+        "denial_conditions": [
+          {
+            "condition_id": "context-ref-boundary",
+            "assertion": "ctxpack-beta-incident is not expanded because its project_id=project-beta and acl_scope_hash=acl-beta-incident do not match the request."
+          }
+        ],
+        "pass_conditions": [
+          {
+            "condition_id": "safe-error",
+            "assertion": "The fixture runner returns a typed denial without revealing the context-pack title, content, source path, or citations."
+          }
+        ],
+        "blocked_leak_vectors": [
+          "context_ref",
+          "context_pack_body",
+          "citation"
+        ],
+        "required_denial_reason": "context_ref_not_authorized",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_BETA_INCIDENT_TIMELINE"
+        ]
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Correlate the fixture request, policy decision, and prompt assembly attempt.",
+          "presence": "required"
+        },
+        {
+          "field": "principal_id",
+          "requirement": "Record the requesting principal used for ACL evaluation.",
+          "presence": "required"
+        },
+        {
+          "field": "project_id",
+          "requirement": "Record the project boundary used for retrieval and cache scoping.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record the allow/deny decision from the enforcement point.",
+          "presence": "required"
+        },
+        {
+          "field": "acl_scope_hash",
+          "requirement": "Record the ACL scope hash compared against candidates, refs, or cache entries.",
+          "presence": "required"
+        },
+        {
+          "field": "index_version",
+          "requirement": "Record the synthetic index version used by the fixture.",
+          "presence": "required"
+        },
+        {
+          "field": "context_ref",
+          "requirement": "Record denied ref ctxpack-beta-incident without expanding its body.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Emit context_ref_not_authorized for the denied context ref.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "acl",
+        "context-ref",
+        "opaque-ref",
+        "synthetic"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "acl-safety-stale-sync-default-deny",
+      "category": "stale_permission_sync_default_deny",
+      "title": "Default-deny repo-aware retrieval when permission sync is stale",
+      "severity": "critical",
+      "intent": "A repo-aware retrieval request must fail closed when the GitHub permission sync age exceeds the freshness SLO in fixture metadata.",
+      "fixture_refs": [
+        {
+          "kind": "sync_state",
+          "path": "evals/fixtures/acl-safety/stale-sync-default-deny.json",
+          "sha256_required": true,
+          "description": "Synthetic sync state with stale marker beyond the configured SLO."
+        }
+      ],
+      "actors": [
+        {
+          "principal_id": "principal-alpha-reader",
+          "principal_type": "user",
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-readers"
+          ]
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-reader",
+        "project_id": "project-alpha",
+        "route_intent": "repo_retrieval",
+        "acl_scope_hash": "acl-alpha-read",
+        "index_version": "idx-fixture-2026-06-20",
+        "sync_state_ref": "sync-stale-alpha",
+        "trace_id": "trace-acl-005"
+      },
+      "input": {
+        "prompt": "Find the latest rollout checklist.",
+        "requested_context_refs": [],
+        "requested_repo_refs": [
+          "repo-alpha-private"
+        ],
+        "cache_lookup": {
+          "enabled": false,
+          "cache_key": "cache-none",
+          "acl_scope_hash": "acl-alpha-read"
+        }
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision_point": "permission_sync_freshness_check",
+        "denial_conditions": [
+          {
+            "condition_id": "stale-sync",
+            "assertion": "The request is denied before retrieval because sync_staleness_ms exceeds permission_sync_slo_ms."
+          }
+        ],
+        "pass_conditions": [
+          {
+            "condition_id": "fresh-sync-baseline",
+            "assertion": "The same synthetic grant may be evaluated only when sync_state_ref is fresh and version-verifiable."
+          }
+        ],
+        "blocked_leak_vectors": [
+          "retrieval_candidate",
+          "semantic_cache_answer",
+          "prompt_context"
+        ],
+        "required_denial_reason": "permission_sync_stale",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_ALPHA_ROLLOUT_CHECKLIST"
+        ]
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Correlate the fixture request, policy decision, and prompt assembly attempt.",
+          "presence": "required"
+        },
+        {
+          "field": "principal_id",
+          "requirement": "Record the requesting principal used for ACL evaluation.",
+          "presence": "required"
+        },
+        {
+          "field": "project_id",
+          "requirement": "Record the project boundary used for retrieval and cache scoping.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record the allow/deny decision from the enforcement point.",
+          "presence": "required"
+        },
+        {
+          "field": "acl_scope_hash",
+          "requirement": "Record the ACL scope hash compared against candidates, refs, or cache entries.",
+          "presence": "required"
+        },
+        {
+          "field": "index_version",
+          "requirement": "Record the synthetic index version used by the fixture.",
+          "presence": "required"
+        },
+        {
+          "field": "permission_sync_version",
+          "requirement": "Record the stale synthetic sync version sync-run-alpha-previous.",
+          "presence": "required"
+        },
+        {
+          "field": "sync_staleness_ms",
+          "requirement": "Record sync staleness and configured SLO used for fail-closed decision.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Emit permission_sync_stale for the default-deny path.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "acl",
+        "sync-freshness",
+        "default-deny",
+        "synthetic"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "acl-safety-prompt-assembly-recheck-pass",
+      "category": "acl_recheck_before_prompt_assembly",
+      "title": "Recheck ACL immediately before prompt assembly and keep only authorized context",
+      "severity": "critical",
+      "intent": "A fixture prompt assembly step receives one allowed and one revoked candidate; the recheck must drop revoked context and pass only with safe content.",
+      "fixture_refs": [
+        {
+          "kind": "prompt_assembly_trace",
+          "path": "evals/fixtures/acl-safety/prompt-assembly-recheck-pass.json",
+          "sha256_required": true,
+          "description": "Synthetic pre-prompt candidate list with one revoked grant after retrieval."
+        }
+      ],
+      "actors": [
+        {
+          "principal_id": "principal-alpha-reader",
+          "principal_type": "user",
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-readers"
+          ]
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-reader",
+        "project_id": "project-alpha",
+        "route_intent": "prompt_assembly",
+        "acl_scope_hash": "acl-alpha-read",
+        "index_version": "idx-fixture-2026-06-20",
+        "sync_state_ref": "sync-fresh-alpha-revoked-one",
+        "trace_id": "trace-acl-006"
+      },
+      "input": {
+        "prompt": "Draft a summary using the selected context.",
+        "requested_context_refs": [
+          "ctx-alpha-public-note",
+          "ctx-alpha-revoked-secret"
+        ],
+        "requested_repo_refs": [
+          "repo-alpha-private"
+        ],
+        "cache_lookup": {
+          "enabled": false,
+          "cache_key": "cache-none",
+          "acl_scope_hash": "acl-alpha-read"
+        }
+      },
+      "expected": {
+        "outcome": "pass",
+        "decision_point": "prompt_assembly_recheck",
+        "denial_conditions": [
+          {
+            "condition_id": "revoked-candidate-dropped",
+            "assertion": "Candidate ctx-alpha-revoked-secret fails recheck and is excluded before any model prompt is assembled."
+          }
+        ],
+        "pass_conditions": [
+          {
+            "condition_id": "safe-prompt-only",
+            "assertion": "Prompt assembly passes only when ctx-alpha-public-note is included and all revoked candidates are excluded with audit evidence."
+          }
+        ],
+        "blocked_leak_vectors": [
+          "revoked_context",
+          "prompt_context",
+          "citation"
+        ],
+        "required_denial_reason": null,
+        "model_prompt_must_include": [
+          "SYNTHETIC_ALPHA_PUBLIC_NOTE"
+        ],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_ALPHA_REVOKED_SECRET"
+        ]
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Correlate the fixture request, policy decision, and prompt assembly attempt.",
+          "presence": "required"
+        },
+        {
+          "field": "principal_id",
+          "requirement": "Record the requesting principal used for ACL evaluation.",
+          "presence": "required"
+        },
+        {
+          "field": "project_id",
+          "requirement": "Record the project boundary used for retrieval and cache scoping.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record the allow/deny decision from the enforcement point.",
+          "presence": "required"
+        },
+        {
+          "field": "acl_scope_hash",
+          "requirement": "Record the ACL scope hash compared against candidates, refs, or cache entries.",
+          "presence": "required"
+        },
+        {
+          "field": "index_version",
+          "requirement": "Record the synthetic index version used by the fixture.",
+          "presence": "required"
+        },
+        {
+          "field": "prompt_assembly_decision",
+          "requirement": "Record the pre-prompt recheck result for included and excluded candidate IDs.",
+          "presence": "required"
+        },
+        {
+          "field": "retrieval_candidate_ids",
+          "requirement": "Record ctx-alpha-revoked-secret as excluded without content body.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "acl",
+        "prompt-assembly",
+        "recheck",
+        "synthetic"
+      ]
+    }
+  ]
+}

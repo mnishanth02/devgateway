@@ -1,0 +1,209 @@
+{
+  "contract_version": "0.1.0",
+  "dataset_id": "agent-workflow.v0.1",
+  "dataset_version": "0.1.0",
+  "suite": "agent_workflow",
+  "schema_status": "layout_stub_until_shared_eval_schema_generalizes_beyond_acl_safety",
+  "fixture_root": "evals/fixtures/agent-workflow",
+  "inert_fixture_mode": true,
+  "no_live_external_calls": true,
+  "production_enablement": false,
+  "source_data_policy": {
+    "synthetic_only": true,
+    "no_real_customer_data": true,
+    "no_real_repo_data": true,
+    "no_live_external_calls": true,
+    "fixture_review_required": true
+  },
+  "categories": [
+    "restart_resume",
+    "budget",
+    "delegation",
+    "state_persistence"
+  ],
+  "artifact_ref_policy": {
+    "required": true,
+    "description": "Each case declares expected gate-result, trace, and audit artifacts that a future runner must write."
+  },
+  "cases": [
+    {
+      "case_id": "agent-workflow-restart-resume",
+      "category": "restart_resume",
+      "title": "Resume synthetic workflow after worker restart",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/agent-workflow/agent-workflow-restart-resume.json",
+          "sha256_required": true,
+          "description": "Inert fixture for agent-workflow-restart-resume."
+        }
+      ],
+      "inputs": {
+        "checkpoint_id": "step-002",
+        "restart_event": "worker_replaced"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Workflow resumes from persisted checkpoint step-002, not from the beginning.",
+          "Idempotency key prevents duplicate tool or model-call artifacts.",
+          "Final state references both pre-restart and post-restart trace segments."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/agent-workflow/agent-workflow-restart-resume/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/agent-workflow/agent-workflow-restart-resume/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/agent-workflow/agent-workflow-restart-resume/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "agent-workflow",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "agent-workflow-budget-deny",
+      "category": "budget",
+      "title": "Stop workflow when synthetic budget is exhausted",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/agent-workflow/agent-workflow-budget-deny.json",
+          "sha256_required": true,
+          "description": "Inert fixture for agent-workflow-budget-deny."
+        }
+      ],
+      "inputs": {
+        "budget_remaining_usd": "0.00",
+        "next_step": "model_call"
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Budget check happens before the next model/tool step.",
+          "Workflow enters blocked_budget state without partial execution.",
+          "Audit artifact records remaining_budget_usd=0.00 and denial reason budget."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/agent-workflow/agent-workflow-budget-deny/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/agent-workflow/agent-workflow-budget-deny/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/agent-workflow/agent-workflow-budget-deny/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "agent-workflow",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "agent-workflow-delegation-contract",
+      "category": "delegation",
+      "title": "Validate delegated subtask boundary and artifact handoff",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/agent-workflow/agent-workflow-delegation-contract.json",
+          "sha256_required": true,
+          "description": "Inert fixture for agent-workflow-delegation-contract."
+        }
+      ],
+      "inputs": {
+        "parent_task_id": "task-parent-synthetic",
+        "child_task_id": "task-child-synthetic"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Delegated task receives scoped context only and cannot widen project permissions.",
+          "Parent workflow records child_task_id and artifact_ref before consuming result.",
+          "Delegation budget and deadline are lower than or equal to parent limits."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/agent-workflow/agent-workflow-delegation-contract/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/agent-workflow/agent-workflow-delegation-contract/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/agent-workflow/agent-workflow-delegation-contract/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "agent-workflow",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "agent-workflow-state-persistence",
+      "category": "state_persistence",
+      "title": "Persist workflow state transitions deterministically",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/agent-workflow/agent-workflow-state-persistence.json",
+          "sha256_required": true,
+          "description": "Inert fixture for agent-workflow-state-persistence."
+        }
+      ],
+      "inputs": {
+        "state_version": "workflow-state-v0.1-fixture"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "State transitions follow queued -> running -> waiting_for_approval -> completed/denied without skipped audit events.",
+          "State snapshot excludes raw secret values and external provider payloads.",
+          "Resume token references persisted state version."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/agent-workflow/agent-workflow-state-persistence/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/agent-workflow/agent-workflow-state-persistence/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/agent-workflow/agent-workflow-state-persistence/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "agent-workflow",
+        "track-0",
+        "synthetic"
+      ]
+    }
+  ]
+}

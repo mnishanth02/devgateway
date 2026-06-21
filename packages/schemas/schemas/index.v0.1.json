@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/index.v0.1.json",
+  "title": "DevGateway Locked External Contract Schema Index v0.1",
+  "contract_version": "0.1.0",
+  "schemas": {
+    "openai": "https://devgateway.local/schemas/external/openai.v0.1.schema.json",
+    "anthropic": "https://devgateway.local/schemas/external/anthropic.v0.1.schema.json",
+    "mcp": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json",
+    "gate_result": "https://devgateway.local/schemas/shared/gate-result.v0.1.schema.json",
+    "virtual_key": "https://devgateway.local/schemas/shared/virtual-key.v0.1.schema.json",
+    "budget_scope": "https://devgateway.local/schemas/shared/budget-scope.v0.1.schema.json",
+    "cost_event": "https://devgateway.local/schemas/shared/cost-event.v0.1.schema.json",
+    "trace_context": "https://devgateway.local/schemas/shared/trace-context.v0.1.schema.json",
+    "provider_policy": "https://devgateway.local/schemas/policy/provider-policy.v0.1.schema.json",
+    "model_provider_registry": "https://devgateway.local/schemas/registry/model-provider-registry.v0.1.schema.json",
+    "policy_denial_reason": "https://devgateway.local/schemas/policy/denial-reason.v0.1.schema.json",
+    "eval_case": "https://devgateway.local/schemas/eval/eval-case.v0.1.schema.json",
+    "gate_definition": "https://devgateway.local/schemas/eval/gate-definition.v0.1.schema.json",
+    "gate_result_persistence": "https://devgateway.local/schemas/eval/gate-result-persistence.v0.1.schema.json"
+  },
+  "endpoints": [
+    {
+      "provider": "openai",
+      "method": "GET",
+      "path": "/v1/models",
+      "response_schema": "https://devgateway.local/schemas/external/openai.v0.1.schema.json#/$defs/getModelsResponse"
+    },
+    {
+      "provider": "openai",
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "request_schema": "https://devgateway.local/schemas/external/openai.v0.1.schema.json#/$defs/chatCompletionsRequest",
+      "response_schema": "https://devgateway.local/schemas/external/openai.v0.1.schema.json#/$defs/chatCompletionsResponse",
+      "stream_chunk_schema": "https://devgateway.local/schemas/external/openai.v0.1.schema.json#/$defs/chatCompletionsStreamChunk"
+    },
+    {
+      "provider": "anthropic",
+      "method": "GET",
+      "path": "/v1/models",
+      "response_schema": "https://devgateway.local/schemas/external/anthropic.v0.1.schema.json#/$defs/getModelsResponse"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "path": "/v1/messages",
+      "request_schema": "https://devgateway.local/schemas/external/anthropic.v0.1.schema.json#/$defs/messagesRequest",
+      "response_schema": "https://devgateway.local/schemas/external/anthropic.v0.1.schema.json#/$defs/messagesResponse",
+      "stream_event_schema": "https://devgateway.local/schemas/external/anthropic.v0.1.schema.json#/$defs/messagesStreamEvent"
+    },
+    {
+      "provider": "anthropic",
+      "method": "POST",
+      "path": "/v1/messages/count_tokens",
+      "request_schema": "https://devgateway.local/schemas/external/anthropic.v0.1.schema.json#/$defs/countTokensRequest",
+      "response_schema": "https://devgateway.local/schemas/external/anthropic.v0.1.schema.json#/$defs/countTokensResponse"
+    },
+    {
+      "provider": "mcp",
+      "method": "POST",
+      "path": "/mcp",
+      "request_schema": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json#/$defs/streamableHttpRequest",
+      "response_schema": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json#/$defs/streamableHttpResponse"
+    },
+    {
+      "provider": "mcp",
+      "method": "GET",
+      "path": "/mcp/sse",
+      "event_schema": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json#/$defs/sseEvent"
+    },
+    {
+      "provider": "mcp",
+      "method": "POST",
+      "path": "/mcp/messages",
+      "request_schema": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json#/$defs/messagesRequest",
+      "response_schema": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json#/$defs/messagesResponse"
+    }
+  ],
+  "async_mcp_tools": [
+    {
+      "name": "start_background_task",
+      "input_schema": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json#/$defs/startBackgroundTaskInput",
+      "output_schema": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json#/$defs/startBackgroundTaskOutput"
+    },
+    {
+      "name": "check_task_status",
+      "input_schema": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json#/$defs/checkTaskStatusInput",
+      "output_schema": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json#/$defs/checkTaskStatusOutput"
+    },
+    {
+      "name": "get_task_result",
+      "input_schema": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json#/$defs/getTaskResultInput",
+      "output_schema": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json#/$defs/getTaskResultOutput"
+    },
+    {
+      "name": "cancel_task",
+      "input_schema": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json#/$defs/cancelTaskInput",
+      "output_schema": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json#/$defs/cancelTaskOutput"
+    },
+    {
+      "name": "list_task_artifacts",
+      "input_schema": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json#/$defs/listTaskArtifactsInput",
+      "output_schema": "https://devgateway.local/schemas/external/mcp.v0.1.schema.json#/$defs/listTaskArtifactsOutput"
+    }
+  ],
+  "shared_contracts": {
+    "gate_result": "https://devgateway.local/schemas/shared/gate-result.v0.1.schema.json#/$defs/gateResult",
+    "gate_result_reference": "https://devgateway.local/schemas/shared/gate-result.v0.1.schema.json#/$defs/gateResultReference",
+    "virtual_key": "https://devgateway.local/schemas/shared/virtual-key.v0.1.schema.json",
+    "virtual_key_record": "https://devgateway.local/schemas/shared/virtual-key.v0.1.schema.json",
+    "budget_scope": "https://devgateway.local/schemas/shared/budget-scope.v0.1.schema.json",
+    "budget_scope_record": "https://devgateway.local/schemas/shared/budget-scope.v0.1.schema.json",
+    "cost_event": "https://devgateway.local/schemas/shared/cost-event.v0.1.schema.json",
+    "cost_event_record": "https://devgateway.local/schemas/shared/cost-event.v0.1.schema.json",
+    "trace_context": "https://devgateway.local/schemas/shared/trace-context.v0.1.schema.json",
+    "trace_context_record": "https://devgateway.local/schemas/shared/trace-context.v0.1.schema.json",
+    "error": "https://devgateway.local/schemas/shared/gate-result.v0.1.schema.json#/$defs/error",
+    "denial_reason_code": "https://devgateway.local/schemas/policy/denial-reason.v0.1.schema.json#/$defs/denialReasonCode",
+    "denial_reason_definition": "https://devgateway.local/schemas/policy/denial-reason.v0.1.schema.json#/$defs/denialReasonDefinition",
+    "denial_audit_context": "https://devgateway.local/schemas/policy/denial-reason.v0.1.schema.json#/$defs/denialAuditContext",
+    "eval_dataset": "https://devgateway.local/schemas/eval/eval-case.v0.1.schema.json#/$defs/evalDataset",
+    "eval_case": "https://devgateway.local/schemas/eval/eval-case.v0.1.schema.json#/$defs/standaloneEvalCase",
+    "eval_dataset_case": "https://devgateway.local/schemas/eval/eval-case.v0.1.schema.json#/$defs/evalCase",
+    "eval_fixture_ref": "https://devgateway.local/schemas/eval/eval-case.v0.1.schema.json#/$defs/fixtureRef",
+    "gate_definition": "https://devgateway.local/schemas/eval/gate-definition.v0.1.schema.json#/$defs/gateDefinition",
+    "gate_suite_thresholds": "https://devgateway.local/schemas/eval/gate-definition.v0.1.schema.json#/$defs/suiteThresholds",
+    "gate_result_persistence": "https://devgateway.local/schemas/eval/gate-result-persistence.v0.1.schema.json#/$defs/gateResultPersistenceRecord",
+    "gate_result_version_bindings": "https://devgateway.local/schemas/eval/gate-result-persistence.v0.1.schema.json#/$defs/versionBindings"
+  }
+}

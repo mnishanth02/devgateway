@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/shared/cost-event.v0.1.schema.json",
+  "title": "DevGateway Shared Cost Event Contract v0.1",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "cost_event_id",
+    "event_type",
+    "trace_id",
+    "request_id",
+    "virtual_key_id",
+    "budget_scope_id",
+    "principal_id",
+    "project_id",
+    "environment",
+    "route_intent",
+    "data_class",
+    "model_alias",
+    "provider_id",
+    "provider_model_id",
+    "gateway_attempt",
+    "fallback_attempt",
+    "attempt_status",
+    "currency",
+    "usage_source",
+    "decision",
+    "estimated",
+    "actual",
+    "aggregation_targets",
+    "policy_version",
+    "registry_version",
+    "occurred_at",
+    "recorded_at"
+  ],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "cost_event_id": { "$ref": "#/$defs/nonEmptyString" },
+    "event_type": { "$ref": "#/$defs/costEventType" },
+    "trace_id": { "$ref": "#/$defs/nonEmptyString" },
+    "request_id": { "$ref": "#/$defs/nonEmptyString" },
+    "span_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+    "virtual_key_id": { "$ref": "#/$defs/nonEmptyString" },
+    "budget_scope_id": { "$ref": "#/$defs/nonEmptyString" },
+    "principal_id": { "$ref": "#/$defs/nonEmptyString" },
+    "project_id": { "$ref": "#/$defs/nonEmptyString" },
+    "environment": { "$ref": "#/$defs/environment" },
+    "route_intent": { "$ref": "#/$defs/routeIntent" },
+    "data_class": { "$ref": "#/$defs/dataClass" },
+    "model_alias": { "$ref": "#/$defs/nonEmptyString" },
+    "provider_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+    "provider_model_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+    "provider_candidate": { "$ref": "#/$defs/nullableNonEmptyString" },
+    "gateway_attempt": { "type": "integer", "minimum": 1 },
+    "fallback_attempt": { "type": "integer", "minimum": 0 },
+    "attempt_status": { "$ref": "#/$defs/attemptStatus" },
+    "fallback_of_cost_event_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "usage_source": { "$ref": "#/$defs/usageSource" },
+    "decision": { "type": "string", "enum": ["allow", "deny"] },
+    "estimated": { "$ref": "#/$defs/costMeasurement" },
+    "actual": { "$ref": "#/$defs/costMeasurement" },
+    "denial_reason": {
+      "anyOf": [
+        { "$ref": "https://devgateway.local/schemas/policy/denial-reason.v0.1.schema.json#/$defs/denialReasonCode" },
+        { "type": "null" }
+      ]
+    },
+    "aggregation_targets": { "$ref": "#/$defs/aggregationTargets" },
+    "policy_version": { "$ref": "#/$defs/nonEmptyString" },
+    "registry_version": { "$ref": "#/$defs/nonEmptyString" },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "recorded_at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "event_type": { "enum": ["estimate", "denial_estimate"] } }, "required": ["event_type"] },
+      "then": {
+        "properties": {
+          "actual": {
+            "properties": {
+              "cost_amount": { "type": "null" },
+              "source": { "enum": ["not_available"] }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "event_type": { "const": "denial_estimate" } }, "required": ["event_type"] },
+      "then": {
+        "required": ["denial_reason"],
+        "properties": {
+          "denial_reason": { "$ref": "https://devgateway.local/schemas/policy/denial-reason.v0.1.schema.json#/$defs/denialReasonCode" },
+          "decision": { "const": "deny" }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "nullableNonEmptyString": {
+      "anyOf": [
+        { "$ref": "#/$defs/nonEmptyString" },
+        { "type": "null" }
+      ]
+    },
+    "costEventType": {
+      "type": "string",
+      "enum": ["estimate", "actual", "reconciliation", "denial_estimate"]
+    },
+    "attemptStatus": {
+      "type": "string",
+      "enum": ["started", "succeeded", "failed", "denied", "cancelled", "timed_out"]
+    },
+    "environment": {
+      "type": "string",
+      "enum": ["development", "test", "staging", "production"]
+    },
+    "dataClass": {
+      "type": "string",
+      "enum": ["public", "internal", "confidential", "restricted"]
+    },
+    "usageSource": {
+      "type": "string",
+      "enum": ["registry_estimate", "gateway_counter", "provider_reported", "estimated_final", "not_available"]
+    },
+    "routeIntent": {
+      "type": "string",
+      "enum": ["chat", "completion", "embedding", "eval", "tool_planning", "tool_execution", "policy_check"]
+    },
+    "costMeasurement": {
+      "type": "object",
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "reasoning_tokens",
+        "cost_amount",
+        "unit_cost_basis",
+        "source"
+      ],
+      "properties": {
+        "input_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "output_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "cache_read_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "cache_write_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "reasoning_tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "cost_amount": { "type": ["number", "null"], "minimum": 0 },
+        "unit_cost_basis": { "type": "string", "enum": ["per_token", "per_million_tokens", "per_request", "provider_invoice", "not_applicable"] },
+        "source": { "$ref": "#/$defs/usageSource" }
+      },
+      "additionalProperties": false
+    },
+    "aggregationTargets": {
+      "type": "object",
+      "required": [
+        "tenant_id",
+        "org_id",
+        "team_id",
+        "project_id",
+        "principal_id",
+        "virtual_key_id",
+        "budget_scope_id",
+        "model_alias",
+        "provider_id",
+        "environment",
+        "route_intent",
+        "data_class",
+        "reset_period_start",
+        "reset_period_end"
+      ],
+      "properties": {
+        "tenant_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "org_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "team_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "project_id": { "$ref": "#/$defs/nonEmptyString" },
+        "principal_id": { "$ref": "#/$defs/nonEmptyString" },
+        "virtual_key_id": { "$ref": "#/$defs/nonEmptyString" },
+        "budget_scope_id": { "$ref": "#/$defs/nonEmptyString" },
+        "model_alias": { "$ref": "#/$defs/nonEmptyString" },
+        "provider_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "environment": { "$ref": "#/$defs/environment" },
+        "route_intent": { "$ref": "#/$defs/routeIntent" },
+        "data_class": { "$ref": "#/$defs/dataClass" },
+        "reset_period_start": { "type": "string", "format": "date-time" },
+        "reset_period_end": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

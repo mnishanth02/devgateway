@@ -1,0 +1,62 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "gateway-model-smoke-invalid-virtual-key",
+  "category": "auth",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "request": {
+    "method": "GET",
+    "route": "/v1/models",
+    "auth_state": "invalid-key-signature"
+  },
+  "gateway_context": {
+    "trace_id": "trace-gateway-model-smoke-invalid-virtual-key",
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "virtual_key_id": "vk_synthetic_invalid",
+    "model_alias": null,
+    "provider_candidate_id": null,
+    "provider_attempt_count": 0
+  },
+  "synthetic_shape": {
+    "error": {
+      "status": 401,
+      "code": "auth_required",
+      "retryable": false,
+      "subcode": "invalid-key"
+    }
+  },
+  "synthetic_measurement": {},
+  "expected_engine_decision": {
+    "decision": "deny",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": [
+      "SYNTHETIC_MODEL_LIST"
+    ],
+    "denial_reason": "auth_required",
+    "auth_denial_subcode": "invalid-key"
+  },
+  "expected_assertions": [
+    "Invalid virtual key material stops before listing models.",
+    "The denial uses the shared typed auth error shape.",
+    "No model list or provider metadata leaks."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-invalid-virtual-key/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-invalid-virtual-key/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-invalid-virtual-key/audit-event.json"
+  },
+  "audit_expectations": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "auth_state",
+    "provider_attempt_count"
+  ]
+}

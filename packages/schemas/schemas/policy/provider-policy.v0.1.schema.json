@@ -1,0 +1,398 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/policy/provider-policy.v0.1.schema.json",
+  "title": "DevGateway Provider Data-Class Policy Matrix v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "matrixId",
+    "createdAt",
+    "freshnessExpiresAt",
+    "status",
+    "productionEnablement",
+    "dataClasses",
+    "evaluationOrder",
+    "providers"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://devgateway.local/schemas/policy/provider-policy.v0.1.schema.json"
+    },
+    "schemaVersion": {
+      "const": "0.1.0"
+    },
+    "matrixId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "freshnessExpiresAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "const": "track_0_governance_only"
+    },
+    "productionEnablement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "note"],
+      "properties": {
+        "enabled": {
+          "const": false
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "dataClasses": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["public", "internal", "confidential", "restricted"],
+      "properties": {
+        "public": {
+          "$ref": "#/$defs/routingRule"
+        },
+        "internal": {
+          "$ref": "#/$defs/routingRule"
+        },
+        "confidential": {
+          "$ref": "#/$defs/routingRule"
+        },
+        "restricted": {
+          "$ref": "#/$defs/routingRule"
+        }
+      }
+    },
+    "evaluationOrder": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "prefixItems": [
+        {
+          "const": "resolve_principal_and_project"
+        },
+        {
+          "const": "resolve_data_class_task_tool_context"
+        },
+        {
+          "const": "resolve_alias_and_provider_candidate"
+        },
+        {
+          "const": "check_provider_lifecycle_and_approval_gate"
+        },
+        {
+          "const": "check_data_class_dpa_zdr_retention_training_region_trace_storage"
+        },
+        {
+          "const": "check_eval_gate"
+        },
+        {
+          "const": "check_budget_and_rate_limit"
+        },
+        {
+          "const": "check_semantic_cache_acl_eligibility"
+        },
+        {
+          "const": "select_route_or_typed_denial"
+        }
+      ]
+    },
+    "providers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/providerPolicy"
+      }
+    }
+  },
+  "$defs": {
+    "routingRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routingRule"],
+      "properties": {
+        "routingRule": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "dataClass": {
+      "enum": ["public", "internal", "confidential", "restricted"]
+    },
+    "dataClassArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/dataClass"
+      }
+    },
+    "providerPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "providerId",
+        "displayName",
+        "providerKind",
+        "externalModelCalls",
+        "lifecycle",
+        "productionEnabled",
+        "allowedModelAliases",
+        "dataClassPolicy",
+        "compliance",
+        "regionPolicy",
+        "traceStoragePolicy",
+        "manualApprovalGate",
+        "evalGate",
+        "budgetRateLimitPolicy",
+        "semanticCachePolicy",
+        "auditability"
+      ],
+      "properties": {
+        "providerId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]*$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "providerKind": {
+          "enum": ["external_model", "self_hosted_model", "deterministic_tooling"]
+        },
+        "externalModelCalls": {
+          "type": "boolean"
+        },
+        "lifecycle": {
+          "enum": [
+            "disabled",
+            "evaluation_only",
+            "approved_non_production",
+            "approved_self_hosted",
+            "approved_production",
+            "retired"
+          ]
+        },
+        "productionEnabled": {
+          "const": false
+        },
+        "allowedModelAliases": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "dataClassPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "allowedDataClasses",
+            "deniedDataClasses",
+            "restrictedExternalCallsDefaultDeny",
+            "confidentialRequiresDpaOrZdrOrApproval",
+            "internalRequiresAcceptableRetentionTraining"
+          ],
+          "properties": {
+            "allowedDataClasses": {
+              "$ref": "#/$defs/dataClassArray"
+            },
+            "deniedDataClasses": {
+              "$ref": "#/$defs/dataClassArray"
+            },
+            "restrictedExternalCallsDefaultDeny": {
+              "type": "boolean"
+            },
+            "confidentialRequiresDpaOrZdrOrApproval": {
+              "type": "boolean"
+            },
+            "internalRequiresAcceptableRetentionTraining": {
+              "type": "boolean"
+            }
+          }
+        },
+        "compliance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "dpa",
+            "zeroDataRetention",
+            "retention",
+            "trainingUse",
+            "subprocessorsDocumented"
+          ],
+          "properties": {
+            "dpa": {
+              "enum": ["none", "pending", "signed", "not_applicable"]
+            },
+            "zeroDataRetention": {
+              "enum": ["unavailable", "pending", "available", "not_applicable"]
+            },
+            "retention": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode", "maxDays"],
+              "properties": {
+                "mode": {
+                  "enum": ["none", "zero", "limited", "provider_default", "unknown"]
+                },
+                "maxDays": {
+                  "type": ["integer", "null"],
+                  "minimum": 0
+                }
+              }
+            },
+            "trainingUse": {
+              "enum": ["prohibited", "opt_out", "allowed", "unknown", "not_applicable"]
+            },
+            "subprocessorsDocumented": {
+              "type": "boolean"
+            }
+          }
+        },
+        "regionPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["allowedRegions", "disallowedRegions", "requiresRegionPinning"],
+          "properties": {
+            "allowedRegions": {
+              "$ref": "#/$defs/regionArray"
+            },
+            "disallowedRegions": {
+              "$ref": "#/$defs/regionArray"
+            },
+            "requiresRegionPinning": {
+              "type": "boolean"
+            }
+          }
+        },
+        "traceStoragePolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "sensitiveSnippetRedactionRequired",
+            "retentionDays",
+            "allowedForDataClasses"
+          ],
+          "properties": {
+            "mode": {
+              "enum": ["none", "metadata_only", "redacted_snippets_allowed", "full_content_allowed"]
+            },
+            "sensitiveSnippetRedactionRequired": {
+              "type": "boolean"
+            },
+            "retentionDays": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "allowedForDataClasses": {
+              "$ref": "#/$defs/dataClassArray"
+            }
+          }
+        },
+        "manualApprovalGate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "required",
+            "requiredForDataClasses",
+            "productionApprovalRequired",
+            "approvalReference"
+          ],
+          "properties": {
+            "required": {
+              "type": "boolean"
+            },
+            "requiredForDataClasses": {
+              "$ref": "#/$defs/dataClassArray"
+            },
+            "productionApprovalRequired": {
+              "type": "boolean"
+            },
+            "approvalReference": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        "evalGate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requiredForProduction", "status"],
+          "properties": {
+            "requiredForProduction": {
+              "type": "boolean"
+            },
+            "status": {
+              "enum": ["not_started", "pending", "passed", "failed", "not_applicable"]
+            }
+          }
+        },
+        "budgetRateLimitPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requiresBudgetCheck", "requiresRateLimitCheck"],
+          "properties": {
+            "requiresBudgetCheck": {
+              "type": "boolean"
+            },
+            "requiresRateLimitCheck": {
+              "type": "boolean"
+            }
+          }
+        },
+        "semanticCachePolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["eligibleDataClasses", "requiresAclScopedCacheKey"],
+          "properties": {
+            "eligibleDataClasses": {
+              "$ref": "#/$defs/dataClassArray"
+            },
+            "requiresAclScopedCacheKey": {
+              "type": "boolean"
+            }
+          }
+        },
+        "auditability": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "decisionAuditRequired",
+            "providerAttemptAuditRequired",
+            "recordsDpaZdrRetentionTrainingRegionTracePolicy"
+          ],
+          "properties": {
+            "decisionAuditRequired": {
+              "type": "boolean"
+            },
+            "providerAttemptAuditRequired": {
+              "type": "boolean"
+            },
+            "recordsDpaZdrRetentionTrainingRegionTracePolicy": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "regionArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@devgateway/registry",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Model and provider registry schema conventions.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "registry:validate": "node --experimental-strip-types src/validate-registry.ts",
+    "transit": "pnpm typecheck"
+  }
+}

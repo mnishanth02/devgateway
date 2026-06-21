@@ -1,0 +1,47 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "retrieval-strategy-context-budget-compression",
+  "category": "context_budget_compression",
+  "retrieval_config": {
+    "strategy_id": "hybrid_graph",
+    "graph_rag_enabled": true,
+    "neo4j_enabled": true,
+    "context_budgeter_enabled": true,
+    "context_compressor_enabled": true
+  },
+  "context_budget_fixture": {
+    "candidate_context_tokens": 6000,
+    "max_context_tokens": 2000,
+    "context_pack_tokens": 1900,
+    "context_budget_policy_id": "context-budget-policy-synthetic-001",
+    "context_compression_run_id": "context-compression-run-synthetic-001",
+    "required_citation_ids": [
+      "doc-strategy-001#chunk-strategy-001",
+      "graph-strategy-001#edge-strategy-001"
+    ],
+    "preserved_citation_ids": [
+      "doc-strategy-001#chunk-strategy-001",
+      "graph-strategy-001#edge-strategy-001"
+    ]
+  },
+  "expected_engine_decision": {
+    "decision": "pass",
+    "context_pack_within_budget": true,
+    "citation_provenance_preserved": true,
+    "prompt_context_allowed_markers": [
+      "SYNTHETIC_COMPRESSED_CONTEXT_WITH_CITATIONS"
+    ],
+    "prompt_context_forbidden_markers": [
+      "SYNTHETIC_DUPLICATE_CONTEXT_BLOCK"
+    ]
+  },
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-context-budget-compression/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-context-budget-compression/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/retrieval-strategy-controls/retrieval-strategy-context-budget-compression/audit-event.json"
+  }
+}

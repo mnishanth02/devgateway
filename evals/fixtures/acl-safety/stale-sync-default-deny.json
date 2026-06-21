@@ -1,0 +1,39 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "acl-safety-stale-sync-default-deny",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_retrieval_behavior": false,
+  "permission_sync_state": {
+    "sync_state_ref": "sync-stale-alpha",
+    "permission_sync_version": "sync-run-alpha-previous",
+    "sync_staleness_ms": 900000,
+    "permission_sync_slo_ms": 300000,
+    "fresh": false,
+    "stale_marker": true
+  },
+  "retrieval_candidates": [
+    {
+      "candidate_id": "chunk-alpha-rollout-checklist",
+      "project_id": "project-alpha",
+      "repo_ref": "repo-alpha-private",
+      "acl_scope_hash": "acl-alpha-read",
+      "content_marker": "SYNTHETIC_ALPHA_ROLLOUT_CHECKLIST",
+      "authorized_if_fresh": true
+    }
+  ],
+  "expected_engine_decision": {
+    "decision": "deny",
+    "denial_reason": "permission_sync_stale",
+    "deny_before_retrieval": true,
+    "prompt_context_forbidden_markers": ["SYNTHETIC_ALPHA_ROLLOUT_CHECKLIST"]
+  },
+  "audit_expectations": [
+    "trace_id",
+    "principal_id",
+    "project_id",
+    "decision",
+    "acl_scope_hash",
+    "index_version"
+  ]
+}

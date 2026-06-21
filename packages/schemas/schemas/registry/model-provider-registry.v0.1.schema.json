@@ -1,0 +1,593 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/registry/model-provider-registry.v0.1.schema.json",
+  "title": "DevGateway Model Provider Registry v0.1",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "registry_version",
+    "created_at",
+    "freshness_expires_at",
+    "production_posture",
+    "model_aliases"
+  ],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "registry_version": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "freshness_expires_at": { "type": "string", "format": "date-time" },
+    "production_posture": { "$ref": "#/$defs/productionGate" },
+    "model_aliases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/modelAlias" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "nullableNonEmptyString": {
+      "anyOf": [
+        { "$ref": "#/$defs/nonEmptyString" },
+        { "type": "null" }
+      ]
+    },
+    "dataClass": {
+      "type": "string",
+      "enum": ["public", "internal", "confidential", "restricted"]
+    },
+    "lifecycleStatus": {
+      "type": "string",
+      "enum": ["experimental", "approved", "deprecated", "disabled"]
+    },
+    "wireFormat": {
+      "type": "string",
+      "enum": [
+        "openai_chat_completions",
+        "anthropic_messages",
+        "provider_native_bifrost_translated"
+      ]
+    },
+    "gateStatus": {
+      "type": "string",
+      "enum": ["not_run", "passing", "failing", "blocked"]
+    },
+    "providerControlPlane": {
+      "type": "string",
+      "enum": ["direct", "azure", "aws", "gcp", "vertex", "self_hosted"]
+    },
+    "productionGate": {
+      "type": "object",
+      "required": ["production_enabled", "production_route_allowed", "gate_result_ref", "notes"],
+      "properties": {
+        "production_enabled": { "const": false },
+        "production_route_allowed": { "const": false },
+        "gate_result_ref": {
+          "anyOf": [
+            {
+              "$ref": "https://devgateway.local/schemas/shared/gate-result.v0.1.schema.json#/$defs/gateResultReference"
+            },
+            { "type": "null" }
+          ]
+        },
+        "notes": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "pricePoint": {
+      "type": "object",
+      "required": ["status", "amount"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["known", "not_offered", "unknown"]
+        },
+        "amount": {
+          "type": ["number", "null"],
+          "minimum": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "known" } },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": { "amount": { "type": "number", "minimum": 0 } },
+            "required": ["amount"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": { "enum": ["not_offered", "unknown"] }
+            },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": { "amount": { "type": "null" } },
+            "required": ["amount"]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "priceSnapshot": {
+      "type": "object",
+      "required": [
+        "currency",
+        "effective_at",
+        "source",
+        "input_per_million_tokens",
+        "output_per_million_tokens",
+        "cache_read_per_million_tokens",
+        "cache_write_per_million_tokens",
+        "batch_input_per_million_tokens",
+        "batch_output_per_million_tokens"
+      ],
+      "properties": {
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "effective_at": { "type": "string", "format": "date-time" },
+        "source": { "$ref": "#/$defs/nonEmptyString" },
+        "input_per_million_tokens": { "$ref": "#/$defs/pricePoint" },
+        "output_per_million_tokens": { "$ref": "#/$defs/pricePoint" },
+        "cache_read_per_million_tokens": { "$ref": "#/$defs/pricePoint" },
+        "cache_write_per_million_tokens": { "$ref": "#/$defs/pricePoint" },
+        "batch_input_per_million_tokens": { "$ref": "#/$defs/pricePoint" },
+        "batch_output_per_million_tokens": { "$ref": "#/$defs/pricePoint" }
+      },
+      "additionalProperties": false
+    },
+    "tokenizer": {
+      "type": "object",
+      "required": ["source", "reference", "count_tokens_endpoint"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "provider_api",
+            "gateway_estimator",
+            "tiktoken",
+            "anthropic_count_tokens",
+            "custom"
+          ]
+        },
+        "reference": { "$ref": "#/$defs/nonEmptyString" },
+        "count_tokens_endpoint": { "$ref": "#/$defs/nullableNonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "contextLimits": {
+      "type": "object",
+      "required": ["context_window_tokens", "max_output_tokens"],
+      "properties": {
+        "context_window_tokens": { "type": "integer", "minimum": 1 },
+        "max_output_tokens": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "toolCallSupport": {
+      "type": "object",
+      "required": ["supported", "schema_dialect"],
+      "properties": {
+        "supported": { "type": "boolean" },
+        "schema_dialect": {
+          "type": "string",
+          "enum": [
+            "none",
+            "openai_tools_json_schema",
+            "anthropic_tools_json_schema",
+            "json_schema_draft_2020_12",
+            "provider_native"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "supported": { "const": false } },
+            "required": ["supported"]
+          },
+          "then": {
+            "properties": { "schema_dialect": { "const": "none" } }
+          }
+        },
+        {
+          "if": {
+            "properties": { "supported": { "const": true } },
+            "required": ["supported"]
+          },
+          "then": {
+            "properties": {
+              "schema_dialect": {
+                "enum": [
+                  "openai_tools_json_schema",
+                  "anthropic_tools_json_schema",
+                  "json_schema_draft_2020_12",
+                  "provider_native"
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "structuredOutput": {
+      "type": "object",
+      "required": ["supported", "validation_strategy"],
+      "properties": {
+        "supported": { "type": "boolean" },
+        "validation_strategy": {
+          "type": "string",
+          "enum": [
+            "none",
+            "json_schema",
+            "provider_strict_json_schema",
+            "gateway_repair_then_validate",
+            "application_validator"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "supported": { "const": false } },
+            "required": ["supported"]
+          },
+          "then": {
+            "properties": { "validation_strategy": { "const": "none" } }
+          }
+        },
+        {
+          "if": {
+            "properties": { "supported": { "const": true } },
+            "required": ["supported"]
+          },
+          "then": {
+            "properties": {
+              "validation_strategy": {
+                "enum": [
+                  "json_schema",
+                  "provider_strict_json_schema",
+                  "gateway_repair_then_validate",
+                  "application_validator"
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "streaming": {
+      "type": "object",
+      "required": ["supported", "event_format"],
+      "properties": {
+        "supported": { "type": "boolean" },
+        "event_format": {
+          "type": "string",
+          "enum": ["none", "sse", "jsonl", "provider_native"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "supported": { "const": false } },
+            "required": ["supported"]
+          },
+          "then": {
+            "properties": { "event_format": { "const": "none" } }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "dataResidency": {
+      "type": "object",
+      "required": ["processing_regions", "storage_regions", "cross_border_transfer"],
+      "properties": {
+        "processing_regions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "storage_regions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "cross_border_transfer": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "providerPosture": {
+      "type": "object",
+      "required": ["retention", "retention_days", "training", "dpa", "zdr"],
+      "properties": {
+        "retention": {
+          "type": "string",
+          "enum": ["none", "zero_retention", "limited", "standard", "unknown"]
+        },
+        "retention_days": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "training": {
+          "type": "string",
+          "enum": ["disabled", "opt_out", "enabled", "unknown"]
+        },
+        "dpa": {
+          "type": "string",
+          "enum": ["in_place", "not_in_place", "not_required", "unknown"]
+        },
+        "zdr": {
+          "type": "string",
+          "enum": [
+            "available_enabled",
+            "available_not_enabled",
+            "not_available",
+            "unknown"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "rateLimit": {
+      "type": "object",
+      "required": [
+        "scope",
+        "window_seconds",
+        "request_limit",
+        "input_token_limit",
+        "output_token_limit",
+        "concurrency_limit"
+      ],
+      "properties": {
+        "scope": {
+          "type": "string",
+          "enum": ["alias", "provider", "project", "tenant", "virtual_key"]
+        },
+        "window_seconds": { "type": "integer", "minimum": 1 },
+        "request_limit": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "input_token_limit": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "output_token_limit": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "concurrency_limit": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "manualApprovalGate": {
+      "type": "object",
+      "required": ["required", "status", "approval_ref", "approver", "reviewed_at", "notes"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "status": {
+          "type": "string",
+          "enum": ["not_required", "pending", "approved", "rejected", "expired"]
+        },
+        "approval_ref": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "approver": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "reviewed_at": {
+          "anyOf": [
+            { "type": "string", "format": "date-time" },
+            { "type": "null" }
+          ]
+        },
+        "notes": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "required": { "const": false } },
+            "required": ["required"]
+          },
+          "then": {
+            "properties": { "status": { "const": "not_required" } }
+          }
+        },
+        {
+          "if": {
+            "properties": { "required": { "const": true } },
+            "required": ["required"]
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "enum": ["pending", "approved", "rejected", "expired"]
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "providerCandidate": {
+      "type": "object",
+      "required": [
+        "candidate_id",
+        "provider_id",
+        "provider_control_plane",
+        "provider_region",
+        "model_id",
+        "wire_format",
+        "tokenizer",
+        "context_limits",
+        "price_snapshot",
+        "tool_call_support",
+        "structured_output",
+        "streaming",
+        "data_residency",
+        "allowed_data_classes",
+        "provider_posture",
+        "rate_limits",
+        "manual_approval_gate"
+      ],
+      "properties": {
+        "candidate_id": { "$ref": "#/$defs/nonEmptyString" },
+        "provider_id": { "$ref": "#/$defs/nonEmptyString" },
+        "provider_control_plane": { "$ref": "#/$defs/providerControlPlane" },
+        "provider_region": { "$ref": "#/$defs/nonEmptyString" },
+        "model_id": { "$ref": "#/$defs/nonEmptyString" },
+        "wire_format": { "$ref": "#/$defs/wireFormat" },
+        "tokenizer": { "$ref": "#/$defs/tokenizer" },
+        "context_limits": { "$ref": "#/$defs/contextLimits" },
+        "price_snapshot": { "$ref": "#/$defs/priceSnapshot" },
+        "tool_call_support": { "$ref": "#/$defs/toolCallSupport" },
+        "structured_output": { "$ref": "#/$defs/structuredOutput" },
+        "streaming": { "$ref": "#/$defs/streaming" },
+        "data_residency": { "$ref": "#/$defs/dataResidency" },
+        "allowed_data_classes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/dataClass" },
+          "uniqueItems": true
+        },
+        "provider_posture": { "$ref": "#/$defs/providerPosture" },
+        "rate_limits": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/rateLimit" }
+        },
+        "manual_approval_gate": { "$ref": "#/$defs/manualApprovalGate" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "provider_control_plane": {
+                "enum": ["azure", "aws", "gcp", "vertex"]
+              }
+            },
+            "required": ["provider_control_plane"]
+          },
+          "then": {
+            "properties": {
+              "manual_approval_gate": {
+                "allOf": [
+                  { "$ref": "#/$defs/manualApprovalGate" },
+                  {
+                    "properties": {
+                      "required": { "const": true },
+                      "status": {
+                        "enum": ["pending", "approved", "rejected", "expired"]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "routing": {
+      "type": "object",
+      "required": ["tier", "fallback_aliases"],
+      "properties": {
+        "tier": {
+          "type": "string",
+          "enum": ["primary", "fallback", "manual", "disabled"]
+        },
+        "fallback_aliases": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "evalGate": {
+      "type": "object",
+      "required": [
+        "suite_id",
+        "suite_version",
+        "latest_gate_status",
+        "gate_result_ref",
+        "evaluated_at"
+      ],
+      "properties": {
+        "suite_id": { "$ref": "#/$defs/nonEmptyString" },
+        "suite_version": { "$ref": "#/$defs/nonEmptyString" },
+        "latest_gate_status": { "$ref": "#/$defs/gateStatus" },
+        "gate_result_ref": {
+          "anyOf": [
+            {
+              "$ref": "https://devgateway.local/schemas/shared/gate-result.v0.1.schema.json#/$defs/gateResultReference"
+            },
+            { "type": "null" }
+          ]
+        },
+        "evaluated_at": {
+          "anyOf": [
+            { "type": "string", "format": "date-time" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "modelAlias": {
+      "type": "object",
+      "required": [
+        "alias",
+        "purpose",
+        "lifecycle_status",
+        "production_gate",
+        "routing",
+        "eval_gate",
+        "candidates"
+      ],
+      "properties": {
+        "alias": { "$ref": "#/$defs/nonEmptyString" },
+        "purpose": { "$ref": "#/$defs/nonEmptyString" },
+        "lifecycle_status": { "$ref": "#/$defs/lifecycleStatus" },
+        "production_gate": { "$ref": "#/$defs/productionGate" },
+        "routing": { "$ref": "#/$defs/routing" },
+        "eval_gate": { "$ref": "#/$defs/evalGate" },
+        "candidates": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/providerCandidate" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "lifecycle_status": {
+                "enum": ["experimental", "approved", "deprecated"]
+              }
+            },
+            "required": ["lifecycle_status"]
+          },
+          "then": {
+            "properties": {
+              "candidates": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "$ref": "#/$defs/providerCandidate" }
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    }
+  }
+}

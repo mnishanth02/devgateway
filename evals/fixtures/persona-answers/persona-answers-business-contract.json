@@ -1,0 +1,32 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "persona-answers-business-contract",
+  "category": "business",
+  "answer_contract": {
+    "audience": "business",
+    "required_sections": [
+      "cost",
+      "risk",
+      "timeline",
+      "decision_needed"
+    ]
+  },
+  "synthetic_source_refs": [
+    "doc-synthetic-business-brief"
+  ],
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "Answer includes cost, risk, timeline, and decision-needed sections.",
+    "No raw technical trace or secret-like placeholder is exposed.",
+    "Numeric claims reference synthetic business assumptions."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/persona-answers/persona-answers-business-contract/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/persona-answers/persona-answers-business-contract/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/persona-answers/persona-answers-business-contract/audit-event.json"
+  }
+}

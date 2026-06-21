@@ -1,0 +1,78 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "gateway-model-smoke-provider-data-policy-gateway-deny",
+  "category": "provider_data_policy",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "request": {
+    "method": "POST",
+    "route": "/v1/chat/completions",
+    "body": {
+      "model": "track0-public-chat",
+      "metadata": {
+        "data_class": "restricted"
+      },
+      "messages": [
+        {
+          "role": "user",
+          "content": "SYNTHETIC_RESTRICTED_GATEWAY_MARKER"
+        }
+      ]
+    }
+  },
+  "gateway_context": {
+    "trace_id": "trace-gateway-model-smoke-provider-data-policy-gateway-deny",
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "virtual_key_id": "vk_synthetic_alpha",
+    "model_alias": "track0-public-chat",
+    "provider_candidate_id": "fixture-openai-external-standard",
+    "provider_attempt_count": 0
+  },
+  "synthetic_shape": {
+    "data_policy": {
+      "data_class": "restricted",
+      "provider_class": "external_standard",
+      "policy_version": "provider-data-class-matrix.v0.1",
+      "gateway_route": "/v1/chat/completions"
+    },
+    "error": {
+      "status": 403,
+      "code": "data_class",
+      "retryable": false
+    }
+  },
+  "synthetic_measurement": {},
+  "expected_engine_decision": {
+    "decision": "deny",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": [
+      "SYNTHETIC_RESTRICTED_GATEWAY_MARKER"
+    ],
+    "denial_reason": "data_class"
+  },
+  "expected_assertions": [
+    "Provider data policy is enforced on the gateway model route before provider dispatch.",
+    "Restricted synthetic data cannot route to an external_standard candidate without DPA/ZDR approval.",
+    "Audit records data_class, provider_class, route, and denial_reason."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-provider-data-policy-gateway-deny/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-provider-data-policy-gateway-deny/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-provider-data-policy-gateway-deny/audit-event.json"
+  },
+  "audit_expectations": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "data_class",
+    "provider_class",
+    "provider_attempt_count"
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 1 degraded-mode fixture; not real customer, repository, provider, credential, or production telemetry data.",
+  "case_id": "degraded-mode-provider-key-audit-unavailable-deny",
+  "category": "provider_key_audit_unavailable",
+  "activation_id": "bg-activation-fixture-001",
+  "incident_id": "inc-fixture-001",
+  "break_glass_design_ref": "docs/governance/break-glass-design.md#required-degraded-mode-tests",
+  "inputs": {
+    "provider_key_access": "requested",
+    "audit_sink": "append_only_unavailable",
+    "credential_reference_id": "credref-fixture-001"
+  },
+  "expected_decision": "deny",
+  "expected_denial_reason": "audit_unavailable",
+  "expected_engine_decision": {
+    "decision": "deny",
+    "denial_reason": "audit_unavailable",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": []
+  },
+  "expected_assertions": [
+    "Provider-key access is denied before provider access when append-only audit write is unavailable.",
+    "No provider key material is exposed."
+  ],
+  "expected_audit_fields": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "activation_id",
+    "incident_id",
+    "credential_reference_id",
+    "audit_sink",
+    "denial_reason"
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-provider-key-audit-unavailable-deny/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-provider-key-audit-unavailable-deny/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-provider-key-audit-unavailable-deny/audit-event.json"
+  }
+}

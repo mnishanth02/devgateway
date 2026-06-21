@@ -1,0 +1,32 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "persona-answers-support-contract",
+  "category": "support",
+  "answer_contract": {
+    "audience": "support",
+    "required_sections": [
+      "symptom",
+      "safe_workaround",
+      "escalation_path",
+      "customer_safe_wording"
+    ]
+  },
+  "synthetic_source_refs": [
+    "doc-synthetic-support-brief"
+  ],
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "Answer includes symptom, safe workaround, escalation path, and customer-safe wording.",
+    "No internal-only synthetic markers are included in customer-facing text.",
+    "Unverified root cause is not stated as fact."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/persona-answers/persona-answers-support-contract/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/persona-answers/persona-answers-support-contract/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/persona-answers/persona-answers-support-contract/audit-event.json"
+  }
+}

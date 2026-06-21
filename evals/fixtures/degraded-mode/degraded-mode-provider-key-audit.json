@@ -1,0 +1,49 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 1 degraded-mode fixture; not real customer, repository, provider, credential, or production telemetry data.",
+  "case_id": "degraded-mode-provider-key-audit",
+  "category": "provider_key_audit",
+  "activation_id": "bg-activation-fixture-001",
+  "incident_id": "inc-fixture-001",
+  "break_glass_design_ref": "docs/governance/break-glass-design.md#required-degraded-mode-tests",
+  "inputs": {
+    "provider_key_access": "requested",
+    "audit_sink": "append_only_available",
+    "credential_reference_id": "credref-fixture-001"
+  },
+  "expected_decision": "pass",
+  "expected_denial_reason": null,
+  "expected_assertions": [
+    "Key access, provider-call allow/deny, and route disable events include the break-glass audit contract fields.",
+    "Audit event includes credential reference ID and access timestamp, not raw provider key material.",
+    "Missing audit write would fail closed before provider access."
+  ],
+  "expected_audit_fields": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "activation_id",
+    "incident_id",
+    "credential_reference_id",
+    "credential_access_timestamp",
+    "event_type"
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-provider-key-audit/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-provider-key-audit/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-provider-key-audit/audit-event.json"
+  },
+  "production_retrieval_behavior": false,
+  "expected_engine_decision": {
+    "decision": "pass",
+    "denial_reason": null,
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": []
+  }
+}

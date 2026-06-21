@@ -1,0 +1,60 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "cost-latency-gateway-overhead-shape",
+  "category": "gateway_overhead",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "request": {},
+  "gateway_context": {
+    "trace_id": "trace-cost-latency-gateway-overhead-shape",
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "virtual_key_id": "vk_synthetic_alpha",
+    "model_alias": "track0-public-chat",
+    "provider_candidate_id": "fixture-openai-primary",
+    "provider_attempt_count": 1
+  },
+  "synthetic_shape": {},
+  "synthetic_measurement": {
+    "client_to_gateway_ms": 4,
+    "auth_eval_ms": 1,
+    "policy_eval_ms": 2,
+    "routing_eval_ms": 1,
+    "provider_round_trip_ms": 35,
+    "stream_overhead_ms": 0,
+    "gateway_overhead_ms": 8,
+    "total_ms": 47,
+    "p95_ms_placeholder": 0,
+    "p99_ms_placeholder": 0
+  },
+  "expected_engine_decision": {
+    "decision": "pass",
+    "prompt_context_allowed_markers": [
+      "SYNTHETIC_LATENCY_ARTIFACT"
+    ],
+    "prompt_context_forbidden_markers": []
+  },
+  "expected_assertions": [
+    "Latency artifact separates client_to_gateway_ms, policy_eval_ms, provider_round_trip_ms, stream_overhead_ms, and total_ms.",
+    "Gateway overhead excludes synthetic provider latency and includes routing/fallback overhead.",
+    "P95/P99 fields exist as placeholders without production SLO claims."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/cost-latency/cost-latency-gateway-overhead-shape/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/cost-latency/cost-latency-gateway-overhead-shape/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/cost-latency/cost-latency-gateway-overhead-shape/audit-event.json"
+  },
+  "audit_expectations": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "gateway_overhead_ms",
+    "total_ms"
+  ]
+}

@@ -1,0 +1,282 @@
+{
+  "contract_version": "0.1.0",
+  "dataset_id": "persona-answers.v0.1",
+  "dataset_version": "0.1.0",
+  "suite": "persona_answers",
+  "schema_status": "layout_stub_until_shared_eval_schema_generalizes_beyond_acl_safety",
+  "fixture_root": "evals/fixtures/persona-answers",
+  "inert_fixture_mode": true,
+  "no_live_external_calls": true,
+  "production_enablement": false,
+  "source_data_policy": {
+    "synthetic_only": true,
+    "no_real_customer_data": true,
+    "no_real_repo_data": true,
+    "no_live_external_calls": true,
+    "fixture_review_required": true
+  },
+  "categories": [
+    "product",
+    "business",
+    "architecture",
+    "support",
+    "executive"
+  ],
+  "artifact_ref_policy": {
+    "required": true,
+    "description": "Each case declares expected gate-result, trace, and audit artifacts that a future runner must write."
+  },
+  "cases": [
+    {
+      "case_id": "persona-answers-product-contract",
+      "category": "product",
+      "title": "Product persona answer contract",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/persona-answers/persona-answers-product-contract.json",
+          "sha256_required": true,
+          "description": "Inert fixture for persona-answers-product-contract."
+        }
+      ],
+      "inputs": {
+        "audience": "product",
+        "required_sections": [
+          "user_impact",
+          "scope",
+          "non_goals",
+          "release_risks"
+        ]
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Answer includes user impact, scope, non-goals, and release risk sections.",
+          "Answer avoids implementation-only jargon unless explained.",
+          "Citations point to synthetic product brief fixture."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/persona-answers/persona-answers-product-contract/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/persona-answers/persona-answers-product-contract/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/persona-answers/persona-answers-product-contract/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "persona-answers",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "persona-answers-business-contract",
+      "category": "business",
+      "title": "Business persona answer contract",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/persona-answers/persona-answers-business-contract.json",
+          "sha256_required": true,
+          "description": "Inert fixture for persona-answers-business-contract."
+        }
+      ],
+      "inputs": {
+        "audience": "business",
+        "required_sections": [
+          "cost",
+          "risk",
+          "timeline",
+          "decision_needed"
+        ]
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Answer includes cost, risk, timeline, and decision-needed sections.",
+          "No raw technical trace or secret-like placeholder is exposed.",
+          "Numeric claims reference synthetic business assumptions."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/persona-answers/persona-answers-business-contract/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/persona-answers/persona-answers-business-contract/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/persona-answers/persona-answers-business-contract/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "persona-answers",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "persona-answers-architecture-contract",
+      "category": "architecture",
+      "title": "Architecture persona answer contract",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/persona-answers/persona-answers-architecture-contract.json",
+          "sha256_required": true,
+          "description": "Inert fixture for persona-answers-architecture-contract."
+        }
+      ],
+      "inputs": {
+        "audience": "architecture",
+        "required_sections": [
+          "constraints",
+          "tradeoffs",
+          "dependencies",
+          "adr_refs"
+        ]
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Answer includes constraints, tradeoffs, dependencies, and ADR refs.",
+          "Unsupported design claims are explicitly marked unknown.",
+          "Citations point to synthetic architecture note fixture."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/persona-answers/persona-answers-architecture-contract/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/persona-answers/persona-answers-architecture-contract/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/persona-answers/persona-answers-architecture-contract/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "persona-answers",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "persona-answers-support-contract",
+      "category": "support",
+      "title": "Support persona answer contract",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/persona-answers/persona-answers-support-contract.json",
+          "sha256_required": true,
+          "description": "Inert fixture for persona-answers-support-contract."
+        }
+      ],
+      "inputs": {
+        "audience": "support",
+        "required_sections": [
+          "symptom",
+          "safe_workaround",
+          "escalation_path",
+          "customer_safe_wording"
+        ]
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Answer includes symptom, safe workaround, escalation path, and customer-safe wording.",
+          "No internal-only synthetic markers are included in customer-facing text.",
+          "Unverified root cause is not stated as fact."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/persona-answers/persona-answers-support-contract/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/persona-answers/persona-answers-support-contract/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/persona-answers/persona-answers-support-contract/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "persona-answers",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "persona-answers-executive-contract",
+      "category": "executive",
+      "title": "Executive persona answer contract",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/persona-answers/persona-answers-executive-contract.json",
+          "sha256_required": true,
+          "description": "Inert fixture for persona-answers-executive-contract."
+        }
+      ],
+      "inputs": {
+        "audience": "executive",
+        "required_sections": [
+          "recommendation",
+          "impact",
+          "risk",
+          "cost_latency",
+          "next_milestone"
+        ]
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Answer starts with concise recommendation and impact summary.",
+          "Includes decision, risk, cost/latency impact, and next milestone.",
+          "Details remain high-level and cite synthetic summary fixture."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/persona-answers/persona-answers-executive-contract/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/persona-answers/persona-answers-executive-contract/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/persona-answers/persona-answers-executive-contract/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "persona-answers",
+        "track-0",
+        "synthetic"
+      ]
+    }
+  ]
+}

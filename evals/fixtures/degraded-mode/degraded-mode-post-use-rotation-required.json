@@ -1,0 +1,48 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 1 degraded-mode fixture; not real customer, repository, provider, credential, or production telemetry data.",
+  "case_id": "degraded-mode-post-use-rotation-required",
+  "category": "post_use_rotation_required",
+  "activation_id": "bg-activation-fixture-001",
+  "incident_id": "inc-fixture-001",
+  "break_glass_design_ref": "docs/governance/break-glass-design.md#required-degraded-mode-tests",
+  "inputs": {
+    "activation_status": "recovery_complete",
+    "provider_key_rotation_evidence_id": null
+  },
+  "expected_decision": "deny",
+  "expected_denial_reason": "provider_key_rotation_evidence_required",
+  "expected_assertions": [
+    "Activation cannot transition to closed without provider-key rotation evidence.",
+    "Evidence ID is linked to activation, incident, audit traces, and post-incident report.",
+    "No raw provider key or secret value is stored in the evidence artifact."
+  ],
+  "expected_audit_fields": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "activation_id",
+    "incident_id",
+    "provider_key_rotation_evidence_id",
+    "incident_report_link",
+    "denial_reason"
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-post-use-rotation-required/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-post-use-rotation-required/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-post-use-rotation-required/audit-event.json"
+  },
+  "production_retrieval_behavior": false,
+  "expected_engine_decision": {
+    "decision": "deny",
+    "denial_reason": "provider_key_rotation_evidence_required",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": []
+  }
+}

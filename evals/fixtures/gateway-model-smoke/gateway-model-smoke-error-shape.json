@@ -1,0 +1,69 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "gateway-model-smoke-error-shape",
+  "category": "error_shape",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "request": {
+    "method": "POST",
+    "route": "/v1/chat/completions",
+    "body": {
+      "model": "track0-public-chat",
+      "trigger": "synthetic_provider_rate_limit"
+    }
+  },
+  "gateway_context": {
+    "trace_id": "trace-gateway-model-smoke-error-shape",
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "virtual_key_id": "vk_synthetic_alpha",
+    "model_alias": "track0-public-chat",
+    "provider_candidate_id": "fixture-openai-primary",
+    "provider_attempt_count": 1
+  },
+  "synthetic_shape": {
+    "error": {
+      "status": 429,
+      "code": "provider_rate_limited",
+      "message": "synthetic retryable provider failure",
+      "trace_id": "trace-gateway-model-smoke-error-shape",
+      "retryable": true,
+      "details": {
+        "policy_reason": "provider_retryable"
+      }
+    },
+    "provider_raw_body_redacted": true
+  },
+  "synthetic_measurement": {},
+  "expected_engine_decision": {
+    "decision": "pass",
+    "prompt_context_allowed_markers": [
+      "SYNTHETIC_TYPED_ERROR"
+    ],
+    "prompt_context_forbidden_markers": [
+      "SYNTHETIC_PROVIDER_RAW_ERROR_BODY"
+    ]
+  },
+  "expected_assertions": [
+    "Error response includes code, message, trace_id, retryable, and details.policy_reason.",
+    "Provider raw error body is redacted from client output and retained only as synthetic fixture metadata.",
+    "HTTP status maps deterministically from the gateway denial taxonomy."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-error-shape/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-error-shape/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-error-shape/audit-event.json"
+  },
+  "audit_expectations": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "error_code"
+  ]
+}

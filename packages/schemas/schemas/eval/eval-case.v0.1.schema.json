@@ -1,0 +1,676 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/eval/eval-case.v0.1.schema.json",
+  "title": "DevGateway Shared Eval Case Contracts v0.1",
+  "description": "Shared versioned schema for inert eval datasets and eval cases. Domain suites extend this shape through typed categories and fixture refs instead of local ad-hoc formats.",
+  "oneOf": [
+    { "$ref": "#/$defs/evalDataset" },
+    { "$ref": "#/$defs/standaloneEvalCase" }
+  ],
+  "$defs": {
+    "jsonValue": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "boolean" },
+        { "type": "number" },
+        { "type": "string" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/jsonValue" }
+        },
+        {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+        }
+      ]
+    },
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:[-+][0-9A-Za-z.-]+)?$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[-_][a-z0-9]+)*$"
+    },
+    "caseIdentifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[-_][a-z0-9]+)*(?:\\.v[0-9]+\\.[0-9]+)?$"
+    },
+    "evalSuite": {
+      "type": "string",
+      "enum": [
+        "gateway_model_smoke",
+        "provider_data_policy",
+        "retrieval_recall",
+        "faithfulness",
+        "acl_safety",
+        "prompt_injection_tainted_context",
+        "tool_safety",
+        "agent_workflow",
+        "persona_answers",
+        "cost_latency"
+      ]
+    },
+    "runnerMode": {
+      "type": "string",
+      "enum": ["fixture", "provider_fixture"]
+    },
+    "suiteCategory": {
+      "anyOf": [
+        { "$ref": "#/$defs/aclSafetyCategory" },
+        { "$ref": "#/$defs/identifier" }
+      ]
+    },
+    "aclSafetyCategory": {
+      "type": "string",
+      "enum": [
+        "cross_project_leak_prevention",
+        "cross_principal_leak_prevention",
+        "semantic_cache_acl_scope_leak_prevention",
+        "context_ref_leak_prevention",
+        "stale_permission_sync_default_deny",
+        "acl_recheck_before_prompt_assembly"
+      ]
+    },
+    "caseSeverity": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "decisionOutcome": {
+      "type": "string",
+      "enum": ["deny", "pass", "allow", "block", "warn", "fail", "error", "skip"]
+    },
+    "decisionPoint": {
+      "type": "string",
+      "enum": [
+        "retrieval_candidate_filter",
+        "semantic_cache_lookup",
+        "context_ref_resolution",
+        "permission_sync_freshness_check",
+        "prompt_assembly_recheck",
+        "provider_fixture_response",
+        "tool_plan_policy",
+        "answer_evaluation",
+        "cost_latency_measurement"
+      ]
+    },
+    "fixtureRef": {
+      "type": "object",
+      "required": ["kind", "path", "sha256_required"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "request_context",
+            "permission_snapshot",
+            "sync_state",
+            "retrieval_snapshot",
+            "semantic_cache_snapshot",
+            "context_pack",
+            "prompt_assembly_trace",
+            "provider_request",
+            "provider_response",
+            "tool_plan",
+            "expected_answer",
+            "metric_trace",
+            "audit_log"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^evals/fixtures/[a-z0-9-]+/[a-z0-9._-]+\\.json$"
+        },
+        "sha256_required": { "const": true },
+        "fixture_version": { "$ref": "#/$defs/semver" },
+        "description": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "artifactRef": {
+      "type": "object",
+      "required": ["artifact_id", "uri", "type"],
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/nonEmptyString" },
+        "uri": { "$ref": "#/$defs/nonEmptyString" },
+        "type": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "sensitivity_label": {
+          "type": "string",
+          "enum": ["public", "internal", "confidential", "restricted"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "providerFixture": {
+      "type": "object",
+      "required": ["provider", "mode", "no_live_external_calls"],
+      "properties": {
+        "provider": { "$ref": "#/$defs/nonEmptyString" },
+        "model_alias": { "$ref": "#/$defs/nonEmptyString" },
+        "mode": { "const": "provider_fixture" },
+        "request_fixture_ref": { "$ref": "#/$defs/fixtureRef" },
+        "response_fixture_ref": { "$ref": "#/$defs/fixtureRef" },
+        "no_live_external_calls": { "const": true },
+        "synthetic_source_data": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "actor": {
+      "type": "object",
+      "required": ["principal_id", "principal_type", "project_ids", "team_ids"],
+      "properties": {
+        "principal_id": { "$ref": "#/$defs/nonEmptyString" },
+        "principal_type": { "type": "string", "enum": ["user", "service"] },
+        "project_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "team_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "requestContext": {
+      "type": "object",
+      "required": [
+        "principal_id",
+        "project_id",
+        "route_intent",
+        "acl_scope_hash",
+        "index_version",
+        "sync_state_ref",
+        "trace_id"
+      ],
+      "properties": {
+        "principal_id": { "$ref": "#/$defs/nonEmptyString" },
+        "project_id": { "$ref": "#/$defs/nonEmptyString" },
+        "route_intent": {
+          "type": "string",
+          "enum": [
+            "repo_retrieval",
+            "semantic_cache",
+            "context_ref_resolution",
+            "prompt_assembly",
+            "provider_completion",
+            "tool_invocation",
+            "agent_workflow"
+          ]
+        },
+        "acl_scope_hash": { "$ref": "#/$defs/nonEmptyString" },
+        "index_version": { "$ref": "#/$defs/nonEmptyString" },
+        "sync_state_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "trace_id": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "caseInput": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "prompt": { "$ref": "#/$defs/nonEmptyString" },
+        "requested_context_refs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "requested_repo_refs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "cache_lookup": {
+          "type": "object",
+          "required": ["enabled", "cache_key", "acl_scope_hash"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "cache_key": { "$ref": "#/$defs/nonEmptyString" },
+            "acl_scope_hash": { "$ref": "#/$defs/nonEmptyString" }
+          },
+          "additionalProperties": false
+        },
+        "provider_request": { "$ref": "#/$defs/jsonValue" },
+        "retrieval_query": { "$ref": "#/$defs/jsonValue" },
+        "tool_invocation": { "$ref": "#/$defs/jsonValue" }
+      },
+      "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+    },
+    "condition": {
+      "type": "object",
+      "required": ["condition_id", "assertion"],
+      "properties": {
+        "condition_id": { "$ref": "#/$defs/nonEmptyString" },
+        "assertion": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "metricExpectation": {
+      "type": "object",
+      "required": ["metric_id", "operator", "value"],
+      "properties": {
+        "metric_id": { "$ref": "#/$defs/nonEmptyString" },
+        "description": { "$ref": "#/$defs/nonEmptyString" },
+        "operator": { "type": "string", "enum": ["lt", "lte", "eq", "gte", "gt"] },
+        "value": { "type": "number" },
+        "unit": { "$ref": "#/$defs/nonEmptyString" },
+        "blocking": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "assertion": {
+      "type": "object",
+      "required": ["assertion_id", "assertion"],
+      "properties": {
+        "assertion_id": { "$ref": "#/$defs/nonEmptyString" },
+        "assertion": { "$ref": "#/$defs/nonEmptyString" },
+        "severity": { "$ref": "#/$defs/caseSeverity" },
+        "evidence_field": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "expectedResult": {
+      "type": "object",
+      "required": ["outcome"],
+      "properties": {
+        "outcome": { "$ref": "#/$defs/decisionOutcome" },
+        "decision_point": { "$ref": "#/$defs/decisionPoint" },
+        "denial_conditions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/condition" }
+        },
+        "pass_conditions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/condition" }
+        },
+        "blocked_leak_vectors": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "required_denial_reason": {
+          "type": ["string", "null"],
+          "enum": [
+            "acl_scope_mismatch",
+            "principal_not_authorized",
+            "project_mismatch",
+            "cache_acl_scope_mismatch",
+            "context_ref_not_authorized",
+            "permission_sync_stale",
+            "prompt_assembly_acl_recheck_failed",
+            null
+          ]
+        },
+        "model_prompt_must_include": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "model_prompt_must_not_include": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "metrics": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/metricExpectation" }
+        },
+        "assertions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/assertion" }
+        },
+        "expected_answer": { "$ref": "#/$defs/jsonValue" },
+        "citation_requirements": { "$ref": "#/$defs/jsonValue" },
+        "tool_plan_requirements": { "$ref": "#/$defs/jsonValue" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "outcome": { "const": "deny" } },
+            "required": ["outcome"]
+          },
+          "then": {
+            "properties": {
+              "denial_conditions": { "minItems": 1 },
+              "required_denial_reason": { "type": "string" }
+            },
+            "required": ["denial_conditions", "required_denial_reason"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "outcome": { "const": "pass" } },
+            "required": ["outcome"]
+          },
+          "then": {
+            "properties": {
+              "pass_conditions": { "minItems": 1 },
+              "required_denial_reason": { "type": "null" }
+            },
+            "required": ["pass_conditions", "required_denial_reason"]
+          }
+        }
+      ],
+      "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+    },
+    "auditEvidenceRequirement": {
+      "type": "object",
+      "required": ["field", "requirement", "presence"],
+      "properties": {
+        "field": {
+          "type": "string",
+          "enum": [
+            "trace_id",
+            "principal_id",
+            "project_id",
+            "decision",
+            "denial_reason",
+            "acl_scope_hash",
+            "index_version",
+            "permission_sync_version",
+            "sync_staleness_ms",
+            "context_ref",
+            "cache_key",
+            "retrieval_candidate_ids",
+            "prompt_assembly_decision",
+            "provider_request_id",
+            "provider_response_fixture",
+            "tool_plan_id",
+            "metric_trace_id"
+          ]
+        },
+        "requirement": { "$ref": "#/$defs/nonEmptyString" },
+        "presence": { "const": "required" }
+      },
+      "additionalProperties": false
+    },
+    "safeguards": {
+      "type": "object",
+      "required": [
+        "fixture_only",
+        "no_live_external_calls",
+        "synthetic_source_data",
+        "production_retrieval_behavior"
+      ],
+      "properties": {
+        "fixture_only": { "const": true },
+        "no_live_external_calls": { "const": true },
+        "synthetic_source_data": { "const": true },
+        "production_retrieval_behavior": { "const": false },
+        "no_production_enablement": { "const": true },
+        "provider_fixture_only": { "const": true },
+        "no_live_provider_credentials": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "evalCase": {
+      "type": "object",
+      "required": [
+        "contract_version",
+        "case_id",
+        "category",
+        "title",
+        "severity",
+        "intent",
+        "fixture_refs",
+        "actors",
+        "request_context",
+        "input",
+        "expected",
+        "audit_evidence",
+        "safeguards",
+        "tags"
+      ],
+      "properties": {
+        "$schema": {
+          "const": "https://devgateway.local/schemas/eval/eval-case.v0.1.schema.json"
+        },
+        "contract_version": { "const": "0.1.0" },
+        "suite": { "$ref": "#/$defs/evalSuite" },
+        "suite_version": { "$ref": "#/$defs/semver" },
+        "dataset_id": { "type": "string", "pattern": "^[a-z0-9-]+\\.v[0-9]+\\.[0-9]+$" },
+        "dataset_version": { "$ref": "#/$defs/semver" },
+        "case_version": { "$ref": "#/$defs/semver" },
+        "case_id": { "$ref": "#/$defs/caseIdentifier" },
+        "category": { "$ref": "#/$defs/suiteCategory" },
+        "title": { "$ref": "#/$defs/nonEmptyString" },
+        "severity": { "$ref": "#/$defs/caseSeverity" },
+        "intent": { "$ref": "#/$defs/nonEmptyString" },
+        "execution_mode": { "$ref": "#/$defs/runnerMode" },
+        "provider_fixture": { "$ref": "#/$defs/providerFixture" },
+        "fixture_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/fixtureRef" }
+        },
+        "actors": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/actor" }
+        },
+        "request_context": { "$ref": "#/$defs/requestContext" },
+        "input": { "$ref": "#/$defs/caseInput" },
+        "expected": { "$ref": "#/$defs/expectedResult" },
+        "metrics": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/metricExpectation" }
+        },
+        "assertions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/assertion" }
+        },
+        "audit_evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/auditEvidenceRequirement" }
+        },
+        "artifact_refs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifactRef" }
+        },
+        "safeguards": { "$ref": "#/$defs/safeguards" },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "execution_mode": { "const": "provider_fixture" } },
+            "required": ["execution_mode"]
+          },
+          "then": { "required": ["provider_fixture"] }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "standaloneEvalCase": {
+      "allOf": [
+        { "$ref": "#/$defs/evalCase" },
+        {
+          "type": "object",
+          "required": [
+            "suite",
+            "suite_version",
+            "dataset_version",
+            "case_version",
+            "execution_mode"
+          ]
+        }
+      ]
+    },
+    "sourceDataPolicy": {
+      "type": "object",
+      "required": [
+        "synthetic_only",
+        "no_real_repo_data",
+        "no_live_github_calls",
+        "fixture_review_required"
+      ],
+      "properties": {
+        "synthetic_only": { "const": true },
+        "no_real_repo_data": { "const": true },
+        "no_live_github_calls": { "const": true },
+        "fixture_review_required": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "evalDataset": {
+      "type": "object",
+      "required": [
+        "contract_version",
+        "dataset_id",
+        "dataset_version",
+        "suite",
+        "schema_ref",
+        "fixture_root",
+        "inert_fixture_mode",
+        "no_live_external_calls",
+        "production_retrieval_behavior",
+        "source_data_policy",
+        "categories",
+        "cases"
+      ],
+      "properties": {
+        "$schema": {
+          "const": "https://devgateway.local/schemas/eval/eval-case.v0.1.schema.json"
+        },
+        "contract_version": { "const": "0.1.0" },
+        "dataset_id": { "type": "string", "pattern": "^[a-z0-9-]+\\.v[0-9]+\\.[0-9]+$" },
+        "dataset_version": { "$ref": "#/$defs/semver" },
+        "suite": { "$ref": "#/$defs/evalSuite" },
+        "suite_version": { "$ref": "#/$defs/semver" },
+        "schema_ref": {
+          "const": "https://devgateway.local/schemas/eval/eval-case.v0.1.schema.json#/$defs/evalDataset"
+        },
+        "fixture_root": { "type": "string", "pattern": "^evals/fixtures/[a-z0-9-]+$" },
+        "runner_mode": { "$ref": "#/$defs/runnerMode" },
+        "provider_fixture": { "$ref": "#/$defs/providerFixture" },
+        "inert_fixture_mode": { "const": true },
+        "no_live_external_calls": { "const": true },
+        "production_retrieval_behavior": { "const": false },
+        "source_data_policy": { "$ref": "#/$defs/sourceDataPolicy" },
+        "artifact_refs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifactRef" }
+        },
+        "categories": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/suiteCategory" }
+        },
+        "cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evalCase" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "suite": { "const": "acl_safety" } },
+            "required": ["suite"]
+          },
+          "then": {
+            "properties": {
+              "fixture_root": { "const": "evals/fixtures/acl-safety" },
+              "categories": { "minItems": 6 },
+              "cases": { "minItems": 6 }
+            },
+            "allOf": [
+              { "properties": { "categories": { "contains": { "const": "cross_project_leak_prevention" } } } },
+              { "properties": { "categories": { "contains": { "const": "cross_principal_leak_prevention" } } } },
+              { "properties": { "categories": { "contains": { "const": "semantic_cache_acl_scope_leak_prevention" } } } },
+              { "properties": { "categories": { "contains": { "const": "context_ref_leak_prevention" } } } },
+              { "properties": { "categories": { "contains": { "const": "stale_permission_sync_default_deny" } } } },
+              { "properties": { "categories": { "contains": { "const": "acl_recheck_before_prompt_assembly" } } } },
+              {
+                "properties": {
+                  "cases": {
+                    "contains": {
+                      "type": "object",
+                      "properties": { "category": { "const": "cross_project_leak_prevention" } },
+                      "required": ["category"]
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "cases": {
+                    "contains": {
+                      "type": "object",
+                      "properties": { "category": { "const": "cross_principal_leak_prevention" } },
+                      "required": ["category"]
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "cases": {
+                    "contains": {
+                      "type": "object",
+                      "properties": { "category": { "const": "semantic_cache_acl_scope_leak_prevention" } },
+                      "required": ["category"]
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "cases": {
+                    "contains": {
+                      "type": "object",
+                      "properties": { "category": { "const": "context_ref_leak_prevention" } },
+                      "required": ["category"]
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "cases": {
+                    "contains": {
+                      "type": "object",
+                      "properties": { "category": { "const": "stale_permission_sync_default_deny" } },
+                      "required": ["category"]
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "cases": {
+                    "contains": {
+                      "type": "object",
+                      "properties": { "category": { "const": "acl_recheck_before_prompt_assembly" } },
+                      "required": ["category"]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": { "runner_mode": { "const": "provider_fixture" } },
+            "required": ["runner_mode"]
+          },
+          "then": { "required": ["provider_fixture"] }
+        }
+      ],
+      "additionalProperties": false
+    }
+  }
+}

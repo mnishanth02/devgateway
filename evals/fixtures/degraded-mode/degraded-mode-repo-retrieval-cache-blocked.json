@@ -1,0 +1,49 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 1 degraded-mode fixture; not real customer, repository, provider, credential, or production telemetry data.",
+  "case_id": "degraded-mode-repo-retrieval-cache-blocked",
+  "category": "repo_retrieval_cache_blocked",
+  "activation_id": "bg-activation-fixture-001",
+  "incident_id": "inc-fixture-001",
+  "break_glass_design_ref": "docs/governance/break-glass-design.md#required-degraded-mode-tests",
+  "inputs": {
+    "break_glass_active": true,
+    "cache_operation": "read_write",
+    "repo_cache_key": "repo-cache-alpha-fixture"
+  },
+  "expected_decision": "deny",
+  "expected_denial_reason": "repo_retrieval_cache_unavailable_break_glass",
+  "expected_assertions": [
+    "Break-glass provider calls cannot read from repository retrieval cache.",
+    "Break-glass provider calls cannot write new repository retrieval cache entries.",
+    "Cache existence, key body, and synthetic repo markers are not disclosed."
+  ],
+  "expected_audit_fields": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "activation_id",
+    "incident_id",
+    "cache_operation",
+    "cache_policy",
+    "denial_reason"
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-repo-retrieval-cache-blocked/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-repo-retrieval-cache-blocked/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-repo-retrieval-cache-blocked/audit-event.json"
+  },
+  "production_retrieval_behavior": false,
+  "expected_engine_decision": {
+    "decision": "deny",
+    "denial_reason": "repo_retrieval_cache_unavailable_break_glass",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": []
+  }
+}

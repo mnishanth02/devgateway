@@ -1,0 +1,24 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "agent-workflow-budget-deny",
+  "category": "budget",
+  "workflow_fixture": {
+    "budget_remaining_usd": "0.00",
+    "next_step": "model_call"
+  },
+  "expected_decision": "deny",
+  "expected_assertions": [
+    "Budget check happens before the next model/tool step.",
+    "Workflow enters blocked_budget state without partial execution.",
+    "Audit artifact records remaining_budget_usd=0.00 and denial reason budget."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/agent-workflow/agent-workflow-budget-deny/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/agent-workflow/agent-workflow-budget-deny/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/agent-workflow/agent-workflow-budget-deny/audit-event.json"
+  }
+}

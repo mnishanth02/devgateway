@@ -1,0 +1,24 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "case_id": "agent-workflow-delegation-contract",
+  "category": "delegation",
+  "workflow_fixture": {
+    "parent_task_id": "task-parent-synthetic",
+    "child_task_id": "task-child-synthetic"
+  },
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "Delegated task receives scoped context only and cannot widen project permissions.",
+    "Parent workflow records child_task_id and artifact_ref before consuming result.",
+    "Delegation budget and deadline are lower than or equal to parent limits."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/agent-workflow/agent-workflow-delegation-contract/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/agent-workflow/agent-workflow-delegation-contract/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/agent-workflow/agent-workflow-delegation-contract/audit-event.json"
+  }
+}

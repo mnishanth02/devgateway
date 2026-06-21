@@ -1,0 +1,46 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "acl-safety-prompt-assembly-recheck-pass",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_retrieval_behavior": false,
+  "permission_sync_state": {
+    "sync_state_ref": "sync-fresh-alpha-revoked-one",
+    "permission_sync_version": "sync-run-alpha-current-plus-revocation",
+    "sync_staleness_ms": 4000,
+    "permission_sync_slo_ms": 300000,
+    "fresh": true
+  },
+  "prompt_assembly_candidates": [
+    {
+      "context_ref": "ctx-alpha-public-note",
+      "candidate_id": "chunk-alpha-public-note",
+      "acl_scope_hash": "acl-alpha-read",
+      "content_marker": "SYNTHETIC_ALPHA_PUBLIC_NOTE",
+      "authorized_at_recheck": true
+    },
+    {
+      "context_ref": "ctx-alpha-revoked-secret",
+      "candidate_id": "chunk-alpha-revoked-secret",
+      "acl_scope_hash": "acl-alpha-revoked",
+      "content_marker": "SYNTHETIC_ALPHA_REVOKED_SECRET",
+      "authorized_at_recheck": false,
+      "revoked_after_retrieval": true
+    }
+  ],
+  "expected_engine_decision": {
+    "decision": "pass",
+    "include_candidate_ids": ["chunk-alpha-public-note"],
+    "exclude_candidate_ids": ["chunk-alpha-revoked-secret"],
+    "prompt_context_allowed_markers": ["SYNTHETIC_ALPHA_PUBLIC_NOTE"],
+    "prompt_context_forbidden_markers": ["SYNTHETIC_ALPHA_REVOKED_SECRET"]
+  },
+  "audit_expectations": [
+    "trace_id",
+    "principal_id",
+    "project_id",
+    "decision",
+    "acl_scope_hash",
+    "index_version"
+  ]
+}

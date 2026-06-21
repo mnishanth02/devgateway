@@ -13,12 +13,12 @@
 | Service | Owns | Does not own |
 |---|---|---|
 | Bifrost Gateway | Provider API calls, virtual keys, budgets, rate limits, provider routing/fallback/load balancing, semantic cache hooks, Prometheus, OpenTelemetry. | Durable workflows, external MCP policy, human approvals, side-effecting tools, repository retrieval, long-term memory, portal UX. |
-| API Gateway / Control API | OIDC session, portal APIs, admin APIs, model registry, policy registry, project configuration. | Raw provider calls except through Bifrost. |
+| API Gateway / Control API | Better Auth-backed human sessions, portal APIs, admin APIs, model registry, policy registry, project configuration. | Raw provider calls except through Bifrost. |
 | Platform Tool Broker / MCP | External MCP endpoint, tool registry, skill registry, MCP server registry, schema validation, risk tier, approvals, sandbox routing, durable tool-call state. | Trusting model-selected policies or bypassing platform approvals. |
 | Agent Orchestrator | Parent agent runs, sub-agent delegation, task planning, result synthesis, trace and artifact linking. | Provider routing internals. |
 | Durable Workflow Runtime | Persisted workflow state, retries, timeouts, cancellation, approvals, worker leases, event outbox. | LLM reasoning or tool policy decisions. |
 | Knowledge Ingestion | GitHub clone/mirror, docs/conversation ingestion, chunking, entity extraction, graph construction. | Final answer generation. |
-| Retrieval Orchestrator | Hybrid retrieval, GraphRAG, ACL filtering, reranking, context-pack assembly, citations. | Model execution. |
+| Retrieval Orchestrator | Hybrid retrieval, GraphRAG, runtime strategy controls, ACL filtering, reranking, context budgeting/compression, context-pack assembly, citations. | Model execution. |
 | Memory Service | Working, episodic, semantic, decision, and correction memory with retention policy. | Hidden ungoverned prompt state. |
 | Evaluation Service | Datasets, eval runs, metric computation, regression gates, release blocking. | Production routing without policy approval. |
 | Portal | Developer/admin/stakeholder experiences, dashboards, project knowledge views. | Direct unrestricted DB or provider access. |
@@ -41,7 +41,7 @@ This path cannot wait for human approvals, long-running tools, or multi-step dur
 1. Portal/API creates a task, or an IDE calls `start_background_task` through MCP.
 2. Control API authenticates the principal and creates `agent_run` and `workflow_run` records.
 3. Supervisor plans retrieval, tools, approvals, and sub-agent delegations.
-4. Retrieval Orchestrator builds ACL-filtered context packs with citations.
+4. Retrieval Orchestrator builds ACL-filtered, budgeted, and compressed context packs with citations under the configured retrieval strategy.
 5. Tool Broker validates requested tools, risk tier, approval policy, and sandbox level.
 6. Sub-agent executor calls Bifrost with the selected model alias and scoped budget.
 7. Workflow runtime persists every step, attempt, result, artifact, event, approval, and failure.
@@ -51,7 +51,7 @@ This path cannot wait for human approvals, long-running tools, or multi-step dur
 
 1. Portal sends persona, project, question, and permission scope.
 2. Retrieval Orchestrator creates a persona-aware query plan.
-3. ACL filtering removes forbidden sources before reranking and prompt assembly.
+3. ACL filtering removes forbidden sources before reranking, context budgeting/compression, and prompt assembly.
 4. Agent uses a model alias selected by answer contract and policy.
 5. Portal renders answer, citations, confidence/coverage notes, and allowed follow-up actions.
 
@@ -70,7 +70,7 @@ This path cannot wait for human approvals, long-running tools, or multi-step dur
 | Admin | `/api/admin/models`, `/api/admin/providers`, `/api/admin/policies`, `/api/admin/budgets`, `/api/admin/audit`. |
 | Webhooks | GitHub push/PR/merge, provider status updates, eval completion, workflow event callbacks. |
 
-All JSON APIs use OIDC session auth or service tokens, return typed error codes, support cursor pagination for list endpoints, and emit audit events for mutations.
+All JSON APIs use Better Auth-backed session auth or service tokens, return typed error codes, support cursor pagination for list endpoints, and emit audit events for mutations.
 
 ## External endpoint shape
 
@@ -153,7 +153,7 @@ These tools are the only IDE contract for durable workflows. They bridge IDEs to
 
 ## Security boundaries
 
-- Microsoft Entra ID OIDC authenticates humans; service principals use signed service tokens.
+- Better Auth OSS authenticates humans for the first release; service principals use signed service tokens.
 - Bifrost enforces ingress virtual-key policy; platform policy service owns project/team/tool/data rules.
 - Virtual keys are one-to-one with a human or service principal. Shared anonymous team keys are not allowed.
 - GitHub App sync is the source for repository permissions, teams, collaborators, CODEOWNERS, and repo visibility.

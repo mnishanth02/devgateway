@@ -1,0 +1,15 @@
+{
+  "name": "@devgateway/config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Placeholder package for shared typed configuration and environment validation.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/retrieval-env.test.ts src/auth-env.test.ts",
+    "typecheck": "tsc --noEmit"
+  }
+}

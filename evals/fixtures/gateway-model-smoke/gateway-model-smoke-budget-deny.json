@@ -1,0 +1,68 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "gateway-model-smoke-budget-deny",
+  "category": "quota_denial",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "request": {
+    "method": "POST",
+    "route": "/v1/chat/completions",
+    "body": {
+      "model": "track0-public-chat"
+    }
+  },
+  "gateway_context": {
+    "trace_id": "trace-gateway-model-smoke-budget-deny",
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "virtual_key_id": "vk_synthetic_alpha",
+    "model_alias": "track0-public-chat",
+    "provider_candidate_id": null,
+    "provider_attempt_count": 0
+  },
+  "synthetic_shape": {
+    "budget": {
+      "budget_scope": "project-alpha:dev",
+      "remaining_budget_usd": "0.000000",
+      "estimated_request_cost_usd": "0.000050"
+    },
+    "error": {
+      "status": 402,
+      "code": "budget",
+      "retryable": false
+    }
+  },
+  "synthetic_measurement": {},
+  "expected_engine_decision": {
+    "decision": "deny",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": [
+      "SYNTHETIC_PROVIDER_BODY"
+    ],
+    "denial_reason": "budget"
+  },
+  "expected_assertions": [
+    "Budget checks execute after auth/policy and before provider dispatch.",
+    "Exhausted budget returns typed denial with no usage charge.",
+    "Audit records budget_scope, remaining_budget_usd, and provider_attempt_count=0."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-budget-deny/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-budget-deny/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-budget-deny/audit-event.json"
+  },
+  "audit_expectations": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "budget_scope",
+    "remaining_budget_usd",
+    "provider_attempt_count"
+  ]
+}

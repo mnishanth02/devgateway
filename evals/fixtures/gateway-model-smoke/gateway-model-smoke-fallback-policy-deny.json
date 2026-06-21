@@ -1,0 +1,59 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "gateway-model-smoke-fallback-policy-deny",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 1 gateway smoke fixture; no live provider calls or real customer data.",
+  "request": {
+    "method": "POST",
+    "route": "/v1/chat/completions",
+    "virtual_key_status": "active",
+    "data_class": "restricted",
+    "fallback_attempt": 1
+  },
+  "provider_candidates": [
+    {
+      "candidate_id": "openai-primary-timeout",
+      "state": "unavailable_before_provider_call"
+    },
+    {
+      "candidate_id": "anthropic-restricted-disallowed",
+      "state": "policy_denied",
+      "denial_reason": "data_class"
+    }
+  ],
+  "expected_engine_decision": {
+    "decision": "deny",
+    "denial_reason": "data_class",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": [
+      "SYNTHETIC_RESTRICTED_FALLBACK_CONTENT"
+    ]
+  },
+  "expected_assertions": [
+    "Fallback candidate is evaluated with the same provider/data-class policy as the primary route.",
+    "Secondary candidate is denied and no provider call is attempted."
+  ],
+  "expected_error_shape": {
+    "status": 403,
+    "code": "data_class",
+    "message": "Request denied by provider data-class policy."
+  },
+  "expected_audit_fields": [
+    "trace_id",
+    "case_id",
+    "decision",
+    "denial_reason",
+    "fallback_attempt",
+    "provider_candidate",
+    "policy_version",
+    "registry_version"
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-policy-deny/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-policy-deny/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-policy-deny/audit-event.json"
+  }
+}

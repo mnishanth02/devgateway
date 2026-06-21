@@ -1,0 +1,902 @@
+{
+  "contract_version": "0.1.0",
+  "dataset_id": "provider-data-policy.v0.1",
+  "dataset_version": "0.1.0",
+  "suite": "provider_data_policy",
+  "schema_status": "layout_stub_until_shared_eval_schema_generalizes_beyond_acl_safety",
+  "fixture_root": "evals/fixtures/provider-data-policy",
+  "inert_fixture_mode": true,
+  "no_live_external_calls": true,
+  "production_enablement": false,
+  "source_data_policy": {
+    "synthetic_only": true,
+    "no_real_customer_data": true,
+    "no_real_repo_data": true,
+    "no_live_external_calls": true,
+    "fixture_review_required": true
+  },
+  "categories": [
+    "public_x_external_standard",
+    "internal_x_external_standard",
+    "confidential_x_external_standard",
+    "restricted_x_external_standard",
+    "public_x_external_dpa_zdr",
+    "internal_x_external_dpa_zdr",
+    "confidential_x_external_dpa_zdr",
+    "restricted_x_external_dpa_zdr",
+    "public_x_self_hosted_approved",
+    "internal_x_self_hosted_approved",
+    "confidential_x_self_hosted_approved",
+    "restricted_x_self_hosted_approved",
+    "public_x_deterministic_tooling",
+    "internal_x_deterministic_tooling",
+    "confidential_x_deterministic_tooling",
+    "restricted_x_deterministic_tooling"
+  ],
+  "artifact_ref_policy": {
+    "required": true,
+    "description": "Each case declares expected gate-result, trace, and audit artifacts that a future runner must write."
+  },
+  "cases": [
+    {
+      "case_id": "provider-data-policy-public-external-standard",
+      "category": "public_x_external_standard",
+      "title": "Provider data policy matrix: public data with external_standard",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-public-external-standard.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-public-external-standard."
+        }
+      ],
+      "inputs": {
+        "data_class": "public",
+        "provider_class": "external_standard",
+        "provider_refs": [
+          "openai-track0-external",
+          "anthropic-track0-external"
+        ]
+      },
+      "expected": {
+        "decision": "allow",
+        "assertions": [
+          "data_class=public with provider_class=external_standard resolves to decision=allow in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": null,
+        "provider_refs": [
+          "openai-track0-external",
+          "anthropic-track0-external"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-public-external-standard/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-public-external-standard/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-public-external-standard/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "public",
+        "external_standard",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "provider-data-policy-internal-external-standard",
+      "category": "internal_x_external_standard",
+      "title": "Provider data policy matrix: internal data with external_standard",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-internal-external-standard.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-internal-external-standard."
+        }
+      ],
+      "inputs": {
+        "data_class": "internal",
+        "provider_class": "external_standard",
+        "provider_refs": [
+          "openai-track0-external",
+          "anthropic-track0-external"
+        ]
+      },
+      "expected": {
+        "decision": "allow",
+        "assertions": [
+          "data_class=internal with provider_class=external_standard resolves to decision=allow in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": null,
+        "provider_refs": [
+          "openai-track0-external",
+          "anthropic-track0-external"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-internal-external-standard/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-internal-external-standard/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-internal-external-standard/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "internal",
+        "external_standard",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "provider-data-policy-confidential-external-standard",
+      "category": "confidential_x_external_standard",
+      "title": "Provider data policy matrix: confidential data with external_standard",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-confidential-external-standard.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-confidential-external-standard."
+        }
+      ],
+      "inputs": {
+        "data_class": "confidential",
+        "provider_class": "external_standard",
+        "provider_refs": [
+          "openai-track0-external",
+          "anthropic-track0-external"
+        ]
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "data_class=confidential with provider_class=external_standard resolves to decision=deny in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": "data_class",
+        "provider_refs": [
+          "openai-track0-external",
+          "anthropic-track0-external"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-confidential-external-standard/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-confidential-external-standard/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-confidential-external-standard/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "confidential",
+        "external_standard",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "provider-data-policy-restricted-external-standard",
+      "category": "restricted_x_external_standard",
+      "title": "Provider data policy matrix: restricted data with external_standard",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-restricted-external-standard.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-restricted-external-standard."
+        }
+      ],
+      "inputs": {
+        "data_class": "restricted",
+        "provider_class": "external_standard",
+        "provider_refs": [
+          "openai-track0-external",
+          "anthropic-track0-external"
+        ]
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "data_class=restricted with provider_class=external_standard resolves to decision=deny in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace.",
+          "Restricted data never permits external_model provider classes; self-hosted/deterministic cases remain non-production and approval-gated where applicable."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": "data_class",
+        "provider_refs": [
+          "openai-track0-external",
+          "anthropic-track0-external"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-restricted-external-standard/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-restricted-external-standard/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-restricted-external-standard/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "restricted",
+        "external_standard",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "provider-data-policy-public-external-dpa-zdr",
+      "category": "public_x_external_dpa_zdr",
+      "title": "Provider data policy matrix: public data with external_dpa_zdr",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-public-external-dpa-zdr.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-public-external-dpa-zdr."
+        }
+      ],
+      "inputs": {
+        "data_class": "public",
+        "provider_class": "external_dpa_zdr",
+        "provider_refs": [
+          "confidential-dpa-zdr-external-placeholder"
+        ]
+      },
+      "expected": {
+        "decision": "allow",
+        "assertions": [
+          "data_class=public with provider_class=external_dpa_zdr resolves to decision=allow in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": null,
+        "provider_refs": [
+          "confidential-dpa-zdr-external-placeholder"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-public-external-dpa-zdr/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-public-external-dpa-zdr/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-public-external-dpa-zdr/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "public",
+        "external_dpa_zdr",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "provider-data-policy-internal-external-dpa-zdr",
+      "category": "internal_x_external_dpa_zdr",
+      "title": "Provider data policy matrix: internal data with external_dpa_zdr",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-internal-external-dpa-zdr.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-internal-external-dpa-zdr."
+        }
+      ],
+      "inputs": {
+        "data_class": "internal",
+        "provider_class": "external_dpa_zdr",
+        "provider_refs": [
+          "confidential-dpa-zdr-external-placeholder"
+        ]
+      },
+      "expected": {
+        "decision": "allow",
+        "assertions": [
+          "data_class=internal with provider_class=external_dpa_zdr resolves to decision=allow in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": null,
+        "provider_refs": [
+          "confidential-dpa-zdr-external-placeholder"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-internal-external-dpa-zdr/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-internal-external-dpa-zdr/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-internal-external-dpa-zdr/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "internal",
+        "external_dpa_zdr",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "provider-data-policy-confidential-external-dpa-zdr",
+      "category": "confidential_x_external_dpa_zdr",
+      "title": "Provider data policy matrix: confidential data with external_dpa_zdr",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-confidential-external-dpa-zdr.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-confidential-external-dpa-zdr."
+        }
+      ],
+      "inputs": {
+        "data_class": "confidential",
+        "provider_class": "external_dpa_zdr",
+        "provider_refs": [
+          "confidential-dpa-zdr-external-placeholder"
+        ]
+      },
+      "expected": {
+        "decision": "allow",
+        "assertions": [
+          "data_class=confidential with provider_class=external_dpa_zdr resolves to decision=allow in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": null,
+        "provider_refs": [
+          "confidential-dpa-zdr-external-placeholder"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-confidential-external-dpa-zdr/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-confidential-external-dpa-zdr/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-confidential-external-dpa-zdr/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "confidential",
+        "external_dpa_zdr",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "provider-data-policy-restricted-external-dpa-zdr",
+      "category": "restricted_x_external_dpa_zdr",
+      "title": "Provider data policy matrix: restricted data with external_dpa_zdr",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-restricted-external-dpa-zdr.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-restricted-external-dpa-zdr."
+        }
+      ],
+      "inputs": {
+        "data_class": "restricted",
+        "provider_class": "external_dpa_zdr",
+        "provider_refs": [
+          "confidential-dpa-zdr-external-placeholder"
+        ]
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "data_class=restricted with provider_class=external_dpa_zdr resolves to decision=deny in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace.",
+          "Restricted data never permits external_model provider classes; self-hosted/deterministic cases remain non-production and approval-gated where applicable."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": "data_class",
+        "provider_refs": [
+          "confidential-dpa-zdr-external-placeholder"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-restricted-external-dpa-zdr/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-restricted-external-dpa-zdr/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-restricted-external-dpa-zdr/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "restricted",
+        "external_dpa_zdr",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "provider-data-policy-public-self-hosted-approved",
+      "category": "public_x_self_hosted_approved",
+      "title": "Provider data policy matrix: public data with self_hosted_approved",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-public-self-hosted-approved.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-public-self-hosted-approved."
+        }
+      ],
+      "inputs": {
+        "data_class": "public",
+        "provider_class": "self_hosted_approved",
+        "provider_refs": [
+          "self-hosted-track0-approved-placeholder"
+        ]
+      },
+      "expected": {
+        "decision": "allow",
+        "assertions": [
+          "data_class=public with provider_class=self_hosted_approved resolves to decision=allow in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": null,
+        "provider_refs": [
+          "self-hosted-track0-approved-placeholder"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-public-self-hosted-approved/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-public-self-hosted-approved/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-public-self-hosted-approved/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "public",
+        "self_hosted_approved",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "provider-data-policy-internal-self-hosted-approved",
+      "category": "internal_x_self_hosted_approved",
+      "title": "Provider data policy matrix: internal data with self_hosted_approved",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-internal-self-hosted-approved.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-internal-self-hosted-approved."
+        }
+      ],
+      "inputs": {
+        "data_class": "internal",
+        "provider_class": "self_hosted_approved",
+        "provider_refs": [
+          "self-hosted-track0-approved-placeholder"
+        ]
+      },
+      "expected": {
+        "decision": "allow",
+        "assertions": [
+          "data_class=internal with provider_class=self_hosted_approved resolves to decision=allow in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": null,
+        "provider_refs": [
+          "self-hosted-track0-approved-placeholder"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-internal-self-hosted-approved/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-internal-self-hosted-approved/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-internal-self-hosted-approved/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "internal",
+        "self_hosted_approved",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "provider-data-policy-confidential-self-hosted-approved",
+      "category": "confidential_x_self_hosted_approved",
+      "title": "Provider data policy matrix: confidential data with self_hosted_approved",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-confidential-self-hosted-approved.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-confidential-self-hosted-approved."
+        }
+      ],
+      "inputs": {
+        "data_class": "confidential",
+        "provider_class": "self_hosted_approved",
+        "provider_refs": [
+          "self-hosted-track0-approved-placeholder"
+        ]
+      },
+      "expected": {
+        "decision": "allow",
+        "assertions": [
+          "data_class=confidential with provider_class=self_hosted_approved resolves to decision=allow in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": null,
+        "provider_refs": [
+          "self-hosted-track0-approved-placeholder"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-confidential-self-hosted-approved/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-confidential-self-hosted-approved/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-confidential-self-hosted-approved/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "confidential",
+        "self_hosted_approved",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "provider-data-policy-restricted-self-hosted-approved",
+      "category": "restricted_x_self_hosted_approved",
+      "title": "Provider data policy matrix: restricted data with self_hosted_approved",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-restricted-self-hosted-approved.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-restricted-self-hosted-approved."
+        }
+      ],
+      "inputs": {
+        "data_class": "restricted",
+        "provider_class": "self_hosted_approved",
+        "provider_refs": [
+          "self-hosted-track0-approved-placeholder"
+        ]
+      },
+      "expected": {
+        "decision": "allow",
+        "assertions": [
+          "data_class=restricted with provider_class=self_hosted_approved resolves to decision=allow in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace.",
+          "Restricted data never permits external_model provider classes; self-hosted/deterministic cases remain non-production and approval-gated where applicable."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": null,
+        "provider_refs": [
+          "self-hosted-track0-approved-placeholder"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-restricted-self-hosted-approved/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-restricted-self-hosted-approved/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-restricted-self-hosted-approved/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "restricted",
+        "self_hosted_approved",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "provider-data-policy-public-deterministic-tooling",
+      "category": "public_x_deterministic_tooling",
+      "title": "Provider data policy matrix: public data with deterministic_tooling",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-public-deterministic-tooling.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-public-deterministic-tooling."
+        }
+      ],
+      "inputs": {
+        "data_class": "public",
+        "provider_class": "deterministic_tooling",
+        "provider_refs": [
+          "deterministic-tooling-track0"
+        ]
+      },
+      "expected": {
+        "decision": "allow",
+        "assertions": [
+          "data_class=public with provider_class=deterministic_tooling resolves to decision=allow in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": null,
+        "provider_refs": [
+          "deterministic-tooling-track0"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-public-deterministic-tooling/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-public-deterministic-tooling/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-public-deterministic-tooling/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "public",
+        "deterministic_tooling",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "provider-data-policy-internal-deterministic-tooling",
+      "category": "internal_x_deterministic_tooling",
+      "title": "Provider data policy matrix: internal data with deterministic_tooling",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-internal-deterministic-tooling.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-internal-deterministic-tooling."
+        }
+      ],
+      "inputs": {
+        "data_class": "internal",
+        "provider_class": "deterministic_tooling",
+        "provider_refs": [
+          "deterministic-tooling-track0"
+        ]
+      },
+      "expected": {
+        "decision": "allow",
+        "assertions": [
+          "data_class=internal with provider_class=deterministic_tooling resolves to decision=allow in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": null,
+        "provider_refs": [
+          "deterministic-tooling-track0"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-internal-deterministic-tooling/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-internal-deterministic-tooling/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-internal-deterministic-tooling/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "internal",
+        "deterministic_tooling",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "provider-data-policy-confidential-deterministic-tooling",
+      "category": "confidential_x_deterministic_tooling",
+      "title": "Provider data policy matrix: confidential data with deterministic_tooling",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-confidential-deterministic-tooling.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-confidential-deterministic-tooling."
+        }
+      ],
+      "inputs": {
+        "data_class": "confidential",
+        "provider_class": "deterministic_tooling",
+        "provider_refs": [
+          "deterministic-tooling-track0"
+        ]
+      },
+      "expected": {
+        "decision": "allow",
+        "assertions": [
+          "data_class=confidential with provider_class=deterministic_tooling resolves to decision=allow in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": null,
+        "provider_refs": [
+          "deterministic-tooling-track0"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-confidential-deterministic-tooling/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-confidential-deterministic-tooling/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-confidential-deterministic-tooling/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "confidential",
+        "deterministic_tooling",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "provider-data-policy-restricted-deterministic-tooling",
+      "category": "restricted_x_deterministic_tooling",
+      "title": "Provider data policy matrix: restricted data with deterministic_tooling",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/provider-data-policy/provider-data-policy-restricted-deterministic-tooling.json",
+          "sha256_required": true,
+          "description": "Inert fixture for provider-data-policy-restricted-deterministic-tooling."
+        }
+      ],
+      "inputs": {
+        "data_class": "restricted",
+        "provider_class": "deterministic_tooling",
+        "provider_refs": [
+          "deterministic-tooling-track0"
+        ]
+      },
+      "expected": {
+        "decision": "allow",
+        "assertions": [
+          "data_class=restricted with provider_class=deterministic_tooling resolves to decision=allow in fixture mode.",
+          "Policy evaluation order matches provider-data-class-policy governance document.",
+          "The case records data_class, provider_class, provider_refs, denial_reason when denied, and audit trace.",
+          "Restricted data never permits external_model provider classes; self-hosted/deterministic cases remain non-production and approval-gated where applicable."
+        ],
+        "no_production_enablement": true,
+        "denial_reason": null,
+        "provider_refs": [
+          "deterministic-tooling-track0"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/provider-data-policy/provider-data-policy-restricted-deterministic-tooling/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/provider-data-policy/provider-data-policy-restricted-deterministic-tooling/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/provider-data-policy/provider-data-policy-restricted-deterministic-tooling/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "provider-data-policy",
+        "restricted",
+        "deterministic_tooling",
+        "synthetic"
+      ]
+    }
+  ]
+}

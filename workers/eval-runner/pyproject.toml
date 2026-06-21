@@ -1,0 +1,9 @@
+[project]
+name = "devgateway-eval-runner"
+version = "0.0.0"
+description = "Placeholder Python worker for eval execution and gate result writing."
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv]
+package = false

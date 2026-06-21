@@ -1,0 +1,280 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/policy/denial-reason.v0.1.schema.json",
+  "title": "DevGateway Policy Denial Reason Contracts v0.1",
+  "type": "object",
+  "required": ["contract_version", "reasons"],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "reasons": {
+      "type": "object",
+      "required": [
+        "budget",
+        "rate_limit",
+        "data_class",
+        "provider_lifecycle",
+        "eval_gate",
+        "policy_stale",
+        "route_disabled",
+        "approval_required"
+      ],
+      "properties": {
+        "budget": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "budget" },
+                "audit": { "properties": { "reason": { "const": "budget" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "budget" } } }
+              }
+            }
+          ]
+        },
+        "rate_limit": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "rate_limit" },
+                "audit": { "properties": { "reason": { "const": "rate_limit" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "rate_limit" } } }
+              }
+            }
+          ]
+        },
+        "data_class": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "data_class" },
+                "audit": { "properties": { "reason": { "const": "data_class" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "data_class" } } }
+              }
+            }
+          ]
+        },
+        "provider_lifecycle": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "provider_lifecycle" },
+                "audit": { "properties": { "reason": { "const": "provider_lifecycle" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "provider_lifecycle" } } }
+              }
+            }
+          ]
+        },
+        "eval_gate": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "eval_gate" },
+                "audit": { "properties": { "reason": { "const": "eval_gate" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "eval_gate" } } }
+              }
+            }
+          ]
+        },
+        "policy_stale": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "policy_stale" },
+                "audit": { "properties": { "reason": { "const": "policy_stale" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "policy_stale" } } }
+              }
+            }
+          ]
+        },
+        "route_disabled": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "route_disabled" },
+                "audit": { "properties": { "reason": { "const": "route_disabled" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "route_disabled" } } }
+              }
+            }
+          ]
+        },
+        "approval_required": {
+          "allOf": [
+            { "$ref": "#/$defs/denialReasonDefinition" },
+            {
+              "properties": {
+                "code": { "const": "approval_required" },
+                "audit": { "properties": { "reason": { "const": "approval_required" } } },
+                "gateway_policy_contract": { "properties": { "reason": { "const": "approval_required" } } }
+              }
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "denialReasonCode": {
+      "type": "string",
+      "enum": [
+        "budget",
+        "rate_limit",
+        "data_class",
+        "provider_lifecycle",
+        "eval_gate",
+        "policy_stale",
+        "route_disabled",
+        "approval_required"
+      ]
+    },
+    "denialReasonDefinition": {
+      "type": "object",
+      "required": ["code", "message", "audit", "gateway_policy_contract"],
+      "properties": {
+        "code": { "$ref": "#/$defs/denialReasonCode" },
+        "message": { "type": "string", "minLength": 1 },
+        "audit": {
+          "type": "object",
+          "required": ["reason", "message", "required_context"],
+          "properties": {
+            "reason": { "$ref": "#/$defs/denialReasonCode" },
+            "message": { "type": "string", "minLength": 1 },
+            "required_context": {
+              "type": "array",
+              "minItems": 10,
+              "uniqueItems": true,
+              "contains": { "const": "decision" },
+              "items": { "$ref": "#/$defs/gatewayAuditRequiredField" }
+            },
+            "recommended_context": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/gatewayAuditRecommendedField" }
+            }
+          },
+          "additionalProperties": false
+        },
+        "gateway_policy_contract": {
+          "type": "object",
+          "required": [
+            "decision",
+            "reason",
+            "audit_required_fields",
+            "failure_mode",
+            "success_fallback_allowed"
+          ],
+          "properties": {
+            "decision": { "const": "deny" },
+            "reason": { "$ref": "#/$defs/denialReasonCode" },
+            "audit_required_fields": {
+              "type": "array",
+              "minItems": 10,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/gatewayAuditRequiredField" }
+            },
+            "failure_mode": { "const": "fail_closed" },
+            "success_fallback_allowed": { "const": false }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "gatewayAuditRequiredField": {
+      "type": "string",
+      "enum": [
+        "decision",
+        "actor",
+        "project",
+        "alias",
+        "provider_candidate",
+        "policy_version",
+        "registry_version",
+        "reason",
+        "trace_id",
+        "cost_estimate"
+      ]
+    },
+    "gatewayAuditRecommendedField": {
+      "type": "string",
+      "enum": [
+        "virtual_key_id",
+        "budget_scope",
+        "data_class",
+        "route_intent",
+        "environment",
+        "gateway_instance",
+        "decision_latency_ms",
+        "policy_snapshot_checksum",
+        "registry_snapshot_checksum",
+        "request_timestamp"
+      ]
+    },
+    "actor": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "costEstimate": {
+      "type": ["object", "null"],
+      "properties": {
+        "input_tokens": { "type": "integer", "minimum": 0 },
+        "output_tokens": { "type": "integer", "minimum": 0 },
+        "currency": { "type": "string", "minLength": 1 },
+        "estimated_cost": { "type": "number", "minimum": 0 },
+        "unit": { "type": "string", "minLength": 1 },
+        "unavailable_reason": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "denialAuditContext": {
+      "type": "object",
+      "required": [
+        "decision",
+        "actor",
+        "project",
+        "alias",
+        "provider_candidate",
+        "policy_version",
+        "registry_version",
+        "reason",
+        "trace_id",
+        "cost_estimate"
+      ],
+      "properties": {
+        "decision": { "const": "deny" },
+        "actor": { "$ref": "#/$defs/actor" },
+        "project": { "type": "string", "minLength": 1 },
+        "alias": { "type": "string", "minLength": 1 },
+        "provider_candidate": { "type": ["string", "null"], "minLength": 1 },
+        "policy_version": { "type": "string", "minLength": 1 },
+        "registry_version": { "type": "string", "minLength": 1 },
+        "reason": { "$ref": "#/$defs/denialReasonCode" },
+        "trace_id": { "type": "string", "minLength": 1 },
+        "cost_estimate": { "$ref": "#/$defs/costEstimate" },
+        "virtual_key_id": { "type": "string", "minLength": 1 },
+        "budget_scope": { "type": "string", "minLength": 1 },
+        "data_class": { "type": "string", "minLength": 1 },
+        "route_intent": { "type": "string", "minLength": 1 },
+        "environment": { "type": "string", "minLength": 1 },
+        "gateway_instance": { "type": "string", "minLength": 1 },
+        "decision_latency_ms": { "type": "number", "minimum": 0 },
+        "policy_snapshot_checksum": { "type": "string", "minLength": 1 },
+        "registry_snapshot_checksum": { "type": "string", "minLength": 1 },
+        "request_timestamp": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

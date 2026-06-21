@@ -1,0 +1,693 @@
+{
+  "schemaVersion": "0.1",
+  "artifact": "railway-variable-matrix",
+  "sourcePlan": "docs\\impl-plan\\track-0-architecture-lock-implementation-setup.md sections 13 and 15",
+  "productionProvisioning": {
+    "enabledByDefault": false,
+    "requiredVariables": {
+      "PRODUCTION_PROVISIONING_ENABLED": "false",
+      "PRODUCTION_DEPLOY_APPROVAL_REQUIRED": "true"
+    },
+    "approvalRequired": true,
+    "approvalNote": "Production Railway services, stores, variables, provider routes, and Bifrost ingress must not be provisioned or enabled until explicit Track 0 production approval is recorded."
+  },
+  "environments": {
+    "development": {
+      "owner": "Platform operations owner",
+      "allowedProvisioning": true,
+      "notes": "Development variables may use Railway reference variables and inert placeholder values. Live provider calls remain gated by registry, policy, and eval controls."
+    },
+    "production": {
+      "owner": "Platform operations owner",
+      "allowedProvisioning": false,
+      "approvalRequiredFrom": [
+        "Platform lead",
+        "Engineering lead",
+        "Security policy owner"
+      ],
+      "notes": "Production variables are defined here for review only. Provisioning and deploys are disabled until explicit release approval."
+    }
+  },
+  "defaults": {
+    "classificationValues": [
+      "secret",
+      "non-secret"
+    ],
+    "secretStorage": "Railway environment variables or Railway service reference variables only; no real secrets in source control.",
+    "nonSecretStorage": "Railway environment variables, reviewed docs, or generated config where appropriate.",
+    "productionGate": {
+      "state": "disabled-by-default",
+      "required": true,
+      "requiresExplicitApproval": true
+    }
+  },
+  "groups": [
+    {
+      "id": "auth",
+      "displayName": "Auth",
+      "owner": "Platform security owner",
+      "environmentOwner": {
+        "development": "Platform operations owner",
+        "production": "Platform security owner"
+      },
+      "productionGate": "Better Auth production origin, admin TOTP, invite-only bootstrap, and auth smoke tests must be approved before production use.",
+      "variables": [
+        {
+          "name": "BETTER_AUTH_URL",
+          "classification": "non-secret",
+          "exposure": "public-url",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "https://<control-api-domain>",
+          "rotation": "Update when the Control API domain changes; verify trusted origins and auth smoke tests."
+        },
+        {
+          "name": "BETTER_AUTH_SECRET",
+          "classification": "secret",
+          "exposure": "credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<secret:railway-generated-better-auth-secret>",
+          "rotation": "Rotate through Railway variables during a maintenance window; invalidate affected sessions if the auth implementation requires it."
+        },
+        {
+          "name": "BETTER_AUTH_TRUSTED_ORIGINS",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "https://<admin-domain>,https://<api-domain>",
+          "rotation": "Review whenever portal or API domains change."
+        },
+        {
+          "name": "AUTH_ADMIN_BOOTSTRAP_ENABLED",
+          "classification": "non-secret",
+          "exposure": "internal-control",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "false",
+          "rotation": "Keep false except for a time-boxed approved bootstrap; reset immediately after bootstrap."
+        },
+        {
+          "name": "AUTH_ADMIN_BOOTSTRAP_EMAIL",
+          "classification": "non-secret",
+          "exposure": "internal-identifier",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<internal:admin@example.invalid>",
+          "rotation": "Change only through approved admin ownership transfer."
+        }
+      ]
+    },
+    {
+      "id": "database",
+      "displayName": "Database",
+      "owner": "Database and migration owner",
+      "environmentOwner": {
+        "development": "Platform operations owner",
+        "production": "Database and migration owner"
+      },
+      "productionGate": "Operational and Knowledge Postgres must have migration policy, least-privilege roles, backup/restore validation, and db checks before production.",
+      "variables": [
+        {
+          "name": "OPERATIONAL_DATABASE_URL",
+          "classification": "secret",
+          "exposure": "credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "${{OperationalPostgres.DATABASE_URL}}",
+          "rotation": "Use Railway managed Postgres credential rotation or recreate scoped role; update dependent services atomically."
+        },
+        {
+          "name": "KNOWLEDGE_DATABASE_URL",
+          "classification": "secret",
+          "exposure": "credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "${{KnowledgePostgres.DATABASE_URL}}",
+          "rotation": "Rotate with Knowledge Postgres role credentials and rerun retrieval/indexer connectivity checks."
+        },
+        {
+          "name": "DATABASE_MIGRATION_URL",
+          "classification": "secret",
+          "exposure": "privileged-credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<secret:migration-role-database-url>",
+          "rotation": "Rotate after every production migration role change and after suspected exposure; migration role must not be used by request-serving services."
+        },
+        {
+          "name": "DATABASE_READONLY_URL",
+          "classification": "secret",
+          "exposure": "credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<secret:readonly-role-database-url>",
+          "rotation": "Rotate with read-only role grants; verify dashboards and read-only tools reconnect."
+        }
+      ]
+    },
+    {
+      "id": "redis",
+      "displayName": "Redis",
+      "owner": "Platform operations owner",
+      "environmentOwner": {
+        "development": "Platform operations owner",
+        "production": "Platform operations owner"
+      },
+      "productionGate": "Redis queues, locks, and rate-limit namespaces must be isolated by environment before production.",
+      "variables": [
+        {
+          "name": "REDIS_URL",
+          "classification": "secret",
+          "exposure": "credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "${{Redis.REDIS_URL}}",
+          "rotation": "Rotate through Railway Redis credentials; restart queue workers and API services after update."
+        },
+        {
+          "name": "REDIS_QUEUE_NAMESPACE",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "devgateway:queue:${{RAILWAY_ENVIRONMENT_NAME}}",
+          "rotation": "Change only during planned queue migration; drain old queues first."
+        },
+        {
+          "name": "REDIS_RATE_LIMIT_NAMESPACE",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "devgateway:ratelimit:${{RAILWAY_ENVIRONMENT_NAME}}",
+          "rotation": "Change with rate-limit policy deployment; old counters can expire naturally."
+        }
+      ]
+    },
+    {
+      "id": "bifrost-provider",
+      "displayName": "Bifrost/provider",
+      "owner": "Gateway owner",
+      "environmentOwner": {
+        "development": "Platform operations owner",
+        "production": "Gateway owner"
+      },
+      "productionGate": "Bifrost route config must be generated or validated from a registry snapshot with passing eval gates; stale or missing policy/registry versions fail closed.",
+      "variables": [
+        {
+          "name": "BIFROST_BASE_URL",
+          "classification": "non-secret",
+          "exposure": "public-url",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "https://<bifrost-service-domain>",
+          "rotation": "Update when the Bifrost Railway domain changes; verify IDE gateway clients and Control API route metadata."
+        },
+        {
+          "name": "BIFROST_ADMIN_TOKEN",
+          "classification": "secret",
+          "exposure": "credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<secret:bifrost-admin-token>",
+          "rotation": "Rotate after any admin access change, break-glass event, or suspected exposure."
+        },
+        {
+          "name": "BIFROST_VIRTUAL_KEY_SEED",
+          "classification": "secret",
+          "exposure": "credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<secret:virtual-key-seed>",
+          "rotation": "Rotate by issuing new virtual keys, revoking old keys, and auditing active sessions."
+        },
+        {
+          "name": "BIFROST_CONFIG_PATH",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "/etc/devgateway/bifrost.evidence.json",
+          "rotation": "Host-side DevGateway evidence artifact path; change only with reviewed config evidence strategy."
+        },
+        {
+          "name": "BIFROST_RUNTIME_CONFIG_PATH",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "/etc/devgateway/config.runtime.json",
+          "rotation": "Host-side upstream Bifrost runtime config artifact path; must be generated/validated separately from DevGateway evidence."
+        },
+        {
+          "name": "BIFROST_CONTAINER_CONFIG_PATH",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "/app/data/config.json",
+          "rotation": "Container mount target; upstream Bifrost reads <app-dir>/config.json."
+        },
+        {
+          "name": "BIFROST_ROUTE_CONFIG_VERSION",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<internal:registry-snapshot-version>",
+          "rotation": "Update on every approved registry snapshot; startup must validate the version before accepting traffic."
+        },
+        {
+          "name": "BIFROST_POLICY_VERSION",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<internal:policy-snapshot-version>",
+          "rotation": "Update with provider/data-class policy releases; reject requests carrying stale or mismatched policy versions."
+        },
+        {
+          "name": "BIFROST_POLICY_MAX_STALENESS_SECONDS",
+          "classification": "non-secret",
+          "exposure": "internal-control",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<optional:live-sync-only>",
+          "rotation": "Reserved for future live-sync pipelines with runtime sync timestamps; do not seed as an active default for immutable checked-in snapshots."
+        },
+        {
+          "name": "BIFROST_BREAK_GLASS_ENABLED",
+          "classification": "non-secret",
+          "exposure": "safety-control",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "false",
+          "rotation": "Keep false except during approved break-glass TTL; reset and rotate provider keys after use."
+        },
+        {
+          "name": "DEVGATEWAY_OPENAI_API_KEY_PLACEHOLDER",
+          "classification": "secret",
+          "exposure": "provider-credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<secret:provider-key-placeholder>",
+          "rotation": "Placeholder/reference only until provider gates pass; do not expose literal OPENAI_API_KEY to Bifrost before validated config gates provider enablement."
+        },
+        {
+          "name": "DEVGATEWAY_ANTHROPIC_API_KEY_PLACEHOLDER",
+          "classification": "secret",
+          "exposure": "provider-credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<secret:provider-key-placeholder>",
+          "rotation": "Placeholder/reference only until provider gates pass; do not expose literal ANTHROPIC_API_KEY to Bifrost before validated config gates provider enablement."
+        }
+      ]
+    },
+    {
+      "id": "github-app",
+      "displayName": "GitHub App",
+      "owner": "SCM integration owner",
+      "environmentOwner": {
+        "development": "SCM integration owner",
+        "production": "SCM integration owner"
+      },
+      "productionGate": "GitHub App scopes, webhook validation, installation ownership, and stale-sync default-deny rules must pass policy validation before production.",
+      "variables": [
+        {
+          "name": "GITHUB_APP_ID",
+          "classification": "non-secret",
+          "exposure": "internal-identifier",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<internal:github-app-id>",
+          "rotation": "Update only when replacing the GitHub App; revalidate permissions and webhooks."
+        },
+        {
+          "name": "GITHUB_APP_INSTALLATION_ID",
+          "classification": "non-secret",
+          "exposure": "internal-identifier",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<internal:github-app-installation-id>",
+          "rotation": "Update when installation scope changes; force permission resync."
+        },
+        {
+          "name": "GITHUB_APP_PRIVATE_KEY_BASE64",
+          "classification": "secret",
+          "exposure": "credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<secret:base64-pem-placeholder>",
+          "rotation": "Rotate through GitHub App private key lifecycle and Railway variable update; revoke old key after rollout."
+        },
+        {
+          "name": "GITHUB_APP_WEBHOOK_SECRET",
+          "classification": "secret",
+          "exposure": "credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<secret:webhook-secret-placeholder>",
+          "rotation": "Rotate with webhook secret change; accept dual secrets only during a short approved transition."
+        }
+      ]
+    },
+    {
+      "id": "object-storage",
+      "displayName": "Object storage",
+      "owner": "Platform operations owner",
+      "environmentOwner": {
+        "development": "Platform operations owner",
+        "production": "Platform operations owner"
+      },
+      "productionGate": "Artifact, source snapshot, generated document, and trace-bundle buckets must have backup/restore and least-privilege access reviewed.",
+      "variables": [
+        {
+          "name": "S3_ENDPOINT",
+          "classification": "non-secret",
+          "exposure": "internal-url",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "${{ArtifactsBucket.S3_ENDPOINT}}",
+          "rotation": "Update when bucket provider or Railway bucket endpoint changes."
+        },
+        {
+          "name": "S3_BUCKET",
+          "classification": "non-secret",
+          "exposure": "internal-identifier",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "${{ArtifactsBucket.S3_BUCKET}}",
+          "rotation": "Change only with a migration or restore plan."
+        },
+        {
+          "name": "S3_REGION",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "${{ArtifactsBucket.S3_REGION}}",
+          "rotation": "Update if bucket region changes; verify data residency policy."
+        },
+        {
+          "name": "S3_ACCESS_KEY_ID",
+          "classification": "secret",
+          "exposure": "credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "${{ArtifactsBucket.S3_ACCESS_KEY_ID}}",
+          "rotation": "Rotate with object-storage credentials; verify workers, eval runner, and trace exporters."
+        },
+        {
+          "name": "S3_SECRET_ACCESS_KEY",
+          "classification": "secret",
+          "exposure": "credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "${{ArtifactsBucket.S3_SECRET_ACCESS_KEY}}",
+          "rotation": "Rotate with object-storage credentials; revoke old key after all services are updated."
+        },
+        {
+          "name": "S3_FORCE_PATH_STYLE",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "true",
+          "rotation": "Change only when switching object-storage provider compatibility mode."
+        }
+      ]
+    },
+    {
+      "id": "observability",
+      "displayName": "Observability",
+      "owner": "Observability owner",
+      "environmentOwner": {
+        "development": "Platform operations owner",
+        "production": "Observability owner"
+      },
+      "productionGate": "OpenTelemetry Collector, Prometheus, Grafana, trace retention, and dashboard ownership must be reviewed before production.",
+      "variables": [
+        {
+          "name": "OTEL_EXPORTER_OTLP_ENDPOINT",
+          "classification": "non-secret",
+          "exposure": "internal-url",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "https://<otel-collector-domain>",
+          "rotation": "Update when collector endpoint changes; verify telemetry ingestion."
+        },
+        {
+          "name": "OTEL_EXPORTER_OTLP_HEADERS",
+          "classification": "secret",
+          "exposure": "credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<secret:otlp-header-placeholder>",
+          "rotation": "Rotate collector authentication headers on schedule and after exposure."
+        },
+        {
+          "name": "OTEL_SERVICE_NAME",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<service-name>",
+          "rotation": "Change with service rename; keep dashboards synchronized."
+        },
+        {
+          "name": "OTEL_RESOURCE_ATTRIBUTES",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "deployment.environment=${{RAILWAY_ENVIRONMENT_NAME}}",
+          "rotation": "Review with telemetry taxonomy changes."
+        },
+        {
+          "name": "TRACE_SAMPLE_RATE",
+          "classification": "non-secret",
+          "exposure": "internal-control",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "0.10",
+          "rotation": "Tune through observability review; production changes must preserve audit and incident needs."
+        },
+        {
+          "name": "METRICS_EXPORT_MODE",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "otel",
+          "rotation": "Change when Prometheus/OTel topology changes."
+        }
+      ]
+    },
+    {
+      "id": "eval",
+      "displayName": "Eval",
+      "owner": "Evaluation owner",
+      "environmentOwner": {
+        "development": "Evaluation owner",
+        "production": "Evaluation owner"
+      },
+      "productionGate": "Production route, alias, prompt, retrieval, tool, skill, and index changes require matching passing eval gate results.",
+      "variables": [
+        {
+          "name": "EVAL_DATASET_PATH",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "evals/fixtures",
+          "rotation": "Update when dataset layout changes; validators must pass."
+        },
+        {
+          "name": "EVAL_GATE_MODE",
+          "classification": "non-secret",
+          "exposure": "internal-control",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "fixture",
+          "rotation": "Production cannot use fixture-only gates for real enablement; mode changes require Evaluation owner approval."
+        },
+        {
+          "name": "EVAL_ARTIFACT_BUCKET",
+          "classification": "non-secret",
+          "exposure": "internal-identifier",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "${{ArtifactsBucket.S3_BUCKET}}",
+          "rotation": "Change with object-storage migration and gate-result retention review."
+        },
+        {
+          "name": "EVAL_PROVIDER_MODE",
+          "classification": "non-secret",
+          "exposure": "internal-control",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "fixture",
+          "rotation": "Live provider mode requires approved provider policy and gate controls."
+        },
+        {
+          "name": "EVAL_SMOKE_ENABLED",
+          "classification": "non-secret",
+          "exposure": "internal-control",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "true",
+          "rotation": "Keep true for readiness checks; disabling requires release approval."
+        }
+      ]
+    },
+    {
+      "id": "secrets-encryption",
+      "displayName": "Secrets/encryption",
+      "owner": "Platform security owner",
+      "environmentOwner": {
+        "development": "Platform security owner",
+        "production": "Platform security owner"
+      },
+      "productionGate": "Application encryption, credential key versioning, rotation control, and audit correlation must be approved before production provider credentials are stored.",
+      "variables": [
+        {
+          "name": "APP_ENCRYPTION_KEY_BASE64",
+          "classification": "secret",
+          "exposure": "encryption-key",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<secret:32-byte-base64-key-placeholder>",
+          "rotation": "Rotate through key-versioned credential re-encryption; never commit raw key material."
+        },
+        {
+          "name": "CREDENTIAL_KEY_VERSION",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "railway-dev-v1",
+          "rotation": "Increment with each credential encryption key rollout."
+        },
+        {
+          "name": "CREDENTIAL_ROTATION_REQUIRED",
+          "classification": "non-secret",
+          "exposure": "internal-control",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "false",
+          "rotation": "Set true after suspected exposure, break-glass provider-key use, or scheduled rotation trigger; clear after verification."
+        },
+        {
+          "name": "AUDIT_CORRELATION_SALT",
+          "classification": "secret",
+          "exposure": "credential",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "<secret:audit-salt-placeholder>",
+          "rotation": "Rotate only with audit correlation impact review; preserve ability to investigate historical events."
+        }
+      ]
+    }
+  ]
+}

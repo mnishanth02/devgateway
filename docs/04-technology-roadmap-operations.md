@@ -58,10 +58,26 @@ Policy services own:
 Durable memory must be inspectable, correctable, scoped, expirable, and deletable. Agent memory is stored
 as governed data with source, scope, retention, correction trail, and ACLs.
 
-## ADR-006: Microsoft Entra ID OIDC is the human identity provider
+## ADR-006: Better Auth OSS is the first-release human identity layer
 
-**Decision:** Humans authenticate through Microsoft Entra ID OIDC. The platform stores stable
-`principal_id` records mapped to Entra subject IDs, email, team memberships, and platform roles.
+**Decision:** Humans authenticate through Better Auth OSS hosted with the platform on Railway. The
+platform stores stable `principal_id` records mapped to Better Auth user IDs, email, optional linked
+GitHub account, team memberships, and platform roles.
+
+**Reason:** The first release is a small, internal-only deployment. Better Auth keeps the auth layer in
+our codebase and database, avoids per-seat SaaS auth cost, and avoids Microsoft Entra ID, Azure, AWS,
+or GCP managed identity dependencies until explicitly approved.
+
+**First-release controls:** User access is invite-only or admin-created. Admin, developer, and
+stakeholder roles are enforced by platform policy. Rate limiting, CSRF/origin checks, secure cookies,
+session expiry, audit hooks, and TOTP 2FA for admin accounts are required before production use.
+
+**Alternatives reviewed:** Clerk can be reconsidered if prebuilt hosted auth UI becomes more important
+than Railway-only operation and SaaS lock-in. WorkOS can be reconsidered if enterprise SSO becomes a
+near-term requirement. Both require explicit approval before adoption.
+
+**Future federation:** OIDC, SAML, SCIM, or external IdP integration remains a migration option, not a
+first-release dependency.
 
 **Repository ACL source:** GitHub App sync supplies repo, team, collaborator, CODEOWNER, and visibility
 permissions. Platform roles can grant portal visibility but cannot exceed GitHub restrictions for private
@@ -122,6 +138,8 @@ models:
       - provider: google_vertex
         model: gemini-3.1-pro
         region: asia-south1
+        lifecycle_status: disabled
+        approval_gate: manual_gcp_approval
     policy:
       eval_suite: large_context_v1
       allowed_data_classes: [public, internal, confidential]
@@ -129,6 +147,8 @@ models:
     candidates:
       - provider: google_vertex
         model: gemini-3.5-flash
+        lifecycle_status: disabled
+        approval_gate: manual_gcp_approval
       - provider: groq
         model: openai/gpt-oss-120b
     policy:
@@ -171,28 +191,31 @@ developer/admin/stakeholder portal. Use TypeScript/TSX for frontend code and gen
 
 | Need | First production choice | Migration trigger |
 |---|---|---|
-| Operational DB | Railway Postgres | Move to managed HA/PITR Postgres when production criticality or restore SLO requires it. |
-| Redis/cache/queue helpers | Railway Redis | Move to managed Redis when availability or throughput SLO requires it. |
-| Knowledge DB/vector/lexical/graph | Postgres full-text + pgvector + typed graph tables | Split to Qdrant/Zoekt/Neo4j/OpenSearch only when thresholds are exceeded. |
-| Object storage | Tigris S3-compatible object storage | Move to S3/R2 when cost, lifecycle, or compliance requires it. |
+| Operational DB | Railway Postgres | Upgrade within Railway or move to another Postgres provider only after manual approval when production criticality or restore SLO requires it. |
+| Redis/cache/queue helpers | Railway Redis | Upgrade within Railway or move to another Redis provider only after manual approval when availability or throughput SLO requires it. |
+| Knowledge DB/vector/lexical/graph | Postgres full-text + pgvector + **self-hosted Neo4j Community** | Split vector/lexical to Qdrant/Zoekt/OpenSearch only when thresholds are exceeded; keep Neo4j for graph traversal from the first production retrieval release. |
+| Object storage | Railway Object Storage bucket using the S3-compatible API | Move to another S3-compatible provider only after manual approval when cost, lifecycle, or compliance requires it. |
 | Trace/eval/cost tables | Postgres tables separated from gateway policy compute | Split when write volume affects gateway/control latency. |
 
 Migration thresholds:
 
 - vector p95 search latency > 750 ms on approved workload after indexing/query tuning
 - lexical p95 search latency > 500 ms for symbol/path queries
-- graph traversal p95 latency > 500 ms for approved multi-hop questions
+- Neo4j graph traversal p95 latency > 500 ms for approved multi-hop questions after query/index tuning
 - knowledge DB workload impacts operational DB latency
 - index rebuild time exceeds accepted recovery window
 
 ## ADR-013: Secrets and key management
 
-**Decision:** Store provider keys, break-glass credentials, webhook secrets, and encryption keys in GCP
-Secret Manager encrypted with Cloud KMS. Railway variables store only bootstrap secret references and
-non-sensitive deployment config.
+**Decision:** Store first-release deployment secrets in Railway variables. If provider keys,
+break-glass credentials, or webhook secrets must be managed dynamically by the platform, store them in
+Operational Postgres encrypted with an application-managed encryption key supplied through Railway
+variables.
 
-Provider keys are encrypted at rest, access-controlled by service principal, rotated on schedule, and
-rotated immediately after break-glass use or suspected exposure.
+Provider keys are never surfaced to clients. Key access is role-scoped, audited, rotated on schedule,
+and rotated immediately after break-glass use or suspected exposure. Moving secrets to Infisical,
+Vault, SOPS/age, Azure Key Vault, AWS Secrets Manager, or GCP Secret Manager requires explicit manual
+approval.
 
 ## ADR-014: Observability stack
 
@@ -217,7 +240,7 @@ Break-glass exists only for gateway outage or critical provider routing failure.
 |---|---|
 | Trigger | Bifrost unavailable, routing failure blocks critical work, or incident commander declares emergency access. |
 | Approver | Platform lead plus engineering lead; production-impacting tools require CTO/founder approval. |
-| Credential storage | GCP Secret Manager with Cloud KMS; access granted to a short-lived break-glass service principal. |
+| Credential storage | Railway variables for bootstrap credentials and encrypted Operational Postgres records for platform-managed provider credentials; access is granted through a short-lived break-glass service principal. |
 | TTL | Maximum 4 hours, auto-expiring by default. |
 | Scope | Approved provider/model aliases only; no repository retrieval cache and no side-effecting tools. |
 | Audit | Immutable audit event with requester, approver, reason, provider, model, project, start/end time, and usage. |
@@ -228,6 +251,32 @@ Break-glass exists only for gateway outage or critical provider routing failure.
 **Decision:** Use `BAAI/bge-m3` for first-release embeddings and `BAAI/bge-reranker-v2-m3` for reranking.
 Code-specific embeddings are not enabled until retrieval evals prove a material improvement.
 
+## ADR-017: Cloud and managed-service approval gate
+
+**Decision:** Railway is the approved first-release managed platform. Azure, AWS, GCP, hosted auth
+providers, non-Railway object storage, non-Railway databases, and non-Railway hosting services cannot
+become committed dependencies without explicit manual approval.
+
+**Scope:** This gate covers Microsoft Entra ID, GCP Secret Manager, Cloud KMS, Google Vertex AI,
+Fly.io, Tigris, Clerk, WorkOS, and similar managed services. Protocol-level compatibility such as OIDC,
+SAML, OpenTelemetry, Redis, Postgres, and S3-compatible APIs remains allowed when the concrete
+first-release provider is Railway-hosted or self-hosted.
+
+**Model providers:** Model API providers are governed separately by provider data-class policy, budget
+approval, eval gates, and this managed-service approval gate when the provider is Azure, AWS, or GCP.
+
+## ADR-018: Retrieval strategy controls and context budget gates
+
+**Decision:** Neo4j-backed GraphRAG, lexical retrieval, general embeddings, reranking, context budgeting,
+and context compression are day-one retrieval capabilities. They remain runtime-toggleable through typed
+config so development, application runs, and evals can compare `hybrid`, `hybrid_graph`, and
+`hybrid_graph_shadow` strategies. GraphRAG enabled while Neo4j is disabled fails closed. Code-specific
+embeddings stay disabled until eval evidence proves material improvement.
+
+**Gate:** Production retrieval cannot be enabled unless retrieval strategy controls, context
+budget/compression checks, GraphRAG provenance checks, ACL safety, retrieval recall, and faithfulness
+gates pass.
+
 ## Roadmap
 
 ### Track 0 - Architecture lock and implementation setup
@@ -236,7 +285,7 @@ Deliver:
 
 - approved ADR set
 - model/provider registry
-- Entra OIDC app registration
+- Better Auth configuration, auth schema migration, initial admin bootstrap, and auth smoke tests
 - GitHub App permission model
 - provider data-class matrix
 - eval datasets and runner skeleton
@@ -316,19 +365,24 @@ Build:
 - docs connector
 - metadata DB
 - graph schema and provenance model
+- Neo4j Community graph traversal store
+- runtime retrieval strategy controls for `hybrid`, `hybrid_graph`, and `hybrid_graph_shadow`
+- context budgeter and compressor
 - deterministic repo graph extraction for initial languages
 - Postgres full-text/symbol index
 - pgvector index
-- hybrid retrieval
+- hybrid retrieval plus Neo4j-backed GraphRAG
 - ACL filtering
 - citation generation
-- embedding/reranker eval
+- embedding/reranker, GraphRAG, retrieval strategy, and context budget/compression evals
 
 Exit:
 
 - agents answer repo/doc questions with citations
 - retrieval eval baseline passes
 - ACL leak tests pass
+- GraphRAG/Neo4j can be enabled, disabled, and shadowed through typed config
+- context packs stay within budget while preserving citations, ACL metadata, graph provenance, and taint markers
 - graph-backed APIs exist for stakeholder portal
 
 ### Track 5 - Stakeholder portal
@@ -350,13 +404,13 @@ Exit:
 - non-developer personas can answer project questions without IDE access
 - persona-specific answer formats pass eval gates
 
-### Track 6 - GraphRAG enrichment
+### Track 6 - Advanced GraphRAG enrichment
 
 Build:
 
 - expanded deterministic repo graph coverage
 - LLM entity/relation extraction for unstructured docs/tickets/conversations
-- graph expansion retrieval
+- advanced graph expansion retrieval beyond the day-one Neo4j GraphRAG path
 - community/domain summaries where useful
 - code-to-business traceability
 
@@ -407,27 +461,29 @@ The first production release is complete when Tracks 0-4 pass exit criteria and 
 - read-only Tool Broker
 - durable workflow restart/resume
 - GitHub ACL sync
-- repo/doc retrieval with citations
+- repo/doc retrieval with citations, Neo4j-backed GraphRAG, and context budget/compression controls
 - eval gates
 - cost attribution
 - break-glass route
 - admin portal
 - developer onboarding snippets
 
-Stakeholder portal and advanced GraphRAG ship after the first production release.
+Stakeholder portal ships after the first production release. Neo4j-backed GraphRAG foundation ships in
+the first production retrieval release; advanced graph analytics/community summaries can come later.
 
 ## Deployment baseline
 
 | Workload | Baseline |
 |---|---|
-| Gateway/stateless services | Railway first; Fly.io Mumbai migration when latency SLO is breached. |
+| Gateway/stateless services | Railway first; non-Railway hosting migration requires manual approval when latency or reliability SLO evidence justifies it. |
 | Operational Postgres | Railway Postgres with backup/restore drills. |
 | Redis | Railway Redis. |
 | Knowledge Postgres | Separate Railway Postgres instance or database compute from operational DB. |
-| Object storage | Tigris S3-compatible object storage. |
+| Graph store | Self-hosted Neo4j Community with volume, memory, backup, and restore validation. |
+| Object storage | Railway Object Storage bucket with S3-compatible API. |
 | Observability | OTel, Prometheus, Grafana, trace/eval/cost tables. |
 | Workflow runtime | Custom Postgres-backed workers on Railway. |
-| Secrets | GCP Secret Manager + Cloud KMS. |
+| Secrets | Railway variables plus encrypted Operational Postgres records for platform-managed provider credentials. |
 
 ## SLOs
 
@@ -451,13 +507,13 @@ Stakeholder portal and advanced GraphRAG ship after the first production release
 | Knowledge Postgres | Daily backup; source snapshots allow rebuild. |
 | Vector/lexical/graph indexes | Rebuildable from chunks and source snapshots; backup based on rebuild time. |
 | Object storage | Versioning and lifecycle policy for artifacts and source snapshots. |
-| Secrets | KMS-backed secrets with rotation procedure and access audit. |
+| Secrets | Railway variable backup procedure, encrypted credential records, rotation procedure, and access audit. |
 
 ## Security operations
 
 - Signed GitHub webhooks.
 - Least-privilege GitHub App permissions.
-- Entra OIDC conditional access for portal.
+- Better Auth invite-only access, secure sessions, rate limiting, trusted origins, and TOTP 2FA for admin accounts.
 - Provider key encryption and rotation.
 - Virtual key revocation.
 - Tool allowlists.

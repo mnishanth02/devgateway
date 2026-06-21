@@ -1,0 +1,50 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 1 degraded-mode fixture; not real customer, repository, provider, credential, or production telemetry data.",
+  "case_id": "degraded-mode-side-effecting-tools-blocked",
+  "category": "side_effecting_tools_blocked",
+  "activation_id": "bg-activation-fixture-001",
+  "incident_id": "inc-fixture-001",
+  "break_glass_design_ref": "docs/governance/break-glass-design.md#required-degraded-mode-tests",
+  "inputs": {
+    "tool_name": "synthetic.deploy.write",
+    "operation_class": "side_effecting",
+    "cto_founder_approval": false
+  },
+  "expected_decision": "deny",
+  "expected_denial_reason": "side_effecting_tool_blocked_break_glass",
+  "expected_assertions": [
+    "Tool broker denies side-effecting tools while break-glass route is active.",
+    "Production-impacting tools additionally require CTO/founder approval and are denied in this fixture.",
+    "Denied tool plan is audited without adapter execution."
+  ],
+  "expected_audit_fields": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "activation_id",
+    "incident_id",
+    "tool_name",
+    "operation_class",
+    "cto_founder_approval",
+    "denial_reason"
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-side-effecting-tools-blocked/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-side-effecting-tools-blocked/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-side-effecting-tools-blocked/audit-event.json"
+  },
+  "production_retrieval_behavior": false,
+  "expected_engine_decision": {
+    "decision": "deny",
+    "denial_reason": "side_effecting_tool_blocked_break_glass",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": []
+  }
+}

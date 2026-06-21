@@ -1,0 +1,162 @@
+{
+  "contract_version": "0.1.0",
+  "dataset_id": "faithfulness.v0.1",
+  "dataset_version": "0.1.0",
+  "suite": "faithfulness",
+  "schema_status": "layout_stub_until_shared_eval_schema_generalizes_beyond_acl_safety",
+  "fixture_root": "evals/fixtures/faithfulness",
+  "inert_fixture_mode": true,
+  "no_live_external_calls": true,
+  "production_enablement": false,
+  "source_data_policy": {
+    "synthetic_only": true,
+    "no_real_customer_data": true,
+    "no_real_repo_data": true,
+    "no_live_external_calls": true,
+    "fixture_review_required": true
+  },
+  "categories": [
+    "contradiction",
+    "unsupported_claim",
+    "insufficient_context_abstain"
+  ],
+  "artifact_ref_policy": {
+    "required": true,
+    "description": "Each case declares expected gate-result, trace, and audit artifacts that a future runner must write."
+  },
+  "cases": [
+    {
+      "case_id": "faithfulness-contradiction-deny",
+      "category": "contradiction",
+      "title": "Reject answer contradicting synthetic source",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/faithfulness/faithfulness-contradiction-deny.json",
+          "sha256_required": true,
+          "description": "Inert fixture for faithfulness-contradiction-deny."
+        }
+      ],
+      "inputs": {
+        "source_claim": "SYNTHETIC_TIER_BRONZE",
+        "candidate_claim": "SYNTHETIC_TIER_PLATINUM"
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Context states synthetic service tier is bronze while candidate answer says platinum.",
+          "Contradiction detector records source_span_id and answer_span_id.",
+          "Accepted response must either correct the contradiction or fail closed."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/faithfulness/faithfulness-contradiction-deny/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/faithfulness/faithfulness-contradiction-deny/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/faithfulness/faithfulness-contradiction-deny/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "faithfulness",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "faithfulness-unsupported-claim-deny",
+      "category": "unsupported_claim",
+      "title": "Reject unsupported extrapolated claim",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/faithfulness/faithfulness-unsupported-claim-deny.json",
+          "sha256_required": true,
+          "description": "Inert fixture for faithfulness-unsupported-claim-deny."
+        }
+      ],
+      "inputs": {
+        "unsupported_claim": "SYNTHETIC_UNSUPPORTED_SLA_DATE"
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Candidate answer adds an unsupported SLA date not present in context.",
+          "Unsupported claim is marked hallucinated and excluded from accepted response.",
+          "Audit artifact records unsupported_claim_count greater than zero."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/faithfulness/faithfulness-unsupported-claim-deny/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/faithfulness/faithfulness-unsupported-claim-deny/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/faithfulness/faithfulness-unsupported-claim-deny/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "faithfulness",
+        "track-0",
+        "synthetic"
+      ]
+    },
+    {
+      "case_id": "faithfulness-insufficient-context-abstain",
+      "category": "insufficient_context_abstain",
+      "title": "Abstain when fixture context is insufficient",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/faithfulness/faithfulness-insufficient-context-abstain.json",
+          "sha256_required": true,
+          "description": "Inert fixture for faithfulness-insufficient-context-abstain."
+        }
+      ],
+      "inputs": {
+        "question": "What is the undisclosed synthetic roadmap date?"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "The accepted answer states insufficient context instead of fabricating details.",
+          "No source marker outside the provided fixture appears in the answer.",
+          "Artifact records abstention_reason=insufficient_context."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/faithfulness/faithfulness-insufficient-context-abstain/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/faithfulness/faithfulness-insufficient-context-abstain/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/faithfulness/faithfulness-insufficient-context-abstain/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version"
+      ],
+      "tags": [
+        "faithfulness",
+        "track-0",
+        "synthetic"
+      ]
+    }
+  ]
+}

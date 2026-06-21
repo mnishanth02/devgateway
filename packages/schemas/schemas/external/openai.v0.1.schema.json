@@ -1,0 +1,262 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/external/openai.v0.1.schema.json",
+  "title": "DevGateway OpenAI-Compatible External Contracts v0.1",
+  "$defs": {
+    "model": {
+      "type": "object",
+      "required": ["id", "object", "created", "owned_by"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "object": { "const": "model" },
+        "created": { "type": "integer", "minimum": 0 },
+        "owned_by": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "getModelsResponse": {
+      "type": "object",
+      "required": ["object", "data"],
+      "properties": {
+        "object": { "const": "list" },
+        "data": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/model" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "contentPart": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string" },
+        "text": { "type": "string" },
+        "image_url": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "toolCall": {
+      "type": "object",
+      "required": ["id", "type", "function"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "function" },
+        "function": {
+          "type": "object",
+          "required": ["name", "arguments"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "arguments": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "message": {
+      "type": "object",
+      "required": ["role"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["system", "developer", "user", "assistant", "tool"]
+        },
+        "content": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "null" },
+            {
+              "type": "array",
+              "items": { "$ref": "#/$defs/contentPart" }
+            }
+          ]
+        },
+        "name": { "type": "string" },
+        "tool_call_id": { "type": "string" },
+        "tool_calls": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/toolCall" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "tool": {
+      "type": "object",
+      "required": ["type", "function"],
+      "properties": {
+        "type": { "const": "function" },
+        "function": {
+          "type": "object",
+          "required": ["name"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "description": { "type": "string" },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "strict": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "chatCompletionsRequest": {
+      "type": "object",
+      "required": ["model", "messages"],
+      "properties": {
+        "model": { "type": "string", "minLength": 1 },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/message" }
+        },
+        "stream": { "type": "boolean" },
+        "temperature": { "type": "number", "minimum": 0 },
+        "top_p": { "type": "number", "minimum": 0, "maximum": 1 },
+        "n": { "type": "integer", "minimum": 1 },
+        "stop": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+          ]
+        },
+        "max_tokens": { "type": "integer", "minimum": 1 },
+        "max_completion_tokens": { "type": "integer", "minimum": 1 },
+        "presence_penalty": { "type": "number" },
+        "frequency_penalty": { "type": "number" },
+        "logit_bias": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "user": { "type": "string" },
+        "tools": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/tool" }
+        },
+        "tool_choice": {
+          "oneOf": [
+            { "type": "string", "enum": ["none", "auto", "required"] },
+            {
+              "type": "object",
+              "additionalProperties": true
+            }
+          ]
+        },
+        "response_format": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "type": "string" },
+            "json_schema": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "usage": {
+      "type": "object",
+      "required": ["prompt_tokens", "completion_tokens", "total_tokens"],
+      "properties": {
+        "prompt_tokens": { "type": "integer", "minimum": 0 },
+        "completion_tokens": { "type": "integer", "minimum": 0 },
+        "total_tokens": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "chatCompletionsResponse": {
+      "type": "object",
+      "required": ["id", "object", "created", "model", "choices"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "object": { "const": "chat.completion" },
+        "created": { "type": "integer", "minimum": 0 },
+        "model": { "type": "string", "minLength": 1 },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["index", "message", "finish_reason"],
+            "properties": {
+              "index": { "type": "integer", "minimum": 0 },
+              "message": {
+                "type": "object",
+                "required": ["role"],
+                "properties": {
+                  "role": { "const": "assistant" },
+                  "content": { "type": ["string", "null"] },
+                  "tool_calls": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/toolCall" }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "finish_reason": {
+                "type": ["string", "null"],
+                "enum": ["stop", "length", "tool_calls", "content_filter", "function_call", null]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "usage": { "$ref": "#/$defs/usage" },
+        "system_fingerprint": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "chatCompletionsStreamChunk": {
+      "type": "object",
+      "required": ["id", "object", "created", "model", "choices"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "object": { "const": "chat.completion.chunk" },
+        "created": { "type": "integer", "minimum": 0 },
+        "model": { "type": "string", "minLength": 1 },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["index", "delta", "finish_reason"],
+            "properties": {
+              "index": { "type": "integer", "minimum": 0 },
+              "delta": {
+                "type": "object",
+                "properties": {
+                  "role": { "const": "assistant" },
+                  "content": { "type": "string" },
+                  "tool_calls": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "finish_reason": { "type": ["string", "null"] }
+            },
+            "additionalProperties": false
+          }
+        },
+        "usage": { "$ref": "#/$defs/usage" },
+        "system_fingerprint": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+  }
+}

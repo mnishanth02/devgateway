@@ -1,0 +1,72 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "gateway-model-smoke-fallback-route",
+  "category": "fallback",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "request": {
+    "method": "POST",
+    "route": "/v1/chat/completions",
+    "body": {
+      "model": "track0-public-chat",
+      "fallback": true
+    }
+  },
+  "gateway_context": {
+    "trace_id": "trace-gateway-model-smoke-fallback-route",
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "virtual_key_id": "vk_synthetic_alpha",
+    "model_alias": "track0-public-chat",
+    "provider_candidate_id": "fixture-openai-secondary",
+    "provider_attempt_count": 2
+  },
+  "synthetic_shape": {
+    "fallback_chain": [
+      {
+        "provider_candidate_id": "fixture-openai-primary",
+        "result": "retryable_error",
+        "final_answer_used": false
+      },
+      {
+        "provider_candidate_id": "fixture-openai-secondary",
+        "result": "success",
+        "final_answer_used": true
+      }
+    ],
+    "policy_rechecked_before_fallback": true,
+    "budget_rechecked_before_fallback": true
+  },
+  "synthetic_measurement": {},
+  "expected_engine_decision": {
+    "decision": "pass",
+    "prompt_context_allowed_markers": [
+      "SYNTHETIC_FALLBACK_SUCCESS"
+    ],
+    "prompt_context_forbidden_markers": [
+      "SYNTHETIC_PRIMARY_PARTIAL_OUTPUT"
+    ]
+  },
+  "expected_assertions": [
+    "First candidate records retryable_error and no final answer is produced from it.",
+    "Second candidate is selected only if policy, budget, and eval gate checks remain satisfied.",
+    "Fallback chain is written to the expected trace artifact."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-route/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-route/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-route/audit-event.json"
+  },
+  "audit_expectations": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "fallback_chain"
+  ]
+}

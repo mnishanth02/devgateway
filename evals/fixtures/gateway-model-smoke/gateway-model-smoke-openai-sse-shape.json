@@ -1,0 +1,71 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "gateway-model-smoke-openai-sse-shape",
+  "category": "openai_sse",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "request": {
+    "method": "POST",
+    "route": "/v1/chat/completions",
+    "body": {
+      "model": "track0-public-chat",
+      "stream": true
+    }
+  },
+  "gateway_context": {
+    "trace_id": "trace-gateway-model-smoke-openai-sse-shape",
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "virtual_key_id": "vk_synthetic_alpha",
+    "model_alias": "track0-public-chat",
+    "provider_candidate_id": "fixture-openai-primary",
+    "provider_attempt_count": 1
+  },
+  "synthetic_shape": {
+    "sse": {
+      "content_type": "text/event-stream",
+      "frames": [
+        "data:{chat.completion.chunk role}",
+        "data:{chat.completion.chunk content_delta}",
+        "data:{chat.completion.chunk finish_reason stop usage}",
+        "data:[DONE]"
+      ],
+      "terminal_usage": {
+        "prompt_tokens": 14,
+        "completion_tokens": 2,
+        "total_tokens": 16
+      }
+    }
+  },
+  "synthetic_measurement": {},
+  "expected_engine_decision": {
+    "decision": "pass",
+    "prompt_context_allowed_markers": [
+      "SYNTHETIC_OPENAI_SSE"
+    ],
+    "prompt_context_forbidden_markers": []
+  },
+  "expected_assertions": [
+    "OpenAI streaming emits data-prefixed JSON chunks and a terminal [DONE].",
+    "Chunk payloads include synthetic deltas and no provider-native secret fields.",
+    "Trace records stream_event_count, terminal_finish_reason, and terminal usage."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-sse-shape/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-sse-shape/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-sse-shape/audit-event.json"
+  },
+  "audit_expectations": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "stream_event_count",
+    "terminal_finish_reason"
+  ]
+}

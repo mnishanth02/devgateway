@@ -1,0 +1,34 @@
+{
+  "name": "devgateway",
+  "private": true,
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "scripts": {
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "build": "turbo run build",
+    "eval:smoke": "turbo run eval:smoke",
+    "db:check": "turbo run db:check",
+    "registry:validate": "turbo run registry:validate",
+    "policy:validate": "turbo run policy:validate",
+    "bifrost:generate": "node --experimental-strip-types scripts/bifrost-config.mjs generate --out infra/bifrost/bifrost.config.example.yaml",
+    "bifrost:validate": "node --experimental-strip-types scripts/bifrost-config.mjs validate --config infra/bifrost/bifrost.config.example.yaml",
+    "bifrost:test": "node --experimental-strip-types --test scripts/bifrost-config.test.mjs",
+    "workspace:validate": "node scripts/validate-root-tooling.mjs && node scripts/validate-eval-layout.mjs && pnpm --filter @devgateway/schemas check",
+    "local:setup": "node scripts/devgateway-dev.mjs setup",
+    "local:dev": "node scripts/devgateway-dev.mjs dev",
+    "local:stop": "node scripts/devgateway-dev.mjs stop",
+    "local:status": "node scripts/devgateway-dev.mjs status",
+    "local:reset": "node scripts/devgateway-dev.mjs reset",
+    "local:test": "node --test scripts/devgateway-dev.test.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "turbo": "^2.6.1",
+    "typescript": "^5.9.3"
+  }
+}
