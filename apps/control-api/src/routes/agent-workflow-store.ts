@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 import {
   dataClasses,
@@ -248,7 +249,10 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
     assertActorMatchesTask(input, actor);
 
     const existing = this.#findTaskByIdempotency(input);
-    if (existing !== null) return existing;
+    if (existing !== null) {
+      this.#assertCreateTaskReplayMatches(input, existing);
+      return existing;
+    }
 
     const now = new Date().toISOString();
     const taskId = `task_${randomUUID()}`;
@@ -430,6 +434,31 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
           task.project_id === input.project_id,
       ) ?? null
     );
+  }
+
+  #assertCreateTaskReplayMatches(input: CreateTaskRequest, existing: TaskRecord): void {
+    const existingWorkflow = this.#workflows.get(existing.workflow_run_id);
+    const comparisons: readonly [string, unknown, unknown][] = [
+      ['task_type', input.task_type, existing.task_type],
+      ['priority', input.priority ?? 'normal', existing.priority],
+      ['data_class', input.data_class, existing.data_class],
+      ['budget_scope_id', input.budget_scope_id, existing.budget_scope_id],
+      ['policy_version', input.policy_version, existing.policy_version],
+      ['registry_version', input.registry_version, existing.registry_version],
+      ['trace_id', input.trace_id, existing.trace_id],
+      ['request_id', input.request_id, existing.request_id],
+      ['workflow_version', input.workflow_version ?? 'workflow.nonproduction.v1', existingWorkflow?.workflow_version],
+      ['objective_ref', input.objective_ref, existing.objective_ref],
+      ['input_context_refs', input.input_context_refs ?? [], existing.input_context_refs],
+    ];
+
+    const mismatch = comparisons.find(([, requested, persisted]) => !agentWorkflowValuesEqual(requested, persisted));
+    if (mismatch !== undefined) {
+      throw new AgentWorkflowRouteValidationError(
+        `idempotency_key replay does not match original task ${mismatch[0]}.`,
+        { statusCode: 409, code: 'invalid_state' },
+      );
+    }
   }
 
   #appendWorkflowEvent(event: WorkflowEventControlRecord): void {
@@ -888,7 +917,7 @@ function createWorkflowRecord(input: {
     trace_context_ref: createTraceContextRef(task.trace_id),
     current_step_ref: {
       step_id: `step_${workflowId}`,
-      step_type: 'planning',
+      step_type: 'plan',
       step_status: status,
       agent_run_id: currentAgentRunId,
       delegation_id: null,
@@ -1234,6 +1263,10 @@ function assertPolicyMatches(record: TaskRecord, policyVersion: string, registry
   }
 }
 
+function agentWorkflowValuesEqual(left: unknown, right: unknown): boolean {
+  return isDeepStrictEqual(left, right);
+}
+
 function assertDataClass(value: unknown): asserts value is DataClass {
   if (typeof value !== 'string' || !(dataClasses as readonly string[]).includes(value)) {
     throw new AgentWorkflowRouteValidationError('data_class must be one of public, internal, confidential, restricted.');
@@ -1423,7 +1456,7 @@ const idempotencyRefSchema = z
 const workflowStepRefSchema = z
   .object({
     step_id: nonEmptyStringSchema,
-    step_type: z.enum(['planning', 'delegation', 'tool_call', 'model_call', 'synthesis', 'terminalization']),
+    step_type: z.enum(['plan', 'delegate', 'agent', 'tool', 'synthesize', 'review', 'artifact']),
     step_status: workflowStateSchema,
     agent_run_id: nonEmptyStringSchema.nullable(),
     delegation_id: nonEmptyStringSchema.nullable(),

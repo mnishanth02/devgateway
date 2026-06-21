@@ -60,7 +60,7 @@
   "additionalProperties": false,
   "$defs": {
     "nonEmptyString": { "type": "string", "minLength": 1 },
-    "nullableNonEmptyString": { "type": ["string", "null"], "minLength": 1 },
+    "nullableNonEmptyString": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
     "agentRole": { "type": "string", "enum": ["supervisor", "planner", "researcher", "synthesizer", "reviewer", "tool_executor", "custom"] },
     "lifecycleStatus": { "type": "string", "enum": ["draft", "eval_ready", "approved", "limited_rollout", "production", "disabled"] },
     "dataClass": { "type": "string", "enum": ["public", "internal", "confidential", "restricted"] },

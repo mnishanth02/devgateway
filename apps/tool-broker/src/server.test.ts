@@ -127,6 +127,23 @@ describe('tool-broker HTTP routes', () => {
         });
     });
 
+    it('hides adapters that declare raw-content output', async () => {
+        const recording = createRecordingRegistry({ outputContainsRawContent: true });
+
+        await withTestServer(createOptions(recording.registry), async (origin) => {
+            const response = await sendHttp(
+                origin,
+                'GET',
+                `/api/tools?allowed_tools=${READ_TOOL_ID}&data_class=internal&role=viewer`,
+            );
+            const body = asRecord(parseJson(response));
+
+            assert.equal(response.statusCode, 200);
+            assert.equal(body.visible_tool_count, 0);
+            assert.deepEqual(body.tools, []);
+        });
+    });
+
     it('fails closed when policy context is missing from the call route', async () => {
         const recording = createRecordingRegistry();
 
@@ -249,6 +266,7 @@ describe('tool-broker policy and audit helpers', () => {
         assert.equal(audit.request_id, 'request-1');
         assert.equal(audit.trace_id, 'trace-1');
         assertNoUnsafeContent(getToolCallAuditRecords());
+        assertNoUnsafeContent(result.body);
     });
 
     it('denies write-like tool IDs before adapter execution and audits the denial', async () => {
@@ -379,7 +397,9 @@ describe('tool-broker policy and audit helpers', () => {
     });
 });
 
-function createRecordingRegistry(options: { readonly unsafeAuditPayload?: boolean } = {}): RecordingRegistry {
+function createRecordingRegistry(
+    options: { readonly unsafeAuditPayload?: boolean; readonly outputContainsRawContent?: boolean } = {},
+): RecordingRegistry {
     let readExecutions = 0;
     let writeExecutions = 0;
     let lastContext: ToolPolicyContext | undefined;
@@ -392,7 +412,7 @@ function createRecordingRegistry(options: { readonly unsafeAuditPayload?: boolea
             effect: 'read',
             readOnly: true,
             externalNetworkAccess: false,
-            outputContainsRawContent: false,
+            outputContainsRawContent: options.outputContainsRawContent ?? false,
             argsSchema: {
                 type: 'object',
                 additionalProperties: false,

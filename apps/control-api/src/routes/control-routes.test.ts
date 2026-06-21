@@ -354,6 +354,15 @@ describe('control API budget routes', () => {
     assert.equal(reserveReplay.budget_reservation.reservation_id, reserved.reservation_id);
     assert.deepEqual((await inspectBudgetScopeSpendForTest(registrar, budgetScopeId)).reservation_state, afterReserve.reservation_state);
 
+    const conflictingReplayReply = new CapturingReply();
+    const conflictingReplay = (await route(registrar, 'POST', BUDGET_RESERVATIONS_BASE_PATH).handler(
+      { headers: authHeaders(), body: { ...reserveBody, amount: 12.6 } },
+      conflictingReplayReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(conflictingReplayReply.statusCode, 400);
+    assert.equal(conflictingReplay.error.code, 'invalid_request');
+
     const settleBody = validBudgetSettlementBody(budgetScopeId, {
       actual_amount: 10.25,
       actual_input_tokens: 900,
@@ -494,6 +503,97 @@ describe('control API budget routes', () => {
     assert.deepEqual((await inspectBudgetScopeSpendForTest(registrar, budgetScopeId)).reservation_state, emptyReservationState());
   });
 
+  it('denies inactive and limit-exceeding budget reservations', async () => {
+    const registrar = new CapturingRegistrar();
+    registerBudgetRoutes(registrar, { runtimeEnvironment: 'development' });
+    const inactiveBudgetScopeId = await createBudgetScopeForTest(registrar, {
+      scope_type: 'workflow',
+      owner_id: 'workflow_run_inactive_budget',
+      status: 'disabled',
+      limits: { hard_cap_amount: 100 },
+      policy_version: 'policy-budget-track2-v1',
+    });
+
+    const inactiveReply = new CapturingReply();
+    const inactive = (await route(registrar, 'POST', BUDGET_RESERVATIONS_BASE_PATH).handler(
+      {
+        headers: authHeaders(),
+        body: validBudgetReservationBody(inactiveBudgetScopeId, {
+          workflow_run_id: 'workflow_run_inactive_budget',
+          delegation_id: null,
+          tool_class: null,
+          idempotency_key: 'idempotency_budget_inactive_denied',
+          request_id: 'request_budget_inactive_denied',
+          trace_id: 'trace_budget_inactive_denied',
+        }),
+      },
+      inactiveReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(inactiveReply.statusCode, 400);
+    assert.equal(inactive.error.code, 'invalid_request');
+    assert.match(inactive.error.message, /must be active/u);
+
+    const limitedBudgetScopeId = await createBudgetScopeForTest(registrar, {
+      scope_type: 'workflow',
+      owner_id: 'workflow_run_token_limit',
+      limits: { input_token_limit: 5, request_limit: 1 },
+      policy_version: 'policy-budget-track2-v1',
+    });
+    const tokenReply = new CapturingReply();
+    const tokenLimit = (await route(registrar, 'POST', BUDGET_RESERVATIONS_BASE_PATH).handler(
+      {
+        headers: authHeaders(),
+        body: validBudgetReservationBody(limitedBudgetScopeId, {
+          workflow_run_id: 'workflow_run_token_limit',
+          delegation_id: null,
+          tool_class: null,
+          input_tokens: 6,
+          idempotency_key: 'idempotency_budget_token_limit_denied',
+          request_id: 'request_budget_token_limit_denied',
+          trace_id: 'trace_budget_token_limit_denied',
+        }),
+      },
+      tokenReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(tokenReply.statusCode, 400);
+    assert.match(tokenLimit.error.message, /input_token_limit/u);
+
+    await route(registrar, 'POST', BUDGET_RESERVATIONS_BASE_PATH).handler({
+      headers: authHeaders(),
+      body: validBudgetReservationBody(limitedBudgetScopeId, {
+        workflow_run_id: 'workflow_run_token_limit',
+        delegation_id: null,
+        tool_class: null,
+        input_tokens: 1,
+        idempotency_key: 'idempotency_budget_request_limit_allowed',
+        request_id: 'request_budget_request_limit_allowed',
+        trace_id: 'trace_budget_request_limit_allowed',
+      }),
+    });
+
+    const requestReply = new CapturingReply();
+    const requestLimit = (await route(registrar, 'POST', BUDGET_RESERVATIONS_BASE_PATH).handler(
+      {
+        headers: authHeaders(),
+        body: validBudgetReservationBody(limitedBudgetScopeId, {
+          workflow_run_id: 'workflow_run_token_limit',
+          delegation_id: null,
+          tool_class: null,
+          input_tokens: 1,
+          idempotency_key: 'idempotency_budget_request_limit_denied',
+          request_id: 'request_budget_request_limit_denied',
+          trace_id: 'trace_budget_request_limit_denied',
+        }),
+      },
+      requestReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(requestReply.statusCode, 400);
+    assert.match(requestLimit.error.message, /request_limit/u);
+  });
+
   it('fails closed in production with production_disabled_route', async () => {
     const registrar = new CapturingRegistrar();
     registerBudgetRoutes(registrar, { runtimeEnvironment: 'production' });
@@ -614,6 +714,27 @@ describe('control API agent workflow routes', () => {
     assert.equal(cancelResult.cancellation_request.requested_by_principal_id, 'principal_test');
     assert.equal(cancelResult.cancellation_request.request_id, 'request_track2_cancel');
     assert.equal(cancelResult.cancellation_request.cancellation_reason, 'operator-requested-test-cancel');
+  });
+
+  it('rejects idempotency-key task replays with different create inputs', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+    await route(registrar, 'POST', TASKS_BASE_PATH).handler({
+      headers: authHeaders(),
+      body: validTaskBody(),
+    });
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'POST', TASKS_BASE_PATH).handler(
+      {
+        headers: authHeaders(),
+        body: { ...validTaskBody(), priority: 'low' },
+      },
+      reply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(reply.statusCode, 409);
+    assert.equal(result.error.code, 'invalid_state');
+    assert.match(result.error.message, /idempotency_key replay/u);
   });
 
   it('returns artifact metadata only without bodies, signed URLs, prompts, or secrets', async () => {
@@ -748,7 +869,7 @@ describe('control API agent workflow routes', () => {
     const registrar = registerAgentWorkflowRoutesForTest();
 
     const allSkills = (await route(registrar, 'GET', SKILLS_BASE_PATH).handler({
-      headers: authHeaders(),
+      headers: authHeaders('principal_demo', 'project_demo'),
       query: {},
     })) as SkillListEnvelope;
 
@@ -759,12 +880,24 @@ describe('control API agent workflow routes', () => {
     assertNoSensitiveControlPayload(allSkills);
 
     const filtered = (await route(registrar, 'GET', SKILLS_BASE_PATH).handler({
-      headers: authHeaders(),
+      headers: authHeaders('principal_demo', 'project_demo'),
       query: { project_id: 'does_not_match' },
     })) as SkillListEnvelope;
 
     assert.equal(filtered.count, 0);
     assert.deepEqual(filtered.skills, []);
+
+    const mismatchedPrincipalReply = new CapturingReply();
+    const mismatchedPrincipal = (await route(registrar, 'GET', SKILLS_BASE_PATH).handler(
+      {
+        headers: authHeaders(),
+        query: { principal_id: 'principal_other' },
+      },
+      mismatchedPrincipalReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(mismatchedPrincipalReply.statusCode, 403);
+    assert.equal(mismatchedPrincipal.error.code, 'invalid_state');
   });
 
   it('lists bundled registry-backed skills and filters by registry project and status without an injected store', async () => {
@@ -1187,7 +1320,7 @@ function registerBundledSkillRoutesForTest(
     now: new Date('2026-06-21T10:31:00.000Z'),
     ...(options.registrySnapshot === undefined ? {} : { registrySnapshot: options.registrySnapshot }),
     authenticate: async () => ({
-      principalId: 'principal_test',
+      principalId: 'principal:skill-registry-admin',
       authSubjectRef: 'subject_test',
     }),
   });

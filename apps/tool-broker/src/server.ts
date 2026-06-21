@@ -149,6 +149,7 @@ const DEFAULT_POLICY_VERSION = 'tool-broker-readonly-policy.v1';
 const DEFAULT_REGISTRY_VERSION = `${tool_integrationsPackage.name}:${tool_integrationsPackage.status}`;
 const DEFAULT_MAX_BODY_BYTES = 1_048_576;
 const MAX_AUDIT_RECORDS = 500;
+const MCP_BATCH_CONCURRENCY_LIMIT = 4;
 const SAFE_TOOL_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{1,120}$/u;
 const SAFE_CONTEXT_VALUE_PATTERN = /^[a-z0-9][a-z0-9._:@/-]{0,127}$/iu;
 const READ_ROLES = new Set(['admin', 'auditor', 'developer', 'operator', 'reader', 'service', 'viewer']);
@@ -542,11 +543,34 @@ export async function handleMcpJsonRpc(
         if (body.length === 0) {
             return { statusCode: 400, body: jsonRpcError(null, -32600, 'JSON-RPC batch must not be empty.', { code: 'INVALID_REQUEST' }) };
         }
-        const responses = await Promise.all(body.map((item) => handleSingleMcpRequest(item, request, options)));
+        const responses = await mapWithConcurrencyLimit(body, MCP_BATCH_CONCURRENCY_LIMIT, (item) =>
+            handleSingleMcpRequest(item, request, options),
+        );
         return { statusCode: responses.some((item) => 'error' in item) ? 400 : 200, body: responses };
     }
     const response = await handleSingleMcpRequest(body, request, options);
     return { statusCode: 'error' in response ? 400 : 200, body: response };
+}
+
+async function mapWithConcurrencyLimit<T, R>(
+    items: readonly T[],
+    limit: number,
+    mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+    const results = new Array<R>(items.length);
+    const iterator = items.entries();
+    const workerCount = Math.min(limit, items.length);
+    await Promise.all(
+        Array.from({ length: workerCount }, async () => {
+            for (;;) {
+                const next = iterator.next();
+                if (next.done === true) break;
+                const [index, item] = next.value;
+                results[index] = await mapper(item);
+            }
+        }),
+    );
+    return results;
 }
 
 async function handleSingleMcpRequest(
@@ -635,6 +659,8 @@ function finalizeToolCallResult(
     options: Required<BrokerServerOptions>,
 ): BrokerToolCallResponse {
     if (result.ok) {
+        const sanitizedArtifacts = (result.artifacts ?? []).map(toAuditArtifactRef);
+        const sanitizedMetadata = sanitizeToolMetadata(result.metadata ?? {});
         const auditRecord = createAuditRecord({
             toolCallId,
             toolId: result.toolId,
@@ -657,8 +683,8 @@ function finalizeToolCallResult(
                 trace_id: auditRecord.trace_id,
                 request_id: auditRecord.request_id,
                 result: result.data,
-                artifacts: result.artifacts,
-                metadata: result.metadata,
+                artifacts: sanitizedArtifacts,
+                metadata: sanitizedMetadata,
             },
         };
     }
@@ -849,7 +875,12 @@ function toMcpToolCallResult(body: unknown): Record<string, unknown> {
 }
 
 function isReadOnlyDefinition(definition: ReadOnlyToolDefinition): boolean {
-    return definition.readOnly === true && definition.effect === 'read' && definition.externalNetworkAccess === false;
+    return (
+        definition.readOnly === true &&
+        definition.effect === 'read' &&
+        definition.externalNetworkAccess === false &&
+        definition.outputContainsRawContent === false
+    );
 }
 
 function isToolVisibleForContext(definition: ReadOnlyToolDefinition, context: BrokerPolicyContext): boolean {

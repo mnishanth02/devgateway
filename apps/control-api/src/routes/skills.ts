@@ -11,6 +11,7 @@ import { gatewayControlContractVersion, type EnvironmentName } from '../../../..
 import type { ControlRouteAuthContext, ControlRouteDefinition, ControlRouteRequest } from './virtual-keys.ts';
 import { stalePolicyControlError } from '../policies/control-errors.ts';
 import {
+  AgentWorkflowRouteValidationError,
   asSkillListFilter,
   assertAgentWorkflowRouteEnabledOutsideProduction,
   authenticateAgentWorkflowRequest,
@@ -63,8 +64,15 @@ export function registerSkillRoutes(registrar: SkillRouteRegistrar, options: Ski
     handler: async (request, reply) =>
       handleKnownAgentWorkflowRouteErrors(reply, async () => {
         assertAgentWorkflowRouteEnabledOutsideProduction(options, 'skills-list');
-        await authenticateAgentWorkflowRequest(request, options);
-        const skills = await store.listSkills(asSkillListFilter(request.query));
+        const actor = await authenticateAgentWorkflowRequest(request, options);
+        const requestedFilter = asSkillListFilter(request.query);
+        if (requestedFilter.principal_id !== undefined && requestedFilter.principal_id !== actor.principalId) {
+          throw new AgentWorkflowRouteValidationError('principal_id filter must match authenticated principal.', {
+            statusCode: 403,
+            code: 'invalid_state',
+          });
+        }
+        const skills = await store.listSkills({ ...requestedFilter, principal_id: actor.principalId });
         return respond(reply, 200, {
           skills: skills.map(toSkillResponse),
           count: skills.length,

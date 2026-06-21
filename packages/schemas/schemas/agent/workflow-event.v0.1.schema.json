@@ -60,9 +60,9 @@
   "additionalProperties": false,
   "$defs": {
     "nonEmptyString": { "type": "string", "minLength": 1 },
-    "nullableNonEmptyString": { "type": ["string", "null"], "minLength": 1 },
-    "eventType": { "type": "string", "enum": ["workflow_created", "state_transitioned", "agent_run_started", "delegation_created", "delegation_completed", "tool_call_decided", "artifact_recorded", "budget_recorded", "audit_recorded", "workflow_completed", "workflow_failed"] },
-    "workflowStatus": { "type": "string", "enum": ["created", "queued", "planning", "running", "waiting_on_child", "synthesizing", "succeeded", "failed", "cancelled", "timed_out", "denied"] },
+    "nullableNonEmptyString": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+    "eventType": { "type": "string", "enum": ["workflow_created", "state_transitioned", "workflow_state_changed", "step_created", "step_state_changed", "agent_run_started", "delegation_created", "delegation_completed", "delegation_state_changed", "tool_call_decided", "agent_run_state_changed", "tool_call_state_changed", "artifact_recorded", "budget_recorded", "budget_reserved", "cost_recorded", "audit_recorded", "heartbeat", "lease_acquired", "lease_released", "workflow_completed", "workflow_failed", "error", "cancel_requested"] },
+    "workflowStatus": { "type": "string", "enum": ["created", "draft", "queued", "planning", "delegating", "dispatched", "leased", "running", "waiting", "waiting_on_child", "synthesizing", "succeeded", "completed", "failed", "authorized", "denied", "invalid_output", "skipped", "cancel_requested", "cancelled", "timed_out"] },
     "dataClass": { "type": "string", "enum": ["public", "internal", "confidential", "restricted"] },
     "traceContextRef": {
       "type": "object",

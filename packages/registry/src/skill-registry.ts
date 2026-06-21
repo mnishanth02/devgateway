@@ -271,6 +271,10 @@ export function validateSkillRegistry(input: SkillRegistryValidationInput): Skil
 
   snapshot.skills.forEach((skill, index) => {
     const path = `$.skills[${index}]`;
+    if (!isSkillRegistryRecordCandidate(skill)) {
+      issues.push({ code: 'schema', path, message: 'skill entry must be an object' });
+      return;
+    }
     if (seenSkillDefinitions.has(skill.skill_definition_id)) {
       issues.push({
         code: 'schema',
@@ -389,10 +393,11 @@ function validateSkillRegistryEnvelope(
       message: 'skill registry must include at least two non-production skills',
     });
   }
-  if (!snapshot.skills.some((skill) => skill.status === 'draft')) {
+  const skillRecords = snapshot.skills.filter(isRecord);
+  if (!skillRecords.some((skill) => skill.status === 'draft')) {
     issues.push({ code: 'schema', path: '$.skills', message: 'skill registry must include a draft skill' });
   }
-  if (!snapshot.skills.some((skill) => skill.status === 'eval_ready')) {
+  if (!skillRecords.some((skill) => skill.status === 'eval_ready')) {
     issues.push({ code: 'schema', path: '$.skills', message: 'skill registry must include an eval_ready skill' });
   }
 }
@@ -572,6 +577,7 @@ function validateToolRefs(
   refs.forEach((ref, index) => {
     const refPath = `${path}[${index}]`;
     validateToolRef(ref, refPath, mode, issues);
+    if (!isRecord(ref)) return;
     const key = `${ref.tool_definition_id}@${ref.tool_version}`;
     if (seen.has(key)) {
       issues.push({ code: 'tool_ref', path: refPath, message: `duplicate tool ref "${key}"` });
@@ -1068,6 +1074,10 @@ function assertString(value: unknown, label: string): asserts value is string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isSkillRegistryRecordCandidate(value: unknown): value is SkillRegistryRecord {
+  return isRecord(value) && typeof value.skill_definition_id === 'string' && typeof value.skill_version_id === 'string';
 }
 
 function isValidDateTime(value: string): boolean {

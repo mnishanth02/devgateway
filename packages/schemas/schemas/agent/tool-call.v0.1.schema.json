@@ -141,7 +141,7 @@
       "type": "object",
       "required": ["decision", "policy_ref", "denial_reason", "evaluated_at"],
       "properties": {
-        "decision": { "type": "string", "enum": ["allowed", "denied", "approval_required"] },
+        "decision": { "type": "string", "enum": ["allow", "deny", "review"] },
         "policy_ref": { "$ref": "#/$defs/nonEmptyString" },
         "denial_reason": { "$ref": "#/$defs/nullableNonEmptyString" },
         "evaluated_at": { "type": "string", "format": "date-time" }

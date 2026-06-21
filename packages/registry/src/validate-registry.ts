@@ -169,8 +169,15 @@ export function validateRegistryCli(options: RegistryValidationCliOptions = {}):
   const validation = validateRegistry({ snapshot, gateResults: gateResultLoad.gateResults });
   const negativeFixture = validateRegistryNegativeFixtures();
   const skillRegistry = getBundledSkillRegistrySnapshot();
-  const skillValidation = validateSkillRegistry({ snapshot: skillRegistry, modelRegistry: snapshot });
-  const skillNegativeFixture = validateSkillRegistryNegativeFixtures({ modelRegistry: snapshot });
+  const skillValidation = validateSkillRegistry({
+    snapshot: skillRegistry,
+    modelRegistry: snapshot,
+    gateResults: gateResultLoad.gateResults,
+  });
+  const skillNegativeFixture = validateSkillRegistryNegativeFixtures({
+    modelRegistry: snapshot,
+    gateResults: gateResultLoad.gateResults,
+  });
   const issues: RegistryValidationIssue[] = [
     ...gateResultLoad.issues,
     ...validation.issues,

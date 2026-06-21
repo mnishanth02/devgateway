@@ -145,12 +145,12 @@ Scope: non-production contract, database, Control API, workflow runtime, fixture
 | `pnpm --filter @devgateway/registry test` | Pass | Ran 5 skill registry tests for lifecycle/ref/content-safety validation. |
 | `pnpm --filter @devgateway/admin-portal typecheck` | Pass | Validated Track 2 trace view model and `/trace` route TypeScript. |
 | `pnpm --filter @devgateway/admin-portal test` | Pass | Ran admin portal node tests plus 27 Vitest tests including trace endpoint, sanitization, route rendering, denial highlighting, and local preview coverage. |
-| `python -m compileall -q workers\agent-runtime\src workers\agent-runtime\tests` | Pass | Compiled runtime source and tests. |
+| `python -m compileall -q workers/agent-runtime/src workers/agent-runtime/tests` | Pass | Compiled runtime source and tests. |
 | `pnpm --filter @devgateway/agent-runtime typecheck` | Pass | Runs runtime compile validation through package script. |
 | `pnpm --filter @devgateway/agent-runtime test` | Pass | Ran 22 stdlib unittest cases for the runtime and execution skeleton, including review-fix regressions. |
 | `pnpm --filter @devgateway/agent-runtime transit` | Pass | Ran fixture-only runtime CLI smoke through the package script. |
-| `PYTHONPATH=workers\agent-runtime\src python -m devgateway_agent_runtime --mode fixture --format json` | Pass | Emitted JSON with workflow state `completed`, fixture mode, no live external calls, idempotency scopes, and zero open leases. |
-| `PYTHONPATH=workers\agent-runtime\src python -m devgateway_agent_runtime --mode fixture --fixture execution --format json` | Pass | Emitted JSON with completed workflow, two child delegations across distinct fixture aliases, validated child results, synthesis metadata, and no live external calls. |
+| `PYTHONPATH=workers/agent-runtime/src python -m devgateway_agent_runtime --mode fixture --format json` | Pass | Emitted JSON with workflow state `completed`, fixture mode, no live external calls, idempotency scopes, and zero open leases. |
+| `PYTHONPATH=workers/agent-runtime/src python -m devgateway_agent_runtime --mode fixture --fixture execution --format json` | Pass | Emitted JSON with completed workflow, two child delegations across distinct fixture aliases, validated child results, synthesis metadata, and no live external calls. |
 | `pnpm workspace:validate` | Pass | Root tooling, eval layout, and schema checks passed. |
 | `pnpm eval:smoke` | Pass | Track 0/1 and Track 2 fixture suites passed with no live provider calls. |
 | `pnpm typecheck` | Pass | Root typecheck completed across all packages. |

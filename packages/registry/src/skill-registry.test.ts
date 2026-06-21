@@ -121,6 +121,38 @@ describe('skill registry validation', () => {
       );
     }
   });
+
+  it('records validation issues for non-object skill entries', () => {
+    const snapshot = mutableSkillSnapshot() as unknown as { skills: unknown[] };
+    snapshot.skills = [null];
+
+    const result = validateSkillRegistry({
+      snapshot: snapshot as SkillRegistrySnapshot,
+      modelRegistry: getBundledRegistrySnapshot(),
+      now: validationNow,
+    });
+
+    assert.equal(result.ok, false);
+    assert.ok(
+      result.issues.some((issue) => issue.code === 'schema' && issue.path === '$.skills[0]'),
+      JSON.stringify(result.issues, null, 2),
+    );
+  });
+
+  it('records validation issues for non-object tool refs', () => {
+    const snapshot = mutableSkillSnapshot();
+    const skill = snapshot.skills[0];
+    assert.ok(skill, 'bundled registry should include a skill to mutate');
+    skill.allowed_tool_refs = [null as unknown as SkillToolRef];
+
+    const result = validateBundledSnapshot(snapshot);
+
+    assert.equal(result.ok, false);
+    assert.ok(
+      result.issues.some((issue) => issue.code === 'tool_ref' && issue.path.endsWith('.allowed_tool_refs[0]')),
+      JSON.stringify(result.issues, null, 2),
+    );
+  });
 });
 
 function validateBundledSnapshot(snapshot: SkillRegistrySnapshot) {

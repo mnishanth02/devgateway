@@ -33,15 +33,28 @@ export const workflowAllowedTransitions = {
 export const workflowEventTypes = [
   'workflow_created',
   'state_transitioned',
+  'workflow_state_changed',
+  'step_created',
+  'step_state_changed',
   'agent_run_started',
   'delegation_created',
   'delegation_completed',
+  'delegation_state_changed',
   'tool_call_decided',
+  'agent_run_state_changed',
+  'tool_call_state_changed',
   'artifact_recorded',
   'budget_recorded',
+  'budget_reserved',
+  'cost_recorded',
   'audit_recorded',
+  'heartbeat',
+  'lease_acquired',
+  'lease_released',
   'workflow_completed',
   'workflow_failed',
+  'error',
+  'cancel_requested',
 ] as const;
 
 export const agentRoles = ['supervisor', 'planner', 'researcher', 'synthesizer', 'reviewer', 'tool_executor', 'custom'] as const;
@@ -82,7 +95,7 @@ export const toolRiskTiers = [
   'disallowed_write',
   'network_restricted',
 ] as const;
-export const toolPolicyDecisions = ['allowed', 'denied', 'approval_required'] as const;
+export const toolPolicyDecisions = ['allow', 'deny', 'review'] as const;
 export const toolCallStatuses = ['queued', 'running', 'succeeded', 'failed', 'denied', 'cancelled', 'timed_out'] as const;
 export const toolDefinitionStatuses = ['draft', 'active', 'disabled', 'archived'] as const;
 
@@ -313,7 +326,7 @@ export type FailureCause = FailureRef;
 
 export interface WorkflowStepRef {
   readonly step_id: string;
-  readonly step_type: 'planning' | 'delegation' | 'tool_call' | 'model_call' | 'synthesis' | 'terminalization';
+  readonly step_type: 'plan' | 'delegate' | 'agent' | 'tool' | 'synthesize' | 'review' | 'artifact';
   readonly step_status: WorkflowState;
   readonly agent_run_id: string | null;
   readonly delegation_id: string | null;
@@ -722,5 +735,5 @@ function collectForbiddenAgentWorkflowMetadataFields(
 }
 
 function normalizeAgentWorkflowMetadataFieldKey(key: string): string {
-  return key.toLowerCase().replace(/[_-]/gu, '');
+  return key.toLowerCase().replace(/[^a-z0-9]/gu, '');
 }
