@@ -174,6 +174,7 @@ describe('control-api Fastify foundation', () => {
 
       const document = response.json();
       assert.equal(document.openapi, '3.1.0');
+      assert.equal(document.servers[0].url, '/');
       assert.ok(document.paths['/healthz']);
       assert.ok(document.paths['/readyz']);
       assert.ok(document.paths['/api/auth/ok']);

@@ -9,8 +9,8 @@
   },
   "scripts": {
     "build": "tsc --noEmit && vite build",
-    "dev": "vite --host 127.0.0.1 --port 43101",
-    "start": "vite preview --host 127.0.0.1 --port 43101",
+    "dev": "vite",
+    "start": "vite preview",
     "test": "node --experimental-strip-types --test src/server.test.ts src/auth/sensitive-action-guards.test.ts && vitest run",
     "typecheck": "tsc --noEmit"
   },

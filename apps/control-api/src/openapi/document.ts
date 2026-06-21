@@ -20,8 +20,8 @@ export function createOpenApiDocumentOptions(
     },
     servers: [
       {
-        url: 'http://127.0.0.1:43100',
-        description: 'Local development',
+        url: '/',
+        description: 'Current deployment origin',
       },
     ],
     tags: [
