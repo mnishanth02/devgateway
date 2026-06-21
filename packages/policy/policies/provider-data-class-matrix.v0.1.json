@@ -2,6 +2,8 @@
   "$schema": "https://devgateway.local/schemas/policy/provider-policy.v0.1.schema.json",
   "schemaVersion": "0.1.0",
   "matrixId": "provider-data-class-matrix.v0.1",
+  "createdAt": "2026-06-20T07:48:38.024Z",
+  "freshnessExpiresAt": "2026-12-31T00:00:00.000Z",
   "status": "track_0_governance_only",
   "productionEnablement": {
     "enabled": false,
@@ -35,15 +37,28 @@
   "providers": [
     {
       "providerId": "openai-track0-external",
-      "displayName": "OpenAI Track 0 external placeholder",
+      "displayName": "OpenAI non-production external provider",
       "providerKind": "external_model",
       "externalModelCalls": true,
       "lifecycle": "approved_non_production",
       "productionEnabled": false,
-      "allowedModelAliases": ["track0-public-chat", "track0-internal-chat"],
+      "allowedModelAliases": [
+        "devgateway/orchestrator",
+        "devgateway/deep-reasoning",
+        "devgateway/code-review",
+        "devgateway/large-context",
+        "devgateway/fast",
+        "devgateway/retrieval-planner"
+      ],
       "dataClassPolicy": {
-        "allowedDataClasses": ["public", "internal"],
-        "deniedDataClasses": ["confidential", "restricted"],
+        "allowedDataClasses": [
+          "public",
+          "internal"
+        ],
+        "deniedDataClasses": [
+          "confidential",
+          "restricted"
+        ],
         "restrictedExternalCallsDefaultDeny": true,
         "confidentialRequiresDpaOrZdrOrApproval": true,
         "internalRequiresAcceptableRetentionTraining": true
@@ -59,7 +74,10 @@
         "subprocessorsDocumented": true
       },
       "regionPolicy": {
-        "allowedRegions": ["us", "eu"],
+        "allowedRegions": [
+          "us",
+          "eu"
+        ],
         "disallowedRegions": [],
         "requiresRegionPinning": true
       },
@@ -67,11 +85,17 @@
         "mode": "metadata_only",
         "sensitiveSnippetRedactionRequired": true,
         "retentionDays": 30,
-        "allowedForDataClasses": ["public", "internal"]
+        "allowedForDataClasses": [
+          "public",
+          "internal"
+        ]
       },
       "manualApprovalGate": {
         "required": true,
-        "requiredForDataClasses": ["confidential", "restricted"],
+        "requiredForDataClasses": [
+          "confidential",
+          "restricted"
+        ],
         "productionApprovalRequired": true,
         "approvalReference": null
       },
@@ -84,7 +108,10 @@
         "requiresRateLimitCheck": true
       },
       "semanticCachePolicy": {
-        "eligibleDataClasses": ["public", "internal"],
+        "eligibleDataClasses": [
+          "public",
+          "internal"
+        ],
         "requiresAclScopedCacheKey": true
       },
       "auditability": {
@@ -95,15 +122,28 @@
     },
     {
       "providerId": "anthropic-track0-external",
-      "displayName": "Anthropic Track 0 external placeholder",
+      "displayName": "Anthropic non-production external provider",
       "providerKind": "external_model",
       "externalModelCalls": true,
       "lifecycle": "approved_non_production",
       "productionEnabled": false,
-      "allowedModelAliases": ["track0-public-chat", "track0-internal-chat"],
+      "allowedModelAliases": [
+        "devgateway/orchestrator",
+        "devgateway/deep-reasoning",
+        "devgateway/code-review",
+        "devgateway/large-context",
+        "devgateway/fast",
+        "devgateway/retrieval-planner"
+      ],
       "dataClassPolicy": {
-        "allowedDataClasses": ["public", "internal"],
-        "deniedDataClasses": ["confidential", "restricted"],
+        "allowedDataClasses": [
+          "public",
+          "internal"
+        ],
+        "deniedDataClasses": [
+          "confidential",
+          "restricted"
+        ],
         "restrictedExternalCallsDefaultDeny": true,
         "confidentialRequiresDpaOrZdrOrApproval": true,
         "internalRequiresAcceptableRetentionTraining": true
@@ -119,7 +159,10 @@
         "subprocessorsDocumented": true
       },
       "regionPolicy": {
-        "allowedRegions": ["us", "eu"],
+        "allowedRegions": [
+          "us",
+          "eu"
+        ],
         "disallowedRegions": [],
         "requiresRegionPinning": true
       },
@@ -127,11 +170,17 @@
         "mode": "metadata_only",
         "sensitiveSnippetRedactionRequired": true,
         "retentionDays": 30,
-        "allowedForDataClasses": ["public", "internal"]
+        "allowedForDataClasses": [
+          "public",
+          "internal"
+        ]
       },
       "manualApprovalGate": {
         "required": true,
-        "requiredForDataClasses": ["confidential", "restricted"],
+        "requiredForDataClasses": [
+          "confidential",
+          "restricted"
+        ],
         "productionApprovalRequired": true,
         "approvalReference": null
       },
@@ -144,7 +193,10 @@
         "requiresRateLimitCheck": true
       },
       "semanticCachePolicy": {
-        "eligibleDataClasses": ["public", "internal"],
+        "eligibleDataClasses": [
+          "public",
+          "internal"
+        ],
         "requiresAclScopedCacheKey": true
       },
       "auditability": {
@@ -160,10 +212,18 @@
       "externalModelCalls": true,
       "lifecycle": "evaluation_only",
       "productionEnabled": false,
-      "allowedModelAliases": ["track0-confidential-chat"],
+      "allowedModelAliases": [
+        "track0-confidential-chat"
+      ],
       "dataClassPolicy": {
-        "allowedDataClasses": ["public", "internal", "confidential"],
-        "deniedDataClasses": ["restricted"],
+        "allowedDataClasses": [
+          "public",
+          "internal",
+          "confidential"
+        ],
+        "deniedDataClasses": [
+          "restricted"
+        ],
         "restrictedExternalCallsDefaultDeny": true,
         "confidentialRequiresDpaOrZdrOrApproval": true,
         "internalRequiresAcceptableRetentionTraining": true
@@ -179,7 +239,10 @@
         "subprocessorsDocumented": true
       },
       "regionPolicy": {
-        "allowedRegions": ["us", "eu"],
+        "allowedRegions": [
+          "us",
+          "eu"
+        ],
         "disallowedRegions": [],
         "requiresRegionPinning": true
       },
@@ -187,11 +250,17 @@
         "mode": "redacted_snippets_allowed",
         "sensitiveSnippetRedactionRequired": true,
         "retentionDays": 14,
-        "allowedForDataClasses": ["public", "internal", "confidential"]
+        "allowedForDataClasses": [
+          "public",
+          "internal",
+          "confidential"
+        ]
       },
       "manualApprovalGate": {
         "required": true,
-        "requiredForDataClasses": ["confidential"],
+        "requiredForDataClasses": [
+          "confidential"
+        ],
         "productionApprovalRequired": true,
         "approvalReference": null
       },
@@ -204,7 +273,10 @@
         "requiresRateLimitCheck": true
       },
       "semanticCachePolicy": {
-        "eligibleDataClasses": ["public", "internal"],
+        "eligibleDataClasses": [
+          "public",
+          "internal"
+        ],
         "requiresAclScopedCacheKey": true
       },
       "auditability": {
@@ -220,9 +292,16 @@
       "externalModelCalls": false,
       "lifecycle": "approved_self_hosted",
       "productionEnabled": false,
-      "allowedModelAliases": ["track0-self-hosted-chat"],
+      "allowedModelAliases": [
+        "track0-self-hosted-chat"
+      ],
       "dataClassPolicy": {
-        "allowedDataClasses": ["public", "internal", "confidential", "restricted"],
+        "allowedDataClasses": [
+          "public",
+          "internal",
+          "confidential",
+          "restricted"
+        ],
         "deniedDataClasses": [],
         "restrictedExternalCallsDefaultDeny": true,
         "confidentialRequiresDpaOrZdrOrApproval": true,
@@ -239,7 +318,9 @@
         "subprocessorsDocumented": false
       },
       "regionPolicy": {
-        "allowedRegions": ["project_local"],
+        "allowedRegions": [
+          "project_local"
+        ],
         "disallowedRegions": [],
         "requiresRegionPinning": true
       },
@@ -247,11 +328,18 @@
         "mode": "metadata_only",
         "sensitiveSnippetRedactionRequired": true,
         "retentionDays": 7,
-        "allowedForDataClasses": ["public", "internal", "confidential", "restricted"]
+        "allowedForDataClasses": [
+          "public",
+          "internal",
+          "confidential",
+          "restricted"
+        ]
       },
       "manualApprovalGate": {
         "required": true,
-        "requiredForDataClasses": ["restricted"],
+        "requiredForDataClasses": [
+          "restricted"
+        ],
         "productionApprovalRequired": true,
         "approvalReference": null
       },
@@ -264,7 +352,10 @@
         "requiresRateLimitCheck": true
       },
       "semanticCachePolicy": {
-        "eligibleDataClasses": ["public", "internal"],
+        "eligibleDataClasses": [
+          "public",
+          "internal"
+        ],
         "requiresAclScopedCacheKey": true
       },
       "auditability": {
@@ -280,9 +371,16 @@
       "externalModelCalls": false,
       "lifecycle": "approved_non_production",
       "productionEnabled": false,
-      "allowedModelAliases": ["deterministic-tooling"],
+      "allowedModelAliases": [
+        "deterministic-tooling"
+      ],
       "dataClassPolicy": {
-        "allowedDataClasses": ["public", "internal", "confidential", "restricted"],
+        "allowedDataClasses": [
+          "public",
+          "internal",
+          "confidential",
+          "restricted"
+        ],
         "deniedDataClasses": [],
         "restrictedExternalCallsDefaultDeny": true,
         "confidentialRequiresDpaOrZdrOrApproval": false,
@@ -299,7 +397,9 @@
         "subprocessorsDocumented": false
       },
       "regionPolicy": {
-        "allowedRegions": ["project_local"],
+        "allowedRegions": [
+          "project_local"
+        ],
         "disallowedRegions": [],
         "requiresRegionPinning": true
       },
@@ -307,7 +407,12 @@
         "mode": "metadata_only",
         "sensitiveSnippetRedactionRequired": true,
         "retentionDays": 7,
-        "allowedForDataClasses": ["public", "internal", "confidential", "restricted"]
+        "allowedForDataClasses": [
+          "public",
+          "internal",
+          "confidential",
+          "restricted"
+        ]
       },
       "manualApprovalGate": {
         "required": false,
@@ -324,7 +429,10 @@
         "requiresRateLimitCheck": true
       },
       "semanticCachePolicy": {
-        "eligibleDataClasses": ["public", "internal"],
+        "eligibleDataClasses": [
+          "public",
+          "internal"
+        ],
         "requiresAclScopedCacheKey": true
       },
       "auditability": {

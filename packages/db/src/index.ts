@@ -1,9 +1,10 @@
 export const dbPackage = {
   name: '@devgateway/db',
-  status: 'phase-0-7-gate-persistence-contract',
+  status: 'phase-1-1-db-tooling-check-seed-separation',
 } as const;
 
 export * from './schema-conventions.js';
+export * from './seeds/index.js';
 export {
   evalGatePersistenceContractVersion,
   evalGatePersistenceProductionPosture,

@@ -33,6 +33,17 @@ export const LOCAL_PORTS = Object.freeze({
   grafana: 43030,
 });
 
+export const LOCAL_BIFROST_IMAGE =
+  'maximhq/bifrost:v1.5.15-ubi9@sha256:39c757944a55f4a15d27a4851c482084472fb4bc1e2f450f2d0fe2075d0905d2';
+export const LOCAL_BIFROST_CONFIG_PATH = 'infra/bifrost/bifrost.config.example.yaml';
+export const LOCAL_BIFROST_RUNTIME_CONFIG_PATH = 'infra/bifrost/config.runtime.example.json';
+export const LOCAL_BIFROST_CONTAINER_CONFIG_PATH = '/app/data/config.json';
+export const LOCAL_BIFROST_ROUTE_CONFIG_VERSION =
+  'bifrost.model-aliases.v0.1.provider-data-class-matrix.v0.1.disabled';
+export const LOCAL_BIFROST_POLICY_VERSION = 'provider-data-class-matrix.v0.1';
+export const LOCAL_BIFROST_HEALTH_PATH = '/health';
+export const LOCAL_PROVIDER_KEY_PLACEHOLDER = 'local-provider-key-placeholder';
+
 const commandNames = ['setup', 'dev', 'stop', 'status', 'reset', 'help'];
 const profileNames = ['all', 'backend', 'deps', 'frontend'];
 
@@ -72,6 +83,7 @@ const dependencyPorts = [
   LOCAL_PORTS.otelGrpc,
   LOCAL_PORTS.otelHttp,
   LOCAL_PORTS.otelHealth,
+  LOCAL_PORTS.bifrost,
   LOCAL_PORTS.prometheus,
   LOCAL_PORTS.grafana,
 ];
@@ -147,11 +159,15 @@ REDIS_RATE_LIMIT_NAMESPACE=devgateway:ratelimit:local
 BIFROST_BASE_URL=http://localhost:${LOCAL_PORTS.bifrost}
 BIFROST_ADMIN_TOKEN=local-bifrost-admin-token
 BIFROST_VIRTUAL_KEY_SEED=local-bifrost-virtual-key-seed
-BIFROST_CONFIG_PATH=infra/bifrost/bifrost.config.example.yaml
-BIFROST_ROUTE_CONFIG_VERSION=local
+BIFROST_CONFIG_PATH=${LOCAL_BIFROST_CONFIG_PATH}
+BIFROST_RUNTIME_CONFIG_PATH=${LOCAL_BIFROST_RUNTIME_CONFIG_PATH}
+BIFROST_CONTAINER_CONFIG_PATH=${LOCAL_BIFROST_CONTAINER_CONFIG_PATH}
+BIFROST_ROUTE_CONFIG_VERSION=${LOCAL_BIFROST_ROUTE_CONFIG_VERSION}
+BIFROST_POLICY_VERSION=${LOCAL_BIFROST_POLICY_VERSION}
+BIFROST_HEALTH_PATH=${LOCAL_BIFROST_HEALTH_PATH}
 BIFROST_BREAK_GLASS_ENABLED=false
-OPENAI_API_KEY=local-provider-key-placeholder
-ANTHROPIC_API_KEY=local-provider-key-placeholder
+DEVGATEWAY_OPENAI_API_KEY_PLACEHOLDER=${LOCAL_PROVIDER_KEY_PLACEHOLDER}
+DEVGATEWAY_ANTHROPIC_API_KEY_PLACEHOLDER=${LOCAL_PROVIDER_KEY_PLACEHOLDER}
 
 GITHUB_APP_ID=local-github-app-id
 GITHUB_APP_INSTALLATION_ID=local-github-app-installation-id
@@ -205,6 +221,122 @@ export function decidePortAction({ port, busyPid, recordedProcess }) {
   };
 }
 
+export function validateBifrostLocalEvidence({ env, config, runtimeConfig }) {
+  const issues = [];
+  const routeConfigVersion = config?.route_config_version;
+  const policyVersion = config?.generated_from?.policy?.version;
+  const configPath = env?.BIFROST_CONFIG_PATH;
+  const runtimeConfigPath = env?.BIFROST_RUNTIME_CONFIG_PATH;
+  const containerConfigPath = env?.BIFROST_CONTAINER_CONFIG_PATH;
+
+  if (config?.kind !== 'bifrost_config') {
+    issues.push('Bifrost config kind must be bifrost_config.');
+  }
+  if (!routeConfigVersion) {
+    issues.push('Bifrost config route_config_version is missing.');
+  }
+  if (!policyVersion) {
+    issues.push('Bifrost config generated_from.policy.version evidence is missing.');
+  }
+  if (!config?.generated_from?.registry?.checksum?.checksum) {
+    issues.push('Bifrost config generated_from.registry checksum evidence is missing.');
+  }
+  if (!config?.generated_from?.policy?.checksum?.checksum) {
+    issues.push('Bifrost config generated_from.policy checksum evidence is missing.');
+  }
+  if (config?.registry?.validate_before_start !== true) {
+    issues.push('Bifrost config must require registry validation before start.');
+  }
+  if (normalizeLocalPath(configPath) !== normalizeLocalPath(LOCAL_BIFROST_CONFIG_PATH)) {
+    issues.push(`BIFROST_CONFIG_PATH must be ${LOCAL_BIFROST_CONFIG_PATH}.`);
+  }
+  if (normalizeLocalPath(runtimeConfigPath) !== normalizeLocalPath(LOCAL_BIFROST_RUNTIME_CONFIG_PATH)) {
+    issues.push(`BIFROST_RUNTIME_CONFIG_PATH must be ${LOCAL_BIFROST_RUNTIME_CONFIG_PATH}.`);
+  }
+  if (containerConfigPath !== LOCAL_BIFROST_CONTAINER_CONFIG_PATH) {
+    issues.push(`BIFROST_CONTAINER_CONFIG_PATH must be ${LOCAL_BIFROST_CONTAINER_CONFIG_PATH}.`);
+  }
+  if (env?.BIFROST_ROUTE_CONFIG_VERSION !== routeConfigVersion) {
+    issues.push(`BIFROST_ROUTE_CONFIG_VERSION must match ${routeConfigVersion ?? 'the config route_config_version'}.`);
+  }
+  if (env?.BIFROST_POLICY_VERSION !== policyVersion) {
+    issues.push(`BIFROST_POLICY_VERSION must match ${policyVersion ?? 'the config policy version'}.`);
+  }
+  if (env?.BIFROST_BREAK_GLASS_ENABLED !== 'false') {
+    issues.push('BIFROST_BREAK_GLASS_ENABLED must be false for local readiness.');
+  }
+  if (env?.PRODUCTION_PROVISIONING_ENABLED !== 'false') {
+    issues.push('PRODUCTION_PROVISIONING_ENABLED must be false for local readiness.');
+  }
+  for (const forbiddenAutoDetectKey of ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY']) {
+    if (env?.[forbiddenAutoDetectKey] !== undefined) {
+      issues.push(`${forbiddenAutoDetectKey} must not be exposed to the Bifrost container before provider gates pass.`);
+    }
+  }
+  for (const key of ['DEVGATEWAY_OPENAI_API_KEY_PLACEHOLDER', 'DEVGATEWAY_ANTHROPIC_API_KEY_PLACEHOLDER']) {
+    if (env?.[key] !== LOCAL_PROVIDER_KEY_PLACEHOLDER) {
+      issues.push(`${key} must remain the local provider-key placeholder.`);
+    }
+  }
+  if (config?.production?.provider_credentials_enabled !== false) {
+    issues.push('Bifrost config must keep production provider credentials disabled.');
+  }
+  if (config?.production?.routes_enabled !== false) {
+    issues.push('Bifrost config must keep production routes disabled.');
+  }
+  if (config?.production?.provisioning_enabled !== false) {
+    issues.push('Bifrost config must keep production provisioning disabled.');
+  }
+  if (config?.production_disabled_posture?.provider_credentials_enabled !== false) {
+    issues.push('Bifrost disabled posture must keep provider credentials disabled.');
+  }
+  if (runtimeConfig !== undefined) {
+    issues.push(...validateBifrostRuntimeConfig(runtimeConfig));
+  }
+
+  return {
+    ok: issues.length === 0,
+    issues,
+    routeConfigVersion,
+    policyVersion,
+  };
+}
+
+export function validateBifrostRuntimeConfig(runtimeConfig) {
+  const issues = [];
+  if (runtimeConfig === null || typeof runtimeConfig !== 'object' || Array.isArray(runtimeConfig)) {
+    return ['Bifrost runtime config must be a JSON object.'];
+  }
+  if (runtimeConfig.providers === undefined || runtimeConfig.providers === null || typeof runtimeConfig.providers !== 'object' || Array.isArray(runtimeConfig.providers)) {
+    issues.push('Bifrost runtime config providers must be an object.');
+  } else if (Object.keys(runtimeConfig.providers).length !== 0) {
+    issues.push('Bifrost runtime config providers must remain empty until provider gates pass.');
+  }
+  for (const storeName of ['config_store', 'logs_store']) {
+    const store = runtimeConfig[storeName];
+    if (store === undefined || store === null || typeof store !== 'object' || Array.isArray(store)) {
+      issues.push(`Bifrost runtime config ${storeName} must be configured so the upstream runtime boots predictably.`);
+      continue;
+    }
+    if (store.enabled !== true) {
+      issues.push(`Bifrost runtime config ${storeName}.enabled must be true for local readiness.`);
+    }
+    if (store.type !== 'sqlite') {
+      issues.push(`Bifrost runtime config ${storeName}.type must be sqlite for local readiness.`);
+    }
+    if (typeof store.config?.path !== 'string' || !store.config.path.startsWith('/app/data/')) {
+      issues.push(`Bifrost runtime config ${storeName}.config.path must be under /app/data/.`);
+    }
+  }
+  const serialized = JSON.stringify(runtimeConfig);
+  for (const forbidden of ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'env.OPENAI', 'env.ANTHROPIC']) {
+    if (serialized.includes(forbidden)) {
+      issues.push(`Bifrost runtime config must not reference ${forbidden} before provider gates pass.`);
+    }
+  }
+  return issues;
+}
+
 function normalizeCommand(rawCommand) {
   if (!commandNames.includes(rawCommand)) {
     throw new Error(`Unknown command "${rawCommand}". Expected one of: ${commandNames.join(', ')}`);
@@ -221,6 +353,10 @@ function normalizeProfile(rawProfile) {
 
 function isDevgatewayCommand(command) {
   return typeof command === 'string' && /(@devgateway\/|devgateway-dev\.mjs|docker compose)/u.test(command);
+}
+
+function normalizeLocalPath(value) {
+  return typeof value === 'string' ? value.replaceAll('/', '\\').toLowerCase() : '';
 }
 
 async function main() {
@@ -283,6 +419,7 @@ async function dev(profile) {
     await ensureDependencyPorts();
     runCompose(['up', '-d', '--remove-orphans']);
     writeState({ ...readState(), composeProject });
+    await ensureBifrostReadiness();
     await status('deps');
     return;
   }
@@ -291,6 +428,7 @@ async function dev(profile) {
     ensureDockerAvailable({ required: true });
     await ensureDependencyPorts();
     runCompose(['up', '-d', '--remove-orphans']);
+    await ensureBifrostReadiness();
   }
 
   await cleanupRecordedProcesses(profile);
@@ -354,6 +492,13 @@ async function status(profile) {
     runCompose(['ps'], { optional: true });
   } else {
     console.log('Docker Compose status skipped: Docker is unavailable.');
+  }
+  if (profileUsesDependencies(profile)) {
+    const readiness = await collectBifrostReadiness();
+    printBifrostReadiness(readiness);
+    if (!readiness.ok) {
+      throw new Error(`Bifrost local readiness failed: ${readiness.issues.join('; ')}`);
+    }
   }
 }
 
@@ -422,6 +567,192 @@ async function cleanupRecordedProcesses(profile) {
 
 function profileMatches(requestedProfile, recordedProfile) {
   return requestedProfile === 'all' || requestedProfile === recordedProfile;
+}
+
+function profileUsesDependencies(profile) {
+  return profile === 'all' || profile === 'deps' || profile === 'backend' || profile === 'frontend';
+}
+
+async function ensureBifrostReadiness() {
+  const configReadiness = collectBifrostConfigReadiness();
+  if (!configReadiness.ok) {
+    throw new Error(`Bifrost config readiness failed: ${configReadiness.issues.join('; ')}`);
+  }
+
+  const env = readLocalEnvForBifrost();
+  const http = await waitForBifrostHttpReadiness({
+    baseUrl: env.BIFROST_BASE_URL ?? `http://localhost:${LOCAL_PORTS.bifrost}`,
+    healthPath: env.BIFROST_HEALTH_PATH ?? LOCAL_BIFROST_HEALTH_PATH,
+  });
+  if (!http.ok) {
+    throw new Error(`Bifrost HTTP readiness failed: ${http.issues.join('; ')}`);
+  }
+}
+
+async function collectBifrostReadiness() {
+  const configReadiness = collectBifrostConfigReadiness();
+  const env = readLocalEnvForBifrost();
+  const http = await probeBifrostHttpReadiness({
+    baseUrl: env.BIFROST_BASE_URL ?? `http://localhost:${LOCAL_PORTS.bifrost}`,
+    healthPath: env.BIFROST_HEALTH_PATH ?? LOCAL_BIFROST_HEALTH_PATH,
+  });
+  return {
+    ok: configReadiness.ok && http.ok,
+    checks: [...configReadiness.checks, http],
+    issues: [...configReadiness.issues, ...http.issues],
+  };
+}
+
+function collectBifrostConfigReadiness() {
+  const env = readLocalEnvForBifrost();
+  const checks = [];
+  const issues = [];
+  let config;
+  let configPath = env.BIFROST_CONFIG_PATH ?? LOCAL_BIFROST_CONFIG_PATH;
+  let runtimeConfig;
+  let runtimeConfigPath = env.BIFROST_RUNTIME_CONFIG_PATH ?? LOCAL_BIFROST_RUNTIME_CONFIG_PATH;
+
+  try {
+    configPath = resolve(repoRoot, configPath);
+    config = JSON.parse(readFileSync(configPath, 'utf8'));
+  } catch (error) {
+    issues.push(`cannot load Bifrost config from ${configPath}: ${error.message}`);
+  }
+
+  try {
+    runtimeConfigPath = resolve(repoRoot, runtimeConfigPath);
+    runtimeConfig = JSON.parse(readFileSync(runtimeConfigPath, 'utf8'));
+  } catch (error) {
+    issues.push(`cannot load Bifrost runtime config from ${runtimeConfigPath}: ${error.message}`);
+  }
+
+  if (config) {
+    const evidence = validateBifrostLocalEvidence({ env, config, runtimeConfig });
+    checks.push({
+      name: 'bifrost-local-evidence',
+      ok: evidence.ok,
+      detail: evidence.ok
+        ? `route=${evidence.routeConfigVersion} policy=${evidence.policyVersion}`
+        : evidence.issues.join('; '),
+    });
+    issues.push(...evidence.issues);
+  }
+
+  if (config) {
+    const validation = runBifrostConfigValidation(configPath);
+    checks.push({
+      name: 'bifrost-config-validation',
+      ok: validation.ok,
+      detail: validation.detail,
+    });
+    if (!validation.ok) issues.push(validation.detail);
+  }
+
+  return { ok: issues.length === 0, checks, issues };
+}
+
+function runBifrostConfigValidation(configPath) {
+  const result = spawnSync(
+    process.execPath,
+    ['--experimental-strip-types', join(repoRoot, 'scripts', 'bifrost-config.mjs'), 'validate', '--config', configPath],
+    {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    },
+  );
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim();
+  if (result.error) {
+    return { ok: false, detail: result.error.message };
+  }
+  return {
+    ok: result.status === 0,
+    detail: output || `node bifrost-config.mjs validate exited ${result.status}`,
+  };
+}
+
+async function waitForBifrostHttpReadiness({ baseUrl, healthPath }) {
+  const deadline = Date.now() + 60_000;
+  let last = { ok: false, issues: ['Bifrost HTTP readiness was not checked.'] };
+  while (Date.now() < deadline) {
+    last = await probeBifrostHttpReadiness({ baseUrl, healthPath });
+    if (last.ok) return last;
+    await sleep(2_000);
+  }
+  return last;
+}
+
+async function probeBifrostHttpReadiness({ baseUrl, healthPath }) {
+  if (!healthPath || !healthPath.startsWith('/')) {
+    return {
+      name: 'bifrost-http-health',
+      ok: false,
+      issues: ['BIFROST_HEALTH_PATH must be explicitly configured as an absolute path.'],
+      detail: 'missing explicit health path',
+    };
+  }
+
+  const healthUrl = new URL(healthPath, ensureTrailingSlash(baseUrl));
+  try {
+    const response = await fetch(healthUrl, {
+      signal: AbortSignal.timeout(2_000),
+      headers: { accept: 'application/json' },
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      return {
+        name: 'bifrost-http-health',
+        ok: false,
+        issues: [`${healthUrl.href} returned HTTP ${response.status}`],
+        detail: text.slice(0, 200) || `HTTP ${response.status}`,
+      };
+    }
+    const payload = JSON.parse(text);
+    if (payload?.status !== 'ok') {
+      return {
+        name: 'bifrost-http-health',
+        ok: false,
+        issues: [`${healthUrl.href} did not return status=ok`],
+        detail: text.slice(0, 200),
+      };
+    }
+    return {
+      name: 'bifrost-http-health',
+      ok: true,
+      issues: [],
+      detail: `${healthUrl.href} status=ok`,
+    };
+  } catch (error) {
+    return {
+      name: 'bifrost-http-health',
+      ok: false,
+      issues: [`${healthUrl.href} readiness probe failed: ${error.message}`],
+      detail: error.message,
+    };
+  }
+}
+
+function printBifrostReadiness(readiness) {
+  console.log('Bifrost readiness:');
+  for (const check of readiness.checks) {
+    console.log(`- ${check.name}: ${check.ok ? 'ok' : 'failed'} (${check.detail})`);
+  }
+}
+
+function readLocalEnvForBifrost() {
+  return {
+    ...readDotEnv(localEnvExampleFile),
+    ...readDotEnv(localEnvFile),
+  };
+}
+
+function ensureTrailingSlash(value) {
+  return value.endsWith('/') ? value : `${value}/`;
+}
+
+function sleep(milliseconds) {
+  return new Promise((resolvePromise) => {
+    setTimeout(resolvePromise, milliseconds);
+  });
 }
 
 function spawnServiceDev(service, profile) {
@@ -535,7 +866,9 @@ function dockerAvailable() {
 }
 
 function runCompose(args, options = {}) {
-  runChecked('docker', ['compose', '--project-name', composeProject, '-f', composeFile, ...args], options);
+  const envFile = join(repoRoot, '.env.local');
+  const envArgs = existsSync(envFile) ? ['--env-file', envFile] : [];
+  runChecked('docker', ['compose', ...envArgs, '--project-name', composeProject, '-f', composeFile, ...args], options);
 }
 
 function runChecked(command, args, options = {}) {

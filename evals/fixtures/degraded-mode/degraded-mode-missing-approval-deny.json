@@ -1,0 +1,52 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 1 degraded-mode fixture; not real customer, repository, provider, credential, or production telemetry data.",
+  "case_id": "degraded-mode-missing-approval-deny",
+  "category": "missing_approval",
+  "activation_id": "bg-activation-fixture-001",
+  "incident_id": "inc-fixture-001",
+  "break_glass_design_ref": "docs/governance/break-glass-design.md#required-degraded-mode-tests",
+  "inputs": {
+    "approval_status": "pending",
+    "required_approvals": [
+      "platform_lead",
+      "engineering_lead",
+      "platform_security_owner"
+    ]
+  },
+  "expected_decision": "deny",
+  "expected_denial_reason": "approval_required",
+  "expected_assertions": [
+    "Pending or incomplete approval status denies provider access.",
+    "No provider credential reference is readable in the denied path.",
+    "Audit identifies missing approval roles without exposing secrets."
+  ],
+  "expected_audit_fields": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "activation_id",
+    "incident_id",
+    "approval_status",
+    "missing_approver_roles",
+    "denial_reason"
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-missing-approval-deny/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-missing-approval-deny/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-missing-approval-deny/audit-event.json"
+  },
+  "production_retrieval_behavior": false,
+  "expected_engine_decision": {
+    "decision": "deny",
+    "denial_reason": "approval_required",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": []
+  }
+}

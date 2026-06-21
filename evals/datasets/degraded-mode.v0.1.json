@@ -1,0 +1,1425 @@
+{
+  "contract_version": "0.1.0",
+  "dataset_id": "degraded-mode.v0.1",
+  "dataset_version": "0.1.0",
+  "suite": "degraded_mode",
+  "schema_status": "layout_stub_until_shared_eval_schema_generalizes_beyond_acl_safety",
+  "fixture_root": "evals/fixtures/degraded-mode",
+  "inert_fixture_mode": true,
+  "no_live_external_calls": true,
+  "production_enablement": false,
+  "source_data_policy": {
+    "synthetic_only": true,
+    "no_real_customer_data": true,
+    "no_real_repo_data": true,
+    "no_live_external_calls": true,
+    "fixture_review_required": true
+  },
+  "categories": [
+    "bifrost_unavailable_fail_closed",
+    "ttl_expiry",
+    "missing_approval",
+    "restricted_data_denied",
+    "repo_retrieval_cache_blocked",
+    "side_effecting_tools_blocked",
+    "provider_key_audit",
+    "post_use_rotation_required",
+    "route_disabled_after_recovery",
+    "provider_key_audit_unavailable",
+    "unapproved_model_alias_denied"
+  ],
+  "artifact_ref_policy": {
+    "required": true,
+    "description": "Each case declares expected gate-result, trace, and audit artifacts that a future degraded-mode runner must write."
+  },
+  "cases": [
+    {
+      "case_id": "degraded-mode-bifrost-unavailable-pending-request",
+      "category": "bifrost_unavailable_fail_closed",
+      "title": "Create pending break-glass request and fail closed when Bifrost is unavailable",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/degraded-mode/degraded-mode-bifrost-unavailable-pending-request.json",
+          "sha256_required": true,
+          "description": "Inert fixture for degraded-mode-bifrost-unavailable-pending-request."
+        }
+      ],
+      "inputs": {
+        "bifrost_health": "unavailable",
+        "existing_activation": "none",
+        "incident_id": "inc-fixture-001"
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Control plane creates or links a pending break-glass request for incident inc-fixture-001.",
+          "Provider route fails closed and does not silently bypass Bifrost.",
+          "No provider key, virtual key, or service principal is exposed while approval is pending."
+        ],
+        "no_production_enablement": true,
+        "outcome": "deny",
+        "required_denial_reason": "break_glass_request_pending",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-bifrost-unavailable-pending-request/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-bifrost-unavailable-pending-request/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-bifrost-unavailable-pending-request/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "activation_id",
+        "incident_id",
+        "approval_status",
+        "bifrost_health",
+        "denial_reason"
+      ],
+      "tags": [
+        "degraded-mode",
+        "break-glass",
+        "bifrost",
+        "fail-closed",
+        "track-1",
+        "synthetic"
+      ],
+      "contract_version": "0.1.0",
+      "intent": "Create pending break-glass request and fail closed when Bifrost is unavailable",
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record trace_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record case_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record suite for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record decision for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record policy_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record dataset_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "activation_id",
+          "requirement": "Record activation_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "incident_id",
+          "requirement": "Record incident_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "approval_status",
+          "requirement": "Record approval_status for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "bifrost_health",
+          "requirement": "Record bifrost_health for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Record denial_reason for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        }
+      ]
+    },
+    {
+      "case_id": "degraded-mode-ttl-expiry-deny",
+      "category": "ttl_expiry",
+      "title": "Deny break-glass access after TTL and reject TTL above four hours",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/degraded-mode/degraded-mode-ttl-expiry-deny.json",
+          "sha256_required": true,
+          "description": "Inert fixture for degraded-mode-ttl-expiry-deny."
+        }
+      ],
+      "inputs": {
+        "activation_id": "bg-fixture-ttl",
+        "requested_ttl_minutes": 300,
+        "elapsed_minutes": 241
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Requested TTL greater than 240 minutes is rejected before activation.",
+          "Previously minted service principal is unusable after configured TTL.",
+          "Audit records expiry and denial without provider-key access."
+        ],
+        "no_production_enablement": true,
+        "outcome": "deny",
+        "required_denial_reason": "break_glass_ttl_expired",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-ttl-expiry-deny/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-ttl-expiry-deny/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-ttl-expiry-deny/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "activation_id",
+        "incident_id",
+        "ttl_minutes",
+        "service_principal_id",
+        "expiry_timestamp",
+        "denial_reason"
+      ],
+      "tags": [
+        "degraded-mode",
+        "break-glass",
+        "ttl",
+        "fail-closed",
+        "track-1",
+        "synthetic"
+      ],
+      "contract_version": "0.1.0",
+      "intent": "Deny break-glass access after TTL and reject TTL above four hours",
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record trace_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record case_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record suite for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record decision for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record policy_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record dataset_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "activation_id",
+          "requirement": "Record activation_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "incident_id",
+          "requirement": "Record incident_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "ttl_minutes",
+          "requirement": "Record ttl_minutes for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "service_principal_id",
+          "requirement": "Record service_principal_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "expiry_timestamp",
+          "requirement": "Record expiry_timestamp for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Record denial_reason for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        }
+      ]
+    },
+    {
+      "case_id": "degraded-mode-missing-approval-deny",
+      "category": "missing_approval",
+      "title": "Deny provider access when required break-glass approval is missing",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/degraded-mode/degraded-mode-missing-approval-deny.json",
+          "sha256_required": true,
+          "description": "Inert fixture for degraded-mode-missing-approval-deny."
+        }
+      ],
+      "inputs": {
+        "approval_status": "pending",
+        "required_approvals": [
+          "platform_lead",
+          "engineering_lead",
+          "platform_security_owner"
+        ]
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Pending or incomplete approval status denies provider access.",
+          "No provider credential reference is readable in the denied path.",
+          "Audit identifies missing approval roles without exposing secrets."
+        ],
+        "no_production_enablement": true,
+        "outcome": "deny",
+        "required_denial_reason": "approval_required",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-missing-approval-deny/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-missing-approval-deny/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-missing-approval-deny/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "activation_id",
+        "incident_id",
+        "approval_status",
+        "missing_approver_roles",
+        "denial_reason"
+      ],
+      "tags": [
+        "degraded-mode",
+        "break-glass",
+        "approval",
+        "fail-closed",
+        "track-1",
+        "synthetic"
+      ],
+      "contract_version": "0.1.0",
+      "intent": "Deny provider access when required break-glass approval is missing",
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record trace_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record case_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record suite for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record decision for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record policy_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record dataset_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "activation_id",
+          "requirement": "Record activation_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "incident_id",
+          "requirement": "Record incident_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "approval_status",
+          "requirement": "Record approval_status for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "missing_approver_roles",
+          "requirement": "Record missing_approver_roles for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Record denial_reason for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        }
+      ]
+    },
+    {
+      "case_id": "degraded-mode-restricted-data-deny",
+      "category": "restricted_data_denied",
+      "title": "Deny restricted data by default in break-glass mode",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/degraded-mode/degraded-mode-restricted-data-deny.json",
+          "sha256_required": true,
+          "description": "Inert fixture for degraded-mode-restricted-data-deny."
+        }
+      ],
+      "inputs": {
+        "requested_data_class": "restricted",
+        "explicit_restricted_scope": false,
+        "restricted_approver_present": false
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Restricted data is denied unless explicitly scoped, approved, and audited for the activation.",
+          "Denied request does not include restricted synthetic markers in provider input.",
+          "Approved exception requirements remain visible as audit prerequisites."
+        ],
+        "no_production_enablement": true,
+        "outcome": "deny",
+        "required_denial_reason": "restricted_data_not_allowed",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-restricted-data-deny/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-restricted-data-deny/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-restricted-data-deny/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "activation_id",
+        "incident_id",
+        "requested_data_class",
+        "allowed_data_classes",
+        "denied_data_classes",
+        "approver_id",
+        "denial_reason"
+      ],
+      "tags": [
+        "degraded-mode",
+        "break-glass",
+        "data-class",
+        "restricted",
+        "track-1",
+        "synthetic"
+      ],
+      "contract_version": "0.1.0",
+      "intent": "Deny restricted data by default in break-glass mode",
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record trace_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record case_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record suite for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record decision for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record policy_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record dataset_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "activation_id",
+          "requirement": "Record activation_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "incident_id",
+          "requirement": "Record incident_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "requested_data_class",
+          "requirement": "Record requested_data_class for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "allowed_data_classes",
+          "requirement": "Record allowed_data_classes for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "denied_data_classes",
+          "requirement": "Record denied_data_classes for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "approver_id",
+          "requirement": "Record approver_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Record denial_reason for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        }
+      ]
+    },
+    {
+      "case_id": "degraded-mode-repo-retrieval-cache-blocked",
+      "category": "repo_retrieval_cache_blocked",
+      "title": "Block repository retrieval cache in break-glass mode",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/degraded-mode/degraded-mode-repo-retrieval-cache-blocked.json",
+          "sha256_required": true,
+          "description": "Inert fixture for degraded-mode-repo-retrieval-cache-blocked."
+        }
+      ],
+      "inputs": {
+        "break_glass_active": true,
+        "cache_operation": "read_write",
+        "repo_cache_key": "repo-cache-alpha-fixture"
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Break-glass provider calls cannot read from repository retrieval cache.",
+          "Break-glass provider calls cannot write new repository retrieval cache entries.",
+          "Cache existence, key body, and synthetic repo markers are not disclosed."
+        ],
+        "no_production_enablement": true,
+        "outcome": "deny",
+        "required_denial_reason": "repo_retrieval_cache_unavailable_break_glass",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-repo-retrieval-cache-blocked/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-repo-retrieval-cache-blocked/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-repo-retrieval-cache-blocked/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "activation_id",
+        "incident_id",
+        "cache_operation",
+        "cache_policy",
+        "denial_reason"
+      ],
+      "tags": [
+        "degraded-mode",
+        "break-glass",
+        "retrieval-cache",
+        "cache-isolation",
+        "track-1",
+        "synthetic"
+      ],
+      "contract_version": "0.1.0",
+      "intent": "Block repository retrieval cache in break-glass mode",
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record trace_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record case_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record suite for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record decision for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record policy_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record dataset_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "activation_id",
+          "requirement": "Record activation_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "incident_id",
+          "requirement": "Record incident_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "cache_operation",
+          "requirement": "Record cache_operation for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "cache_policy",
+          "requirement": "Record cache_policy for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Record denial_reason for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        }
+      ]
+    },
+    {
+      "case_id": "degraded-mode-side-effecting-tools-blocked",
+      "category": "side_effecting_tools_blocked",
+      "title": "Block side-effecting tools during break-glass provider access",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/degraded-mode/degraded-mode-side-effecting-tools-blocked.json",
+          "sha256_required": true,
+          "description": "Inert fixture for degraded-mode-side-effecting-tools-blocked."
+        }
+      ],
+      "inputs": {
+        "tool_name": "synthetic.deploy.write",
+        "operation_class": "side_effecting",
+        "cto_founder_approval": false
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Tool broker denies side-effecting tools while break-glass route is active.",
+          "Production-impacting tools additionally require CTO/founder approval and are denied in this fixture.",
+          "Denied tool plan is audited without adapter execution."
+        ],
+        "no_production_enablement": true,
+        "outcome": "deny",
+        "required_denial_reason": "side_effecting_tool_blocked_break_glass",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-side-effecting-tools-blocked/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-side-effecting-tools-blocked/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-side-effecting-tools-blocked/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "activation_id",
+        "incident_id",
+        "tool_name",
+        "operation_class",
+        "cto_founder_approval",
+        "denial_reason"
+      ],
+      "tags": [
+        "degraded-mode",
+        "break-glass",
+        "tool-safety",
+        "side-effects",
+        "track-1",
+        "synthetic"
+      ],
+      "contract_version": "0.1.0",
+      "intent": "Block side-effecting tools during break-glass provider access",
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record trace_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record case_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record suite for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record decision for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record policy_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record dataset_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "activation_id",
+          "requirement": "Record activation_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "incident_id",
+          "requirement": "Record incident_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "tool_name",
+          "requirement": "Record tool_name for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "operation_class",
+          "requirement": "Record operation_class for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "cto_founder_approval",
+          "requirement": "Record cto_founder_approval for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Record denial_reason for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        }
+      ]
+    },
+    {
+      "case_id": "degraded-mode-provider-key-audit",
+      "category": "provider_key_audit",
+      "title": "Require immutable provider-key audit events for break-glass access",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/degraded-mode/degraded-mode-provider-key-audit.json",
+          "sha256_required": true,
+          "description": "Inert fixture for degraded-mode-provider-key-audit."
+        }
+      ],
+      "inputs": {
+        "provider_key_access": "requested",
+        "audit_sink": "append_only_available",
+        "credential_reference_id": "credref-fixture-001"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Key access, provider-call allow/deny, and route disable events include the break-glass audit contract fields.",
+          "Audit event includes credential reference ID and access timestamp, not raw provider key material.",
+          "Missing audit write would fail closed before provider access."
+        ],
+        "no_production_enablement": true,
+        "outcome": "pass",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-provider-key-audit/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-provider-key-audit/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-provider-key-audit/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "activation_id",
+        "incident_id",
+        "credential_reference_id",
+        "credential_access_timestamp",
+        "event_type"
+      ],
+      "tags": [
+        "degraded-mode",
+        "break-glass",
+        "provider-key",
+        "audit",
+        "track-1",
+        "synthetic"
+      ],
+      "contract_version": "0.1.0",
+      "intent": "Require immutable provider-key audit events for break-glass access",
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record trace_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record case_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record suite for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record decision for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record policy_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record dataset_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "activation_id",
+          "requirement": "Record activation_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "incident_id",
+          "requirement": "Record incident_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "credential_reference_id",
+          "requirement": "Record credential_reference_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "credential_access_timestamp",
+          "requirement": "Record credential_access_timestamp for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "event_type",
+          "requirement": "Record event_type for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        }
+      ]
+    },
+    {
+      "case_id": "degraded-mode-post-use-rotation-required",
+      "category": "post_use_rotation_required",
+      "title": "Block activation closure until post-use provider-key rotation evidence exists",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/degraded-mode/degraded-mode-post-use-rotation-required.json",
+          "sha256_required": true,
+          "description": "Inert fixture for degraded-mode-post-use-rotation-required."
+        }
+      ],
+      "inputs": {
+        "activation_status": "recovery_complete",
+        "provider_key_rotation_evidence_id": null
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Activation cannot transition to closed without provider-key rotation evidence.",
+          "Evidence ID is linked to activation, incident, audit traces, and post-incident report.",
+          "No raw provider key or secret value is stored in the evidence artifact."
+        ],
+        "no_production_enablement": true,
+        "outcome": "deny",
+        "required_denial_reason": "provider_key_rotation_evidence_required",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-post-use-rotation-required/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-post-use-rotation-required/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-post-use-rotation-required/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "activation_id",
+        "incident_id",
+        "provider_key_rotation_evidence_id",
+        "incident_report_link",
+        "denial_reason"
+      ],
+      "tags": [
+        "degraded-mode",
+        "break-glass",
+        "rotation",
+        "closure-gate",
+        "track-1",
+        "synthetic"
+      ],
+      "contract_version": "0.1.0",
+      "intent": "Block activation closure until post-use provider-key rotation evidence exists",
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record trace_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record case_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record suite for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record decision for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record policy_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record dataset_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "activation_id",
+          "requirement": "Record activation_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "incident_id",
+          "requirement": "Record incident_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "provider_key_rotation_evidence_id",
+          "requirement": "Record provider_key_rotation_evidence_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "incident_report_link",
+          "requirement": "Record incident_report_link for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Record denial_reason for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        }
+      ]
+    },
+    {
+      "case_id": "degraded-mode-route-disabled-after-recovery",
+      "category": "route_disabled_after_recovery",
+      "title": "Keep emergency route and virtual key disabled after recovery",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/degraded-mode/degraded-mode-route-disabled-after-recovery.json",
+          "sha256_required": true,
+          "description": "Inert fixture for degraded-mode-route-disabled-after-recovery."
+        }
+      ],
+      "inputs": {
+        "normal_gateway_health": "healthy",
+        "route_disable_timestamp": "2026-06-20T18:40:00Z",
+        "virtual_key_status": "revoked"
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Emergency route is unusable after recovery and normal gateway health verification.",
+          "Break-glass virtual key and service principal are revoked or expired.",
+          "Attempted post-recovery use emits route-disabled audit evidence."
+        ],
+        "no_production_enablement": true,
+        "outcome": "deny",
+        "required_denial_reason": "break_glass_route_disabled",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-route-disabled-after-recovery/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-route-disabled-after-recovery/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-route-disabled-after-recovery/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "activation_id",
+        "incident_id",
+        "route_disable_timestamp",
+        "service_principal_revocation_timestamp",
+        "virtual_key_id",
+        "denial_reason"
+      ],
+      "tags": [
+        "degraded-mode",
+        "break-glass",
+        "recovery",
+        "route-disabled",
+        "track-1",
+        "synthetic"
+      ],
+      "contract_version": "0.1.0",
+      "intent": "Keep emergency route and virtual key disabled after recovery",
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record trace_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record case_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record suite for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record decision for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record policy_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record dataset_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "activation_id",
+          "requirement": "Record activation_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "incident_id",
+          "requirement": "Record incident_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "route_disable_timestamp",
+          "requirement": "Record route_disable_timestamp for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "service_principal_revocation_timestamp",
+          "requirement": "Record service_principal_revocation_timestamp for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "virtual_key_id",
+          "requirement": "Record virtual_key_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Record denial_reason for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        }
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "degraded-mode-provider-key-audit-unavailable-deny",
+      "category": "provider_key_audit_unavailable",
+      "title": "Deny provider-key access when immutable audit write is unavailable",
+      "severity": "critical",
+      "intent": "Deny provider-key access when immutable audit write is unavailable",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/degraded-mode/degraded-mode-provider-key-audit-unavailable-deny.json",
+          "sha256_required": true,
+          "description": "Inert fixture for degraded-mode-provider-key-audit-unavailable-deny."
+        }
+      ],
+      "inputs": {
+        "provider_key_access": "requested",
+        "audit_sink": "append_only_unavailable",
+        "credential_reference_id": "credref-fixture-001"
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision": "deny",
+        "required_denial_reason": "audit_unavailable",
+        "assertions": [
+          "Provider-key access is denied before provider access when append-only audit write is unavailable.",
+          "No provider key material is exposed."
+        ],
+        "no_production_enablement": true,
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-provider-key-audit-unavailable-deny/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-provider-key-audit-unavailable-deny/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-provider-key-audit-unavailable-deny/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "activation_id",
+        "incident_id",
+        "credential_reference_id",
+        "audit_sink",
+        "denial_reason"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record trace_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record case_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record suite for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record decision for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record policy_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record dataset_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "activation_id",
+          "requirement": "Record activation_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "incident_id",
+          "requirement": "Record incident_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "credential_reference_id",
+          "requirement": "Record credential_reference_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "audit_sink",
+          "requirement": "Record audit_sink for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Record denial_reason for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "degraded-mode",
+        "break-glass",
+        "provider-key",
+        "audit",
+        "fail-closed",
+        "track-1",
+        "synthetic"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "degraded-mode-unapproved-model-alias-deny",
+      "category": "unapproved_model_alias_denied",
+      "title": "Deny break-glass provider access for unapproved model alias scope",
+      "severity": "critical",
+      "intent": "Deny break-glass provider access for unapproved model alias scope",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/degraded-mode/degraded-mode-unapproved-model-alias-deny.json",
+          "sha256_required": true,
+          "description": "Inert fixture for degraded-mode-unapproved-model-alias-deny."
+        }
+      ],
+      "inputs": {
+        "provider_key_access": "requested",
+        "approval_state": "approved",
+        "requested_model_alias": "devgateway/unapproved-live-alias",
+        "approved_model_aliases": [
+          "devgateway/code-review"
+        ],
+        "data_class": "confidential"
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision": "deny",
+        "required_denial_reason": "approval_required",
+        "assertions": [
+          "Break-glass access remains scoped to explicitly approved provider/model aliases.",
+          "Unapproved alias is denied even with an approved activation."
+        ],
+        "no_production_enablement": true,
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-unapproved-model-alias-deny/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-unapproved-model-alias-deny/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-unapproved-model-alias-deny/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "activation_id",
+        "incident_id",
+        "requested_model_alias",
+        "approved_model_aliases",
+        "denial_reason"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record trace_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record case_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record suite for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record decision for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record policy_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record dataset_version for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "activation_id",
+          "requirement": "Record activation_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "incident_id",
+          "requirement": "Record incident_id for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "requested_model_alias",
+          "requirement": "Record requested_model_alias for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "approved_model_aliases",
+          "requirement": "Record approved_model_aliases for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Record denial_reason for degraded-mode fixture audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "degraded-mode",
+        "break-glass",
+        "model-scope",
+        "approval",
+        "track-1",
+        "synthetic"
+      ]
+    }
+  ],
+  "production_retrieval_behavior": false
+}

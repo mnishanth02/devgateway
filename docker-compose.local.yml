@@ -47,7 +47,7 @@ services:
       retries: 10
 
   minio:
-    image: quay.io/minio/minio:latest
+    image: quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: devgateway
@@ -86,7 +86,7 @@ services:
       retries: 20
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+    image: otel/opentelemetry-collector-contrib@sha256:b3079f45e19bdb7326bf49cdddce6cf60dfd865138db39f2733ea48ab17bc4cb
     command: ["--config=/etc/otelcol/config.yaml"]
     ports:
       - "44317:4317"
@@ -99,6 +99,34 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  bifrost:
+    image: maximhq/bifrost:v1.5.15-ubi9@sha256:39c757944a55f4a15d27a4851c482084472fb4bc1e2f450f2d0fe2075d0905d2
+    environment:
+      BIFROST_ADMIN_TOKEN: ${BIFROST_ADMIN_TOKEN}
+      BIFROST_VIRTUAL_KEY_SEED: ${BIFROST_VIRTUAL_KEY_SEED}
+      BIFROST_CONFIG_PATH: ${BIFROST_CONTAINER_CONFIG_PATH:-/app/data/config.json}
+      BIFROST_ROUTE_CONFIG_VERSION: ${BIFROST_ROUTE_CONFIG_VERSION}
+      BIFROST_POLICY_VERSION: ${BIFROST_POLICY_VERSION}
+      BIFROST_BREAK_GLASS_ENABLED: ${BIFROST_BREAK_GLASS_ENABLED:-false}
+      PRODUCTION_PROVISIONING_ENABLED: ${PRODUCTION_PROVISIONING_ENABLED:-false}
+      PRODUCTION_DEPLOY_APPROVAL_REQUIRED: ${PRODUCTION_DEPLOY_APPROVAL_REQUIRED:-true}
+      DEVGATEWAY_OPENAI_API_KEY_PLACEHOLDER: ${DEVGATEWAY_OPENAI_API_KEY_PLACEHOLDER}
+      DEVGATEWAY_ANTHROPIC_API_KEY_PLACEHOLDER: ${DEVGATEWAY_ANTHROPIC_API_KEY_PLACEHOLDER}
+    ports:
+      - "43180:8080"
+    volumes:
+      - ./infra/bifrost/config.runtime.example.json:/app/data/config.json:ro
+      - bifrost-data:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:8080/health || wget --spider -q http://localhost:8080/health",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   prometheus:
     image: prom/prometheus:v2.54.1
@@ -134,5 +162,6 @@ volumes:
   minio-data:
   neo4j-data:
   neo4j-logs:
+  bifrost-data:
   prometheus-data:
   grafana-data:

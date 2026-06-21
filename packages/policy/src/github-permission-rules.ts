@@ -1,4 +1,4 @@
-import type { DenialReasonCode } from './denial-reasons.js';
+import type { DenialReasonCode } from './denial-reasons.ts';
 
 export const GITHUB_PERMISSION_RULES_CONTRACT_VERSION = '0.1.0' as const;
 

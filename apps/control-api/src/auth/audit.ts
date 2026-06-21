@@ -1,19 +1,39 @@
 import type { BetterAuthOptions } from 'better-auth';
 
 export type AuthAuditEventName =
+  | 'auth.user.create_requested'
   | 'auth.user.created'
+  | 'auth.user.update_requested'
   | 'auth.user.updated'
+  | 'auth.user.delete_requested'
   | 'auth.user.deleted'
+  | 'auth.session.create_requested'
   | 'auth.session.created'
+  | 'auth.session.revoke_requested'
   | 'auth.session.revoked'
+  | 'auth.account.link_requested'
   | 'auth.account.linked'
+  | 'auth.account.update_requested'
   | 'auth.account.updated'
-  | 'auth.account.deleted';
+  | 'auth.account.delete_requested'
+  | 'auth.account.deleted'
+  | 'auth.admin_bootstrap.created'
+  | 'auth.admin_bootstrap.consumed'
+  | 'auth.admin_bootstrap.denied'
+  | 'auth.sensitive_action.denied'
+  | 'auth.provider_key.read'
+  | 'auth.provider_key.rotated'
+  | 'auth.break_glass_token.minted'
+  | 'auth.production_enablement.requested';
 
 export interface AuthAuditEvent {
   readonly name: AuthAuditEventName;
   readonly subjectId?: string;
   readonly actorId?: string;
+  readonly traceId?: string;
+  readonly requestId?: string;
+  readonly occurredAt?: string;
+  readonly outcome?: 'allow' | 'deny' | 'error';
   readonly metadata?: Readonly<Record<string, string>>;
 }
 
@@ -21,46 +41,78 @@ export interface AuthAuditEmitter {
   emit(event: AuthAuditEvent): Promise<void>;
 }
 
+export interface ImmutableAuthAuditStore {
+  insertAuthAuditEvent(event: PersistedAuthAuditEvent): Promise<void>;
+}
+
+export interface PersistedAuthAuditEvent extends AuthAuditEvent {
+  readonly occurredAt: string;
+  readonly immutable: true;
+  readonly schemaVersion: 'auth-audit.v1';
+}
+
+export interface TestAuthAuditEmitter extends AuthAuditEmitter {
+  readonly productionSafe: false;
+  readonly events: readonly PersistedAuthAuditEvent[];
+}
+
 export const authAuditEventRequirements = [
-  'User create/update/delete must emit immutable audit events.',
-  'Session create/revoke must emit immutable audit events.',
-  'Account link/update/delete must emit immutable audit events.',
+  'User create/update/delete attempts must emit immutable pre-mutation audit events; success evidence must be transactionally coupled before production enablement.',
+  'Session create/revoke attempts must emit immutable pre-mutation audit events; success evidence must be transactionally coupled before production enablement.',
+  'Account link/update/delete attempts must emit immutable pre-mutation audit events; success evidence must be transactionally coupled before production enablement.',
   'Provider-key and break-glass access must be audited outside Better Auth hooks.',
+  'Admin bootstrap create/consume/deny events must be immutable and request-correlated.',
 ] as const;
 
-export const noopAuthAuditEmitter: AuthAuditEmitter = {
-  async emit() {
-    return undefined;
-  },
-};
+export function createDbBackedAuthAuditEmitter(store: ImmutableAuthAuditStore): AuthAuditEmitter {
+  return {
+    async emit(event) {
+      await store.insertAuthAuditEvent(toPersistedAuthAuditEvent(event));
+    },
+  };
+}
 
-export function createAuthDatabaseHooks(
-  auditEmitter: AuthAuditEmitter = noopAuthAuditEmitter,
-): NonNullable<BetterAuthOptions['databaseHooks']> {
+export function createTestAuthAuditEmitter(): TestAuthAuditEmitter {
+  const events: PersistedAuthAuditEvent[] = [];
+  return {
+    productionSafe: false,
+    get events() {
+      return events;
+    },
+    async emit(event) {
+      events.push(toPersistedAuthAuditEvent(event));
+    },
+  };
+}
+
+export function requireAuthAuditEmitter(auditEmitter: AuthAuditEmitter | undefined): AuthAuditEmitter {
+  if (auditEmitter === undefined) {
+    throw new Error('AuthAuditEmitter is required; production must use an immutable DB-backed emitter');
+  }
+  return auditEmitter;
+}
+
+export function createAuthDatabaseHooks(auditEmitter: AuthAuditEmitter): NonNullable<BetterAuthOptions['databaseHooks']> {
   return {
     user: {
       create: {
-        after: async (user) => {
+        before: async (user) => {
           await auditEmitter.emit({
-            name: 'auth.user.created',
+            name: 'auth.user.create_requested',
             subjectId: user.id,
             actorId: user.id,
           });
         },
       },
       update: {
-        after: async (user) => {
-          await auditEmitter.emit({
-            name: 'auth.user.updated',
-            subjectId: user.id,
-            actorId: user.id,
-          });
+        before: async (user) => {
+          await auditEmitter.emit(authAuditEvent('auth.user.update_requested', user.id));
         },
       },
       delete: {
-        after: async (user) => {
+        before: async (user) => {
           await auditEmitter.emit({
-            name: 'auth.user.deleted',
+            name: 'auth.user.delete_requested',
             subjectId: user.id,
             actorId: user.id,
           });
@@ -69,18 +121,18 @@ export function createAuthDatabaseHooks(
     },
     session: {
       create: {
-        after: async (session) => {
+        before: async (session) => {
           await auditEmitter.emit({
-            name: 'auth.session.created',
+            name: 'auth.session.create_requested',
             subjectId: session.userId,
             actorId: session.userId,
           });
         },
       },
       delete: {
-        after: async (session) => {
+        before: async (session) => {
           await auditEmitter.emit({
-            name: 'auth.session.revoked',
+            name: 'auth.session.revoke_requested',
             subjectId: session.userId,
             actorId: session.userId,
           });
@@ -89,35 +141,56 @@ export function createAuthDatabaseHooks(
     },
     account: {
       create: {
-        after: async (account) => {
+        before: async (account) => {
           await auditEmitter.emit({
-            name: 'auth.account.linked',
-            subjectId: account.userId,
-            actorId: account.userId,
-            metadata: { providerId: account.providerId },
+            name: 'auth.account.link_requested',
+            ...optionalActorSubject(account.userId),
+            ...providerMetadata(account.providerId),
           });
         },
       },
       update: {
-        after: async (account) => {
+        before: async (account) => {
           await auditEmitter.emit({
-            name: 'auth.account.updated',
-            subjectId: account.userId,
-            actorId: account.userId,
-            metadata: { providerId: account.providerId },
+            name: 'auth.account.update_requested',
+            ...optionalActorSubject(account.userId),
+            ...providerMetadata(account.providerId),
           });
         },
       },
       delete: {
-        after: async (account) => {
+        before: async (account) => {
           await auditEmitter.emit({
-            name: 'auth.account.deleted',
-            subjectId: account.userId,
-            actorId: account.userId,
-            metadata: { providerId: account.providerId },
+            name: 'auth.account.delete_requested',
+            ...optionalActorSubject(account.userId),
+            ...providerMetadata(account.providerId),
           });
         },
       },
     },
+  };
+}
+
+function authAuditEvent(name: AuthAuditEventName, subjectId: string | undefined): AuthAuditEvent {
+  return {
+    name,
+    ...optionalActorSubject(subjectId),
+  };
+}
+
+function optionalActorSubject(subjectId: string | undefined): Pick<AuthAuditEvent, 'subjectId' | 'actorId'> | {} {
+  return subjectId === undefined ? {} : { subjectId, actorId: subjectId };
+}
+
+function providerMetadata(providerId: string | undefined): Pick<AuthAuditEvent, 'metadata'> | {} {
+  return providerId === undefined ? {} : { metadata: { providerId } };
+}
+
+function toPersistedAuthAuditEvent(event: AuthAuditEvent): PersistedAuthAuditEvent {
+  return {
+    ...event,
+    occurredAt: event.occurredAt ?? new Date().toISOString(),
+    immutable: true,
+    schemaVersion: 'auth-audit.v1',
   };
 }

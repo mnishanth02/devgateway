@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/shared/trace-context.v0.1.schema.json",
+  "title": "DevGateway Shared Trace Context Contract v0.1",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "trace_context_id",
+    "trace_id",
+    "request_id",
+    "traceparent",
+    "tracestate",
+    "devgateway_headers",
+    "principal_id",
+    "project_id",
+    "virtual_key_id",
+    "budget_scope_id",
+    "data_class",
+    "environment",
+    "model_alias",
+    "route_intent",
+    "policy_version",
+    "registry_version",
+    "sampling",
+    "propagation_path",
+    "log_correlation",
+    "created_at"
+  ],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "trace_context_id": { "$ref": "#/$defs/nonEmptyString" },
+    "trace_id": { "$ref": "#/$defs/nonEmptyString" },
+    "request_id": { "$ref": "#/$defs/nonEmptyString" },
+    "traceparent": { "type": "string", "pattern": "^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$" },
+    "tracestate": { "$ref": "#/$defs/nullableNonEmptyString" },
+    "devgateway_headers": { "$ref": "#/$defs/devgatewayHeaders" },
+    "principal_id": { "$ref": "#/$defs/nonEmptyString" },
+    "project_id": { "$ref": "#/$defs/nonEmptyString" },
+    "virtual_key_id": { "$ref": "#/$defs/nonEmptyString" },
+    "budget_scope_id": { "$ref": "#/$defs/nonEmptyString" },
+    "data_class": { "$ref": "#/$defs/dataClass" },
+    "environment": { "$ref": "#/$defs/environment" },
+    "model_alias": { "$ref": "#/$defs/nonEmptyString" },
+    "route_intent": { "$ref": "#/$defs/routeIntent" },
+    "policy_version": { "$ref": "#/$defs/nonEmptyString" },
+    "registry_version": { "$ref": "#/$defs/nonEmptyString" },
+    "sampling": { "$ref": "#/$defs/sampling" },
+    "propagation_path": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/traceHop" }
+    },
+    "log_correlation": { "$ref": "#/$defs/logCorrelation" },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "nullableNonEmptyString": {
+      "anyOf": [
+        { "$ref": "#/$defs/nonEmptyString" },
+        { "type": "null" }
+      ]
+    },
+    "dataClass": {
+      "type": "string",
+      "enum": ["public", "internal", "confidential", "restricted"]
+    },
+    "routeIntent": {
+      "type": "string",
+      "enum": ["chat", "completion", "embedding", "eval", "tool_planning", "tool_execution", "policy_check"]
+    },
+    "environment": {
+      "type": "string",
+      "enum": ["development", "test", "staging", "production"]
+    },
+    "devgatewayHeaders": {
+      "type": "object",
+      "required": [
+        "x_devgateway_request_id",
+        "x_devgateway_principal_id",
+        "x_devgateway_project_id",
+        "x_devgateway_virtual_key_id",
+        "x_devgateway_budget_scope_id",
+        "x_devgateway_policy_version",
+        "x_devgateway_registry_version",
+        "x_devgateway_route_intent",
+        "x_devgateway_data_class",
+        "x_devgateway_environment",
+        "x_devgateway_sampling_decision"
+      ],
+      "properties": {
+        "x_devgateway_request_id": { "$ref": "#/$defs/nonEmptyString" },
+        "x_devgateway_principal_id": { "$ref": "#/$defs/nonEmptyString" },
+        "x_devgateway_project_id": { "$ref": "#/$defs/nonEmptyString" },
+        "x_devgateway_virtual_key_id": { "$ref": "#/$defs/nonEmptyString" },
+        "x_devgateway_budget_scope_id": { "$ref": "#/$defs/nonEmptyString" },
+        "x_devgateway_policy_version": { "$ref": "#/$defs/nonEmptyString" },
+        "x_devgateway_registry_version": { "$ref": "#/$defs/nonEmptyString" },
+        "x_devgateway_route_intent": { "$ref": "#/$defs/routeIntent" },
+        "x_devgateway_data_class": { "$ref": "#/$defs/dataClass" },
+        "x_devgateway_environment": { "$ref": "#/$defs/environment" },
+        "x_devgateway_sampling_decision": { "type": "string", "enum": ["record", "drop", "defer"] }
+      },
+      "additionalProperties": false
+    },
+    "sampling": {
+      "type": "object",
+      "required": ["decision", "sample_rate", "debug", "policy"],
+      "properties": {
+        "decision": { "type": "string", "enum": ["record", "drop", "defer"] },
+        "sample_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "debug": { "type": "boolean" },
+        "policy": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "traceHop": {
+      "type": "object",
+      "required": ["component", "span_id", "entered_at", "exited_at"],
+      "properties": {
+        "component": {
+          "type": "string",
+          "enum": ["control_api", "bifrost", "provider", "audit", "cost", "eval", "tool_broker", "admin_portal"]
+        },
+        "span_id": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+        "entered_at": { "type": "string", "format": "date-time" },
+        "exited_at": {
+          "anyOf": [
+            { "type": "string", "format": "date-time" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "logCorrelation": {
+      "type": "object",
+      "required": ["audit_event_id", "cost_event_id", "gateway_instance_id", "request_log_id"],
+      "properties": {
+        "audit_event_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "cost_event_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "gateway_instance_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "request_log_id": { "$ref": "#/$defs/nullableNonEmptyString" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

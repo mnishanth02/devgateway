@@ -1,0 +1,77 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "gateway-model-smoke-openai-chat-completions",
+  "category": "openai_chat_completions",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "request": {
+    "method": "POST",
+    "route": "/v1/chat/completions",
+    "body": {
+      "model": "track0-public-chat",
+      "stream": false
+    }
+  },
+  "gateway_context": {
+    "trace_id": "trace-gateway-model-smoke-openai-chat-completions",
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "virtual_key_id": "vk_synthetic_alpha",
+    "model_alias": "track0-public-chat",
+    "provider_candidate_id": "fixture-openai-primary",
+    "provider_attempt_count": 1
+  },
+  "synthetic_shape": {
+    "response": {
+      "id": "chatcmpl-fixture-001",
+      "object": "chat.completion",
+      "choices": [
+        {
+          "message": {
+            "role": "assistant",
+            "content": "Synthetic hello."
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 12,
+        "completion_tokens": 4,
+        "total_tokens": 16
+      }
+    }
+  },
+  "synthetic_measurement": {
+    "estimated_cost_usd": "0.000032",
+    "synthetic_non_billable": true
+  },
+  "expected_engine_decision": {
+    "decision": "pass",
+    "prompt_context_allowed_markers": [
+      "SYNTHETIC_GATEWAY_SAFE_RESPONSE"
+    ],
+    "prompt_context_forbidden_markers": []
+  },
+  "expected_assertions": [
+    "The gateway accepts OpenAI chat completions shape and routes by model alias.",
+    "The response includes id, object, choices, finish_reason, and usage.",
+    "Synthetic usage is attributed without marking the request billable."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-chat-completions/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-chat-completions/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-chat-completions/audit-event.json"
+  },
+  "audit_expectations": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "usage_event_id"
+  ]
+}

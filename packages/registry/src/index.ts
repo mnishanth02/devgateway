@@ -5,7 +5,7 @@ export {
   gateResultSchemaId,
   gateResultTargetKinds,
   validateGateResultReferenceMatch,
-} from './gate-result-contract.js';
+} from './gate-result-contract.ts';
 
 export type {
   GateResultArtifactRef,
@@ -21,7 +21,7 @@ export type {
   GateResultTarget,
   GateResultTargetExpectation,
   GateResultTargetKind,
-} from './gate-result-contract.js';
+} from './gate-result-contract.ts';
 
 export {
   dataClasses,
@@ -44,19 +44,27 @@ export {
   type RegistryProductionGate,
   type RegistryProviderCandidate,
   type WireFormat,
-} from './schema.js';
+} from './schema.ts';
 
 export {
   initialModelAliases,
   initialModelAliasNames,
   initialModelAliasRegistry,
   isProductionDisabledInitialAlias,
-} from './initial-aliases.js';
+} from './initial-aliases.ts';
 
 export type {
   InitialModelAlias,
   InitialModelAliasName,
-} from './initial-aliases.js';
+} from './initial-aliases.ts';
+
+export {
+  assertRegistrySnapshot,
+  defaultRegistrySnapshotPath,
+  getBundledRegistrySnapshot,
+  loadRegistrySnapshot,
+  type RegistrySnapshotLoadOptions,
+} from './load-registry.ts';
 
 export {
   validateRegistry,
@@ -64,4 +72,4 @@ export {
   validateRegistryNegativeFixtures,
   type RegistryValidationIssue,
   type RegistryValidationResult,
-} from './validate-registry.js';
+} from './validate-registry.ts';

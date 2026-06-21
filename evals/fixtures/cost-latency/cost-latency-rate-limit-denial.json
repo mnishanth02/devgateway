@@ -1,0 +1,62 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "cost-latency-rate-limit-denial",
+  "category": "rate_limit_denial",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "request": {},
+  "gateway_context": {
+    "trace_id": "trace-cost-latency-rate-limit-denial",
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "virtual_key_id": "vk_synthetic_alpha",
+    "model_alias": "track0-public-chat",
+    "provider_candidate_id": null,
+    "provider_attempt_count": 0
+  },
+  "synthetic_shape": {},
+  "synthetic_measurement": {
+    "rate_limit_key": "principal-alpha-gateway:/v1/chat/completions",
+    "window_ms": 60000,
+    "current_count": 61,
+    "limit": 60,
+    "retry_after_ms": 12000,
+    "billable_cost_usd": "0.000000",
+    "provider_round_trip_ms": 0,
+    "gateway_overhead_ms": 4,
+    "total_ms": 4,
+    "provider_attempt_count": 0,
+    "synthetic_non_billable": true
+  },
+  "expected_engine_decision": {
+    "decision": "deny",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": [
+      "SYNTHETIC_PROVIDER_BODY"
+    ],
+    "denial_reason": "rate_limit"
+  },
+  "expected_assertions": [
+    "Rate-limit denial records retry_after_ms and no provider round trip.",
+    "The denial is attributed to principal_id, project_id, route, and rate_limit_key.",
+    "No synthetic cost event is marked billable for the denied request."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/cost-latency/cost-latency-rate-limit-denial/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/cost-latency/cost-latency-rate-limit-denial/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/cost-latency/cost-latency-rate-limit-denial/audit-event.json"
+  },
+  "audit_expectations": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "rate_limit_key",
+    "retry_after_ms"
+  ]
+}

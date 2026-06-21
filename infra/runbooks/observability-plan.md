@@ -39,6 +39,12 @@ Telemetry must include correlation IDs, but must not include raw prompts, provid
 | Audit and compliance | Audit append rate, rejected audit updates/deletes, trace-to-audit correlation coverage, break-glass audit events, restore validation audit records. | Platform security owner | Platform operations owner |
 | SLO and burn rate | Availability, p95/p99 latency, error budget burn, dependency health, backup freshness, restore-test freshness. | Platform operations owner | Platform lead |
 
+### Track 1 gateway/control dashboard
+
+The gateway/control dashboard must follow one request from gateway ingress through Control API or policy evaluation, Bifrost route decision, provider attempt(s), audit append, and cost event emission. Required panels include request rate, error rate, p95/p99 latency, decision count, fallback rate, provider-attempt waterfall, audit-write outcome, and cost estimate. Required dimensions are `provider_id`, `model_alias`, `virtual_key_id`, `project_id`, `route_intent`, `decision`, `fallback_applied`, `fallback_reason`, latency bucket/span duration, and cost fields such as `cost_estimate_usd`, `input_tokens`, and `output_tokens`.
+
+Raw prompts, provider keys, raw virtual keys, and private repository payloads must not appear in panel labels, trace attributes, logs, or dashboard variables.
+
 ## Initial SLO evidence plan
 
 | Area | Candidate SLI | Initial Track 1 target proposal | Evidence source |
@@ -72,6 +78,10 @@ Targets are intentionally proposals until Track 1 traffic and owner review defin
 5. Verify audit immutability review: runtime roles cannot update or delete immutable audit records, or reject triggers are planned and tested.
 6. Verify backup/restore dashboard panel references the latest restore validation evidence.
 7. Record dashboard review owner sign-off before first production release.
+
+### Audit sink unavailable check
+
+Production behavior is fail-closed: if an auditable gateway/control/provider/tool/admin action cannot write to the audit sink, the action must be denied or stopped, a safe error must be returned, and structured logs must include `audit_sink_unavailable=true`, `trace_id`, `request_id`, service, environment, and safe decision outcome. Non-production may continue only for explicitly configured fixture/development behavior, and that continuation must be logged at error level with the same non-secret fields. Non-production continuation is not valid production-readiness evidence.
 
 ## Incident and regression triage
 

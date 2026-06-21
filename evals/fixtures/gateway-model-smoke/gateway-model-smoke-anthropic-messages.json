@@ -1,0 +1,75 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "gateway-model-smoke-anthropic-messages",
+  "category": "anthropic_messages",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "request": {
+    "method": "POST",
+    "route": "/v1/messages",
+    "headers": {
+      "anthropic-version": "2023-06-01"
+    },
+    "body": {
+      "model": "track0-claude-chat",
+      "stream": false
+    }
+  },
+  "gateway_context": {
+    "trace_id": "trace-gateway-model-smoke-anthropic-messages",
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "virtual_key_id": "vk_synthetic_alpha",
+    "model_alias": "track0-claude-chat",
+    "provider_candidate_id": "fixture-anthropic-primary",
+    "provider_attempt_count": 1
+  },
+  "synthetic_shape": {
+    "response": {
+      "id": "msg_fixture_001",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Synthetic hello."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 13,
+        "output_tokens": 4
+      }
+    }
+  },
+  "synthetic_measurement": {},
+  "expected_engine_decision": {
+    "decision": "pass",
+    "prompt_context_allowed_markers": [
+      "SYNTHETIC_ANTHROPIC_MESSAGE"
+    ],
+    "prompt_context_forbidden_markers": []
+  },
+  "expected_assertions": [
+    "The gateway accepts Anthropic messages shape and routes by model alias.",
+    "The response includes id, type=message, role, content array, stop_reason, and usage.",
+    "Synthetic request metadata never includes live provider credentials."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-anthropic-messages/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-anthropic-messages/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-anthropic-messages/audit-event.json"
+  },
+  "audit_expectations": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "usage_event_id"
+  ]
+}

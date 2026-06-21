@@ -14,7 +14,7 @@ This Phase 0.8 plan defines how Railway should build and start DevGateway servic
 
 | Railway service | Build command | Start command | Notes |
 |---|---|---|---|
-| Bifrost gateway | `docker build -f infra\bifrost\Dockerfile .` or approved upstream image | Upstream Bifrost entrypoint with `BIFROST_CONFIG_PATH` | Pin image digests before production; config sync remains a reviewed artifact. |
+| Bifrost gateway | Approved upstream image pinned by digest | Upstream Bifrost image default command (`/app/main`) through its entrypoint; mount validated config as `/app/data/config.json` | Pin image digests before production; config sync remains a reviewed artifact. |
 | Control API | `pnpm turbo run build --filter=@devgateway/control-api...` | `pnpm --filter @devgateway/control-api start` | Package must provide `build`, `start`, and `health` scripts before deployment. |
 | Admin portal | `pnpm turbo run build --filter=@devgateway/admin-portal...` | `pnpm --filter @devgateway/admin-portal start` | Package must provide web build/start scripts before deployment. |
 | Tool Broker | `pnpm turbo run build --filter=@devgateway/tool-broker...` | `pnpm --filter @devgateway/tool-broker start` | MCP endpoint cannot enable production tools without policy/eval gates. |

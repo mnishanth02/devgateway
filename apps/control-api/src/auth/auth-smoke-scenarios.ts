@@ -23,7 +23,7 @@ export type AuthSmokeErrorCode =
 
 export type AuthSmokeAuditEventName =
   | 'auth.sign_in.succeeded'
-  | 'auth.session.revoked'
+  | 'auth.session.revoke_requested'
   | 'auth.policy.denied'
   | 'auth.rate_limit.denied';
 
@@ -313,7 +313,7 @@ export const authSmokeScenarios = [
       postconditions: ['Follow-up use of the revoked session is denied with typed session_revoked and a generic external body.'],
       audit: {
         required: true,
-        eventNames: ['auth.session.revoked'],
+        eventNames: ['auth.session.revoke_requested'],
         evidence: ['revoked session identifier or fingerprint', 'admin actor identifier', 'trace identifier', 'timestamp'],
       },
     },

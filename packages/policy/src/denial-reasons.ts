@@ -1,6 +1,6 @@
 export const DENIAL_TAXONOMY_CONTRACT_VERSION = '0.1.0' as const;
 
-export const DENIAL_REASON_CODES = [
+export const REQUIRED_DENIAL_REASON_CODES = [
   'budget',
   'rate_limit',
   'data_class',
@@ -10,6 +10,8 @@ export const DENIAL_REASON_CODES = [
   'route_disabled',
   'approval_required',
 ] as const;
+
+export const DENIAL_REASON_CODES = REQUIRED_DENIAL_REASON_CODES;
 
 export type DenialReasonCode = (typeof DENIAL_REASON_CODES)[number];
 
@@ -230,6 +232,62 @@ export const DENIAL_REASONS = {
 } as const satisfies Record<DenialReasonCode, DenialReasonDefinition>;
 
 export type DenialReason = (typeof DENIAL_REASONS)[DenialReasonCode];
+
+export type DenialReasonMappingValidationIssue = {
+  readonly code: 'missing_reason' | 'code_mismatch' | 'audit_mismatch' | 'contract_mismatch' | 'not_fail_closed';
+  readonly path: string;
+  readonly message: string;
+};
+
+export function validateDenialReasonMapping(
+  reasons: Partial<Record<DenialReasonCode, DenialReasonDefinition>> = DENIAL_REASONS,
+): readonly DenialReasonMappingValidationIssue[] {
+  const issues: DenialReasonMappingValidationIssue[] = [];
+  for (const code of REQUIRED_DENIAL_REASON_CODES) {
+    const reason = reasons[code];
+    if (reason === undefined) {
+      issues.push({
+        code: 'missing_reason',
+        path: `$.${code}`,
+        message: `required denial reason "${code}" is missing`,
+      });
+      continue;
+    }
+    if (reason.code !== code) {
+      issues.push({
+        code: 'code_mismatch',
+        path: `$.${code}.code`,
+        message: `denial reason "${code}" must self-identify with the same code`,
+      });
+    }
+    if (reason.audit.reason !== code) {
+      issues.push({
+        code: 'audit_mismatch',
+        path: `$.${code}.audit.reason`,
+        message: `denial reason "${code}" audit mapping must use the same reason code`,
+      });
+    }
+    if (reason.gatewayPolicyContract.reason !== code) {
+      issues.push({
+        code: 'contract_mismatch',
+        path: `$.${code}.gatewayPolicyContract.reason`,
+        message: `denial reason "${code}" gateway contract must use the same reason code`,
+      });
+    }
+    if (
+      reason.gatewayPolicyContract.decision !== 'deny' ||
+      reason.gatewayPolicyContract.failureMode !== 'fail_closed' ||
+      reason.gatewayPolicyContract.successFallbackAllowed !== false
+    ) {
+      issues.push({
+        code: 'not_fail_closed',
+        path: `$.${code}.gatewayPolicyContract`,
+        message: `denial reason "${code}" must deny, fail closed, and disallow success fallback`,
+      });
+    }
+  }
+  return issues;
+}
 
 export const DENIAL_TAXONOMY = {
   contractVersion: DENIAL_TAXONOMY_CONTRACT_VERSION,

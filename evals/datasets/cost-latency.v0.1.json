@@ -8,6 +8,7 @@
   "inert_fixture_mode": true,
   "no_live_external_calls": true,
   "production_enablement": false,
+  "production_retrieval_behavior": false,
   "source_data_policy": {
     "synthetic_only": true,
     "no_real_customer_data": true,
@@ -17,7 +18,9 @@
   },
   "categories": [
     "cost_attribution",
-    "gateway_overhead"
+    "gateway_overhead",
+    "budget_denial",
+    "rate_limit_denial"
   ],
   "artifact_ref_policy": {
     "required": true,
@@ -25,10 +28,12 @@
   },
   "cases": [
     {
+      "contract_version": "0.1.0",
       "case_id": "cost-latency-cost-attribution",
       "category": "cost_attribution",
       "title": "Validate synthetic cost attribution shape",
       "severity": "medium",
+      "intent": "Cost artifact includes model_alias, provider_candidate_id, input/output tokens, unit prices, and estimated_cost_usd.",
       "fixture_refs": [
         {
           "kind": "synthetic_fixture",
@@ -37,19 +42,37 @@
           "description": "Inert fixture for cost-latency-cost-attribution."
         }
       ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "fixture",
+        "trace_id": "trace-cost-latency-cost-attribution"
+      },
       "inputs": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "budget_scope": "project-alpha:dev",
         "input_tokens": 120,
         "output_tokens": 80,
-        "estimated_cost_usd": "0.00042"
+        "total_tokens": 200,
+        "unit_price_input_usd": "0.000001",
+        "unit_price_output_usd": "0.000004",
+        "estimated_cost_usd": "0.000440",
+        "synthetic_non_billable": true
       },
       "expected": {
+        "outcome": "pass",
         "decision": "pass",
         "assertions": [
           "Cost artifact includes model_alias, provider_candidate_id, input/output tokens, unit prices, and estimated_cost_usd.",
           "Cost is attributed to principal_id, project_id, budget_scope, and trace_id.",
           "Fixture cost is marked synthetic_non_billable."
         ],
-        "no_production_enablement": true
+        "no_production_enablement": true,
+        "model_prompt_must_include": [
+          "SYNTHETIC_COST_ATTRIBUTION"
+        ],
+        "model_prompt_must_not_include": []
       },
       "artifact_refs": {
         "expected_gate_result": "artifacts/evals/cost-latency/cost-latency-cost-attribution/gate-result.json",
@@ -62,19 +85,72 @@
         "suite",
         "decision",
         "policy_version",
-        "dataset_version"
+        "dataset_version",
+        "usage_event_id",
+        "estimated_cost_usd"
       ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "usage_event_id",
+          "requirement": "Record synthetic usage_event_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "estimated_cost_usd",
+          "requirement": "Record synthetic estimated_cost_usd for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
       "tags": [
         "cost-latency",
         "track-0",
-        "synthetic"
+        "synthetic",
+        "cost"
       ]
     },
     {
+      "contract_version": "0.1.0",
       "case_id": "cost-latency-gateway-overhead-shape",
       "category": "gateway_overhead",
       "title": "Validate gateway overhead measurement shape",
       "severity": "medium",
+      "intent": "Latency artifact separates client_to_gateway_ms, policy_eval_ms, provider_round_trip_ms, stream_overhead_ms, and total_ms.",
       "fixture_refs": [
         {
           "kind": "synthetic_fixture",
@@ -83,20 +159,37 @@
           "description": "Inert fixture for cost-latency-gateway-overhead-shape."
         }
       ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "fixture",
+        "trace_id": "trace-cost-latency-gateway-overhead-shape"
+      },
       "inputs": {
         "client_to_gateway_ms": 4,
+        "auth_eval_ms": 1,
         "policy_eval_ms": 2,
+        "routing_eval_ms": 1,
         "provider_round_trip_ms": 35,
-        "gateway_overhead_ms": 6
+        "stream_overhead_ms": 0,
+        "gateway_overhead_ms": 8,
+        "total_ms": 47,
+        "p95_ms_placeholder": 0,
+        "p99_ms_placeholder": 0
       },
       "expected": {
+        "outcome": "pass",
         "decision": "pass",
         "assertions": [
           "Latency artifact separates client_to_gateway_ms, policy_eval_ms, provider_round_trip_ms, stream_overhead_ms, and total_ms.",
           "Gateway overhead excludes synthetic provider latency and includes routing/fallback overhead.",
           "P95/P99 fields exist as placeholders without production SLO claims."
         ],
-        "no_production_enablement": true
+        "no_production_enablement": true,
+        "model_prompt_must_include": [
+          "SYNTHETIC_LATENCY_ARTIFACT"
+        ],
+        "model_prompt_must_not_include": []
       },
       "artifact_refs": {
         "expected_gate_result": "artifacts/evals/cost-latency/cost-latency-gateway-overhead-shape/gate-result.json",
@@ -109,12 +202,300 @@
         "suite",
         "decision",
         "policy_version",
-        "dataset_version"
+        "dataset_version",
+        "gateway_overhead_ms",
+        "total_ms"
       ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "gateway_overhead_ms",
+          "requirement": "Record synthetic gateway_overhead_ms for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "total_ms",
+          "requirement": "Record synthetic total_ms for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
       "tags": [
         "cost-latency",
         "track-0",
-        "synthetic"
+        "synthetic",
+        "latency"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "cost-latency-budget-denial",
+      "category": "budget_denial",
+      "title": "Validate budget denial cost and latency attribution",
+      "severity": "high",
+      "intent": "Budget denial records zero provider latency and zero billable cost.",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/cost-latency/cost-latency-budget-denial.json",
+          "sha256_required": true,
+          "description": "Inert fixture for cost-latency-budget-denial."
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "fixture",
+        "trace_id": "trace-cost-latency-budget-denial"
+      },
+      "inputs": {
+        "remaining_budget_usd": "0.000000",
+        "estimated_request_cost_usd": "0.000050",
+        "billable_cost_usd": "0.000000",
+        "provider_round_trip_ms": 0,
+        "gateway_overhead_ms": 5,
+        "total_ms": 5,
+        "provider_attempt_count": 0,
+        "synthetic_non_billable": true
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision": "deny",
+        "assertions": [
+          "Budget denial records zero provider latency and zero billable cost.",
+          "The trace includes remaining_budget_usd, estimated_request_cost_usd, and denial_reason.",
+          "Provider attempt count remains 0 for the denied synthetic request."
+        ],
+        "no_production_enablement": true,
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_PROVIDER_BODY"
+        ],
+        "required_denial_reason": "budget"
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/cost-latency/cost-latency-budget-denial/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/cost-latency/cost-latency-budget-denial/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/cost-latency/cost-latency-budget-denial/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "remaining_budget_usd",
+        "estimated_request_cost_usd"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "remaining_budget_usd",
+          "requirement": "Record synthetic remaining_budget_usd for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "estimated_request_cost_usd",
+          "requirement": "Record synthetic estimated_request_cost_usd for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "cost-latency",
+        "track-0",
+        "synthetic",
+        "budget",
+        "deny"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "cost-latency-rate-limit-denial",
+      "category": "rate_limit_denial",
+      "title": "Validate rate-limit denial latency and retry attribution",
+      "severity": "high",
+      "intent": "Rate-limit denial records retry_after_ms and no provider round trip.",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/cost-latency/cost-latency-rate-limit-denial.json",
+          "sha256_required": true,
+          "description": "Inert fixture for cost-latency-rate-limit-denial."
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "fixture",
+        "trace_id": "trace-cost-latency-rate-limit-denial"
+      },
+      "inputs": {
+        "rate_limit_key": "principal-alpha-gateway:/v1/chat/completions",
+        "window_ms": 60000,
+        "current_count": 61,
+        "limit": 60,
+        "retry_after_ms": 12000,
+        "billable_cost_usd": "0.000000",
+        "provider_round_trip_ms": 0,
+        "gateway_overhead_ms": 4,
+        "total_ms": 4,
+        "provider_attempt_count": 0,
+        "synthetic_non_billable": true
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision": "deny",
+        "assertions": [
+          "Rate-limit denial records retry_after_ms and no provider round trip.",
+          "The denial is attributed to principal_id, project_id, route, and rate_limit_key.",
+          "No synthetic cost event is marked billable for the denied request."
+        ],
+        "no_production_enablement": true,
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_PROVIDER_BODY"
+        ],
+        "required_denial_reason": "rate_limit"
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/cost-latency/cost-latency-rate-limit-denial/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/cost-latency/cost-latency-rate-limit-denial/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/cost-latency/cost-latency-rate-limit-denial/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "rate_limit_key",
+        "retry_after_ms"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "rate_limit_key",
+          "requirement": "Record synthetic rate_limit_key for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "retry_after_ms",
+          "requirement": "Record synthetic retry_after_ms for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "cost-latency",
+        "track-0",
+        "synthetic",
+        "rate-limit",
+        "deny"
       ]
     }
   ]

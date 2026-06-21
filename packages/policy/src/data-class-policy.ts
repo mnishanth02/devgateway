@@ -53,6 +53,8 @@ export type TraceStorageMode = 'none' | 'metadata_only' | 'redacted_snippets_all
 export interface ProviderPolicyMatrix {
   schemaVersion: '0.1.0';
   matrixId: string;
+  createdAt: string;
+  freshnessExpiresAt: string;
   status: 'track_0_governance_only';
   productionEnablement: {
     enabled: false;

@@ -8,6 +8,7 @@
   "inert_fixture_mode": true,
   "no_live_external_calls": true,
   "production_enablement": false,
+  "production_retrieval_behavior": false,
   "source_data_policy": {
     "synthetic_only": true,
     "no_real_customer_data": true,
@@ -17,10 +18,18 @@
   },
   "categories": [
     "auth",
-    "streaming",
+    "openai_models",
+    "openai_chat_completions",
+    "openai_sse",
+    "anthropic_messages",
+    "anthropic_sse",
+    "anthropic_count_tokens",
     "usage_attribution",
+    "error_shape",
     "fallback",
-    "error_shape"
+    "provider_data_policy",
+    "quota_denial",
+    "fallback_policy_denial"
   ],
   "artifact_ref_policy": {
     "required": true,
@@ -28,10 +37,12 @@
   },
   "cases": [
     {
+      "contract_version": "0.1.0",
       "case_id": "gateway-model-smoke-auth-required",
       "category": "auth",
-      "title": "Deny request without a valid virtual key or principal binding",
+      "title": "Deny request without a virtual key or principal binding",
       "severity": "critical",
+      "intent": "Missing auth stops before provider selection.",
       "fixture_refs": [
         {
           "kind": "synthetic_fixture",
@@ -40,18 +51,31 @@
           "description": "Inert fixture for gateway-model-smoke-auth-required."
         }
       ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/chat/completions",
+        "trace_id": "trace-gateway-model-smoke-auth-required"
+      },
       "inputs": {
+        "method": "POST",
         "route": "/v1/chat/completions",
         "auth_state": "missing_virtual_key"
       },
       "expected": {
+        "outcome": "deny",
         "decision": "deny",
         "assertions": [
-          "Missing or invalid auth must stop before provider selection.",
-          "The error body uses the shared typed denial shape without provider response leakage.",
-          "Audit evidence records virtual_key_id as absent and provider_attempt_count as 0."
+          "Missing auth stops before provider selection.",
+          "The client error uses the typed gateway denial shape.",
+          "Audit records provider_attempt_count=0."
         ],
-        "no_production_enablement": true
+        "no_production_enablement": true,
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_PROVIDER_BODY"
+        ],
+        "required_denial_reason": "auth_required"
       },
       "artifact_refs": {
         "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-auth-required/gate-result.json",
@@ -64,44 +88,112 @@
         "suite",
         "decision",
         "policy_version",
-        "dataset_version"
+        "dataset_version",
+        "auth_state",
+        "provider_attempt_count"
       ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "auth_state",
+          "requirement": "Record synthetic auth_state for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "provider_attempt_count",
+          "requirement": "Record synthetic provider_attempt_count for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
       "tags": [
         "gateway-model-smoke",
         "track-0",
-        "synthetic"
+        "synthetic",
+        "auth",
+        "deny"
       ]
     },
     {
-      "case_id": "gateway-model-smoke-streaming-shape",
-      "category": "streaming",
-      "title": "Validate fixture-mode streaming event ordering and terminal usage",
-      "severity": "medium",
+      "contract_version": "0.1.0",
+      "case_id": "gateway-model-smoke-revoked-virtual-key",
+      "category": "auth",
+      "title": "Deny request using a revoked virtual key",
+      "severity": "critical",
+      "intent": "Revoked keys stop before model routing or provider selection.",
       "fixture_refs": [
         {
           "kind": "synthetic_fixture",
-          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-streaming-shape.json",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-revoked-virtual-key.json",
           "sha256_required": true,
-          "description": "Inert fixture for gateway-model-smoke-streaming-shape."
+          "description": "Inert fixture for gateway-model-smoke-revoked-virtual-key."
         }
       ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/chat/completions",
+        "trace_id": "trace-gateway-model-smoke-revoked-virtual-key"
+      },
       "inputs": {
-        "stream": true,
-        "wire_format": "openai_chat_completions"
+        "method": "POST",
+        "route": "/v1/chat/completions",
+        "auth_state": "revoked_virtual_key"
       },
       "expected": {
-        "decision": "pass",
+        "outcome": "deny",
+        "decision": "deny",
         "assertions": [
-          "Stream emits message_start before content_delta and message_stop after final usage_delta.",
-          "Chunk payloads are synthetic and contain no provider-native secret fields.",
-          "Trace artifact records stream_event_count and terminal_finish_reason."
+          "Revoked keys stop before model routing or provider selection.",
+          "The denial reason is stable and audit-safe.",
+          "No provider request is attempted."
         ],
-        "no_production_enablement": true
+        "no_production_enablement": true,
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_PROVIDER_BODY"
+        ],
+        "required_denial_reason": "auth_required",
+        "auth_denial_subcode": "revoked-key"
       },
       "artifact_refs": {
-        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-streaming-shape/gate-result.json",
-        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-streaming-shape/trace.jsonl",
-        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-streaming-shape/audit-event.json"
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-revoked-virtual-key/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-revoked-virtual-key/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-revoked-virtual-key/audit-event.json"
       },
       "audit_evidence_required": [
         "trace_id",
@@ -109,19 +201,851 @@
         "suite",
         "decision",
         "policy_version",
-        "dataset_version"
+        "dataset_version",
+        "auth_state",
+        "provider_attempt_count"
       ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "auth_state",
+          "requirement": "Record synthetic auth_state for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "provider_attempt_count",
+          "requirement": "Record synthetic provider_attempt_count for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
       "tags": [
         "gateway-model-smoke",
         "track-0",
-        "synthetic"
+        "synthetic",
+        "auth",
+        "deny"
       ]
     },
     {
+      "contract_version": "0.1.0",
+      "case_id": "gateway-model-smoke-invalid-virtual-key",
+      "category": "auth",
+      "title": "Deny request using an invalid virtual key signature",
+      "severity": "critical",
+      "intent": "Invalid virtual key material stops before listing models.",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-invalid-virtual-key.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-invalid-virtual-key."
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/models",
+        "trace_id": "trace-gateway-model-smoke-invalid-virtual-key"
+      },
+      "inputs": {
+        "method": "GET",
+        "route": "/v1/models",
+        "auth_state": "invalid-key-signature"
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision": "deny",
+        "assertions": [
+          "Invalid virtual key material stops before listing models.",
+          "The denial uses the shared typed auth error shape.",
+          "No model list or provider metadata leaks."
+        ],
+        "no_production_enablement": true,
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_MODEL_LIST"
+        ],
+        "required_denial_reason": "auth_required",
+        "auth_denial_subcode": "invalid-key"
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-invalid-virtual-key/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-invalid-virtual-key/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-invalid-virtual-key/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "auth_state",
+        "provider_attempt_count"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "auth_state",
+          "requirement": "Record synthetic auth_state for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "provider_attempt_count",
+          "requirement": "Record synthetic provider_attempt_count for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic",
+        "auth",
+        "deny"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "gateway-model-smoke-openai-models",
+      "category": "openai_models",
+      "title": "Return OpenAI-compatible /v1/models response from synthetic aliases",
+      "severity": "medium",
+      "intent": "The gateway returns an OpenAI-compatible model list shape in fixture mode.",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-openai-models.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-openai-models."
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/models",
+        "trace_id": "trace-gateway-model-smoke-openai-models"
+      },
+      "inputs": {
+        "method": "GET",
+        "route": "/v1/models",
+        "auth_state": "valid_virtual_key"
+      },
+      "expected": {
+        "outcome": "pass",
+        "decision": "pass",
+        "assertions": [
+          "The gateway returns an OpenAI-compatible model list shape in fixture mode.",
+          "Model ids are aliases, not live provider model names or credentials.",
+          "Audit records the registry snapshot and virtual key principal."
+        ],
+        "no_production_enablement": true,
+        "model_prompt_must_include": [
+          "SYNTHETIC_MODEL_LIST"
+        ],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-models/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-models/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-models/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "registry_snapshot_id"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "registry_snapshot_id",
+          "requirement": "Record synthetic registry_snapshot_id for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic",
+        "openai",
+        "models"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "gateway-model-smoke-openai-chat-completions",
+      "category": "openai_chat_completions",
+      "title": "Return OpenAI-compatible chat completions response",
+      "severity": "high",
+      "intent": "The gateway accepts OpenAI chat completions shape and routes by model alias.",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-openai-chat-completions.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-openai-chat-completions."
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/chat/completions",
+        "trace_id": "trace-gateway-model-smoke-openai-chat-completions"
+      },
+      "inputs": {
+        "method": "POST",
+        "route": "/v1/chat/completions",
+        "body": {
+          "model": "track0-public-chat",
+          "stream": false
+        }
+      },
+      "expected": {
+        "outcome": "pass",
+        "decision": "pass",
+        "assertions": [
+          "The gateway accepts OpenAI chat completions shape and routes by model alias.",
+          "The response includes id, object, choices, finish_reason, and usage.",
+          "Synthetic usage is attributed without marking the request billable."
+        ],
+        "no_production_enablement": true,
+        "model_prompt_must_include": [
+          "SYNTHETIC_GATEWAY_SAFE_RESPONSE"
+        ],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-chat-completions/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-chat-completions/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-chat-completions/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "usage_event_id"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "usage_event_id",
+          "requirement": "Record synthetic usage_event_id for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic",
+        "openai",
+        "chat"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "gateway-model-smoke-openai-sse-shape",
+      "category": "openai_sse",
+      "title": "Return OpenAI-compatible SSE chat completion stream",
+      "severity": "high",
+      "intent": "OpenAI streaming emits data-prefixed JSON chunks and a terminal [DONE].",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-openai-sse-shape.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-openai-sse-shape."
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/chat/completions",
+        "trace_id": "trace-gateway-model-smoke-openai-sse-shape"
+      },
+      "inputs": {
+        "method": "POST",
+        "route": "/v1/chat/completions",
+        "body": {
+          "model": "track0-public-chat",
+          "stream": true
+        }
+      },
+      "expected": {
+        "outcome": "pass",
+        "decision": "pass",
+        "assertions": [
+          "OpenAI streaming emits data-prefixed JSON chunks and a terminal [DONE].",
+          "Chunk payloads include synthetic deltas and no provider-native secret fields.",
+          "Trace records stream_event_count, terminal_finish_reason, and terminal usage."
+        ],
+        "no_production_enablement": true,
+        "model_prompt_must_include": [
+          "SYNTHETIC_OPENAI_SSE"
+        ],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-sse-shape/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-sse-shape/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-sse-shape/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "stream_event_count",
+        "terminal_finish_reason"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "stream_event_count",
+          "requirement": "Record synthetic stream_event_count for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "terminal_finish_reason",
+          "requirement": "Record synthetic terminal_finish_reason for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic",
+        "openai",
+        "sse"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "gateway-model-smoke-anthropic-messages",
+      "category": "anthropic_messages",
+      "title": "Return Anthropic-compatible /v1/messages response",
+      "severity": "high",
+      "intent": "The gateway accepts Anthropic messages shape and routes by model alias.",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-anthropic-messages.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-anthropic-messages."
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/messages",
+        "trace_id": "trace-gateway-model-smoke-anthropic-messages"
+      },
+      "inputs": {
+        "method": "POST",
+        "route": "/v1/messages",
+        "headers": {
+          "anthropic-version": "2023-06-01"
+        },
+        "body": {
+          "model": "track0-claude-chat",
+          "stream": false
+        }
+      },
+      "expected": {
+        "outcome": "pass",
+        "decision": "pass",
+        "assertions": [
+          "The gateway accepts Anthropic messages shape and routes by model alias.",
+          "The response includes id, type=message, role, content array, stop_reason, and usage.",
+          "Synthetic request metadata never includes live provider credentials."
+        ],
+        "no_production_enablement": true,
+        "model_prompt_must_include": [
+          "SYNTHETIC_ANTHROPIC_MESSAGE"
+        ],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-anthropic-messages/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-anthropic-messages/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-anthropic-messages/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "usage_event_id"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "usage_event_id",
+          "requirement": "Record synthetic usage_event_id for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic",
+        "anthropic",
+        "messages"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "gateway-model-smoke-anthropic-sse-shape",
+      "category": "anthropic_sse",
+      "title": "Return Anthropic-compatible messages SSE stream",
+      "severity": "high",
+      "intent": "Anthropic streaming emits named SSE events in expected order.",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-anthropic-sse-shape.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-anthropic-sse-shape."
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/messages",
+        "trace_id": "trace-gateway-model-smoke-anthropic-sse-shape"
+      },
+      "inputs": {
+        "method": "POST",
+        "route": "/v1/messages",
+        "headers": {
+          "anthropic-version": "2023-06-01"
+        },
+        "body": {
+          "model": "track0-claude-chat",
+          "stream": true
+        }
+      },
+      "expected": {
+        "outcome": "pass",
+        "decision": "pass",
+        "assertions": [
+          "Anthropic streaming emits named SSE events in expected order.",
+          "Delta events are synthetic and redact provider-native internals.",
+          "Trace records message_start through message_stop and terminal usage."
+        ],
+        "no_production_enablement": true,
+        "model_prompt_must_include": [
+          "SYNTHETIC_ANTHROPIC_SSE"
+        ],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-anthropic-sse-shape/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-anthropic-sse-shape/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-anthropic-sse-shape/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "stream_event_count",
+        "terminal_finish_reason"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "stream_event_count",
+          "requirement": "Record synthetic stream_event_count for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "terminal_finish_reason",
+          "requirement": "Record synthetic terminal_finish_reason for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic",
+        "anthropic",
+        "sse"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "gateway-model-smoke-anthropic-count-tokens",
+      "category": "anthropic_count_tokens",
+      "title": "Return Anthropic-compatible /v1/messages/count_tokens response",
+      "severity": "medium",
+      "intent": "The gateway supports Anthropic count_tokens fixture requests without generating content.",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-anthropic-count-tokens.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-anthropic-count-tokens."
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/messages/count_tokens",
+        "trace_id": "trace-gateway-model-smoke-anthropic-count-tokens"
+      },
+      "inputs": {
+        "method": "POST",
+        "route": "/v1/messages/count_tokens",
+        "headers": {
+          "anthropic-version": "2023-06-01"
+        },
+        "body": {
+          "model": "track0-claude-chat"
+        }
+      },
+      "expected": {
+        "outcome": "pass",
+        "decision": "pass",
+        "assertions": [
+          "The gateway supports Anthropic count_tokens fixture requests without generating content.",
+          "The response includes input_tokens only and records no completion usage.",
+          "Cost attribution marks the fixture as synthetic_non_billable."
+        ],
+        "no_production_enablement": true,
+        "model_prompt_must_include": [
+          "SYNTHETIC_COUNT_TOKENS"
+        ],
+        "model_prompt_must_not_include": []
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-anthropic-count-tokens/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-anthropic-count-tokens/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-anthropic-count-tokens/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "usage_event_id"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "usage_event_id",
+          "requirement": "Record synthetic usage_event_id for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic",
+        "anthropic",
+        "count_tokens"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
       "case_id": "gateway-model-smoke-usage-attribution",
       "category": "usage_attribution",
-      "title": "Attribute synthetic token usage to principal, project, alias, and provider candidate",
+      "title": "Attribute synthetic usage and cost to gateway principals",
       "severity": "high",
+      "intent": "Usage ledger includes input_tokens, output_tokens, total_tokens, unit prices, and estimated_cost_usd.",
       "fixture_refs": [
         {
           "kind": "synthetic_fixture",
@@ -130,18 +1054,32 @@
           "description": "Inert fixture for gateway-model-smoke-usage-attribution."
         }
       ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/chat/completions",
+        "trace_id": "trace-gateway-model-smoke-usage-attribution"
+      },
       "inputs": {
-        "model_alias": "track0-public-chat",
-        "project_id": "project-alpha"
+        "method": "POST",
+        "route": "/v1/chat/completions",
+        "body": {
+          "model": "track0-public-chat"
+        }
       },
       "expected": {
+        "outcome": "pass",
         "decision": "pass",
         "assertions": [
-          "Usage ledger includes input_tokens, output_tokens, total_tokens, and estimated_cost_usd.",
-          "Usage attribution includes principal_id, project_id, model_alias, provider_candidate_id, and trace_id.",
+          "Usage ledger includes input_tokens, output_tokens, total_tokens, unit prices, and estimated_cost_usd.",
+          "Usage attribution includes principal_id, project_id, model_alias, provider_candidate_id, budget_scope, and trace_id.",
           "No usage record is marked billable or production."
         ],
-        "no_production_enablement": true
+        "no_production_enablement": true,
+        "model_prompt_must_include": [
+          "SYNTHETIC_USAGE_LEDGER"
+        ],
+        "model_prompt_must_not_include": []
       },
       "artifact_refs": {
         "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-usage-attribution/gate-result.json",
@@ -154,64 +1092,73 @@
         "suite",
         "decision",
         "policy_version",
-        "dataset_version"
+        "dataset_version",
+        "usage_event_id",
+        "budget_scope"
       ],
-      "tags": [
-        "gateway-model-smoke",
-        "track-0",
-        "synthetic"
-      ]
-    },
-    {
-      "case_id": "gateway-model-smoke-fallback-route",
-      "category": "fallback",
-      "title": "Fallback to secondary candidate after synthetic retryable provider error",
-      "severity": "high",
-      "fixture_refs": [
+      "audit_evidence": [
         {
-          "kind": "synthetic_fixture",
-          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-fallback-route.json",
-          "sha256_required": true,
-          "description": "Inert fixture for gateway-model-smoke-fallback-route."
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "usage_event_id",
+          "requirement": "Record synthetic usage_event_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "budget_scope",
+          "requirement": "Record synthetic budget_scope for fixture-mode audit correlation.",
+          "presence": "required"
         }
       ],
-      "inputs": {
-        "primary_candidate": "candidate-a",
-        "fallback_candidate": "candidate-b"
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
       },
-      "expected": {
-        "decision": "pass",
-        "assertions": [
-          "First candidate records retryable_error and no final answer is produced from it.",
-          "Second candidate is selected only if policy, budget, and eval gate checks remain satisfied.",
-          "Fallback chain is written to the expected trace artifact."
-        ],
-        "no_production_enablement": true
-      },
-      "artifact_refs": {
-        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-route/gate-result.json",
-        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-route/trace.jsonl",
-        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-route/audit-event.json"
-      },
-      "audit_evidence_required": [
-        "trace_id",
-        "case_id",
-        "suite",
-        "decision",
-        "policy_version",
-        "dataset_version"
-      ],
       "tags": [
         "gateway-model-smoke",
         "track-0",
-        "synthetic"
+        "synthetic",
+        "usage",
+        "cost"
       ]
     },
     {
+      "contract_version": "0.1.0",
       "case_id": "gateway-model-smoke-error-shape",
       "category": "error_shape",
-      "title": "Return stable typed gateway error shape for fixture provider failure",
+      "title": "Return stable typed gateway error shape for synthetic provider failure",
       "severity": "medium",
+      "intent": "Error response includes code, message, trace_id, retryable, and details.policy_reason.",
       "fixture_refs": [
         {
           "kind": "synthetic_fixture",
@@ -220,17 +1167,35 @@
           "description": "Inert fixture for gateway-model-smoke-error-shape."
         }
       ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/chat/completions",
+        "trace_id": "trace-gateway-model-smoke-error-shape"
+      },
       "inputs": {
-        "provider_error": "synthetic_rate_limit"
+        "method": "POST",
+        "route": "/v1/chat/completions",
+        "body": {
+          "model": "track0-public-chat",
+          "trigger": "synthetic_provider_rate_limit"
+        }
       },
       "expected": {
+        "outcome": "pass",
         "decision": "pass",
         "assertions": [
           "Error response includes code, message, trace_id, retryable, and details.policy_reason.",
           "Provider raw error body is redacted from client output and retained only as synthetic fixture metadata.",
-          "HTTP status maps deterministically from denial taxonomy."
+          "HTTP status maps deterministically from the gateway denial taxonomy."
         ],
-        "no_production_enablement": true
+        "no_production_enablement": true,
+        "model_prompt_must_include": [
+          "SYNTHETIC_TYPED_ERROR"
+        ],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_PROVIDER_RAW_ERROR_BODY"
+        ]
       },
       "artifact_refs": {
         "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-error-shape/gate-result.json",
@@ -243,13 +1208,649 @@
         "suite",
         "decision",
         "policy_version",
-        "dataset_version"
+        "dataset_version",
+        "error_code"
       ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "error_code",
+          "requirement": "Record synthetic error_code for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
       "tags": [
         "gateway-model-smoke",
         "track-0",
-        "synthetic"
+        "synthetic",
+        "error"
       ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "gateway-model-smoke-fallback-route",
+      "category": "fallback",
+      "title": "Fallback to secondary candidate after synthetic retryable provider error",
+      "severity": "high",
+      "intent": "First candidate records retryable_error and no final answer is produced from it.",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-fallback-route.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-fallback-route."
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/chat/completions",
+        "trace_id": "trace-gateway-model-smoke-fallback-route"
+      },
+      "inputs": {
+        "method": "POST",
+        "route": "/v1/chat/completions",
+        "body": {
+          "model": "track0-public-chat",
+          "fallback": true
+        }
+      },
+      "expected": {
+        "outcome": "pass",
+        "decision": "pass",
+        "assertions": [
+          "First candidate records retryable_error and no final answer is produced from it.",
+          "Second candidate is selected only if policy, budget, and eval gate checks remain satisfied.",
+          "Fallback chain is written to the expected trace artifact."
+        ],
+        "no_production_enablement": true,
+        "model_prompt_must_include": [
+          "SYNTHETIC_FALLBACK_SUCCESS"
+        ],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_PRIMARY_PARTIAL_OUTPUT"
+        ]
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-route/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-route/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-route/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "fallback_chain"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "fallback_chain",
+          "requirement": "Record synthetic fallback_chain for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic",
+        "fallback"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "gateway-model-smoke-provider-data-policy-gateway-deny",
+      "category": "provider_data_policy",
+      "title": "Deny restricted data through gateway path for external standard provider",
+      "severity": "critical",
+      "intent": "Provider data policy is enforced on the gateway model route before provider dispatch.",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-provider-data-policy-gateway-deny.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-provider-data-policy-gateway-deny."
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/chat/completions",
+        "trace_id": "trace-gateway-model-smoke-provider-data-policy-gateway-deny"
+      },
+      "inputs": {
+        "method": "POST",
+        "route": "/v1/chat/completions",
+        "body": {
+          "model": "track0-public-chat",
+          "metadata": {
+            "data_class": "restricted"
+          },
+          "messages": [
+            {
+              "role": "user",
+              "content": "SYNTHETIC_RESTRICTED_GATEWAY_MARKER"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision": "deny",
+        "assertions": [
+          "Provider data policy is enforced on the gateway model route before provider dispatch.",
+          "Restricted synthetic data cannot route to an external_standard candidate without DPA/ZDR approval.",
+          "Audit records data_class, provider_class, route, and denial_reason."
+        ],
+        "no_production_enablement": true,
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_RESTRICTED_GATEWAY_MARKER"
+        ],
+        "required_denial_reason": "data_class"
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-provider-data-policy-gateway-deny/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-provider-data-policy-gateway-deny/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-provider-data-policy-gateway-deny/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "data_class",
+        "provider_class",
+        "provider_attempt_count"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "data_class",
+          "requirement": "Record synthetic data_class for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "provider_class",
+          "requirement": "Record synthetic provider_class for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "provider_attempt_count",
+          "requirement": "Record synthetic provider_attempt_count for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic",
+        "data-policy",
+        "deny"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "gateway-model-smoke-budget-deny",
+      "category": "quota_denial",
+      "title": "Deny gateway model call when synthetic budget is exhausted",
+      "severity": "high",
+      "intent": "Budget checks execute after auth/policy and before provider dispatch.",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-budget-deny.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-budget-deny."
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/chat/completions",
+        "trace_id": "trace-gateway-model-smoke-budget-deny"
+      },
+      "inputs": {
+        "method": "POST",
+        "route": "/v1/chat/completions",
+        "body": {
+          "model": "track0-public-chat"
+        }
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision": "deny",
+        "assertions": [
+          "Budget checks execute after auth/policy and before provider dispatch.",
+          "Exhausted budget returns typed denial with no usage charge.",
+          "Audit records budget_scope, remaining_budget_usd, and provider_attempt_count=0."
+        ],
+        "no_production_enablement": true,
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_PROVIDER_BODY"
+        ],
+        "required_denial_reason": "budget"
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-budget-deny/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-budget-deny/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-budget-deny/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "budget_scope",
+        "remaining_budget_usd",
+        "provider_attempt_count"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "budget_scope",
+          "requirement": "Record synthetic budget_scope for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "remaining_budget_usd",
+          "requirement": "Record synthetic remaining_budget_usd for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "provider_attempt_count",
+          "requirement": "Record synthetic provider_attempt_count for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic",
+        "budget",
+        "deny"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "gateway-model-smoke-rate-limit-deny",
+      "category": "quota_denial",
+      "title": "Deny gateway model call when synthetic rate limit is exceeded",
+      "severity": "high",
+      "intent": "Rate-limit checks execute before provider dispatch.",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-rate-limit-deny.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-rate-limit-deny."
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/chat/completions",
+        "trace_id": "trace-gateway-model-smoke-rate-limit-deny"
+      },
+      "inputs": {
+        "method": "POST",
+        "route": "/v1/chat/completions",
+        "body": {
+          "model": "track0-public-chat"
+        }
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision": "deny",
+        "assertions": [
+          "Rate-limit checks execute before provider dispatch.",
+          "The denial includes retry_after_ms and stable typed error fields.",
+          "Audit records rate_limit_key, current_count, limit, and provider_attempt_count=0."
+        ],
+        "no_production_enablement": true,
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_PROVIDER_BODY"
+        ],
+        "required_denial_reason": "rate_limit"
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-rate-limit-deny/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-rate-limit-deny/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-rate-limit-deny/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "rate_limit_key",
+        "retry_after_ms",
+        "provider_attempt_count"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record synthetic trace_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record synthetic case_id for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "suite",
+          "requirement": "Record synthetic suite for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record synthetic decision for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record synthetic policy_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "dataset_version",
+          "requirement": "Record synthetic dataset_version for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "rate_limit_key",
+          "requirement": "Record synthetic rate_limit_key for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "retry_after_ms",
+          "requirement": "Record synthetic retry_after_ms for fixture-mode audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "provider_attempt_count",
+          "requirement": "Record synthetic provider_attempt_count for fixture-mode audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "gateway-model-smoke",
+        "track-0",
+        "synthetic",
+        "rate-limit",
+        "deny"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "gateway-model-smoke-fallback-policy-deny",
+      "category": "fallback_policy_denial",
+      "title": "Deny fallback route when secondary candidate violates policy",
+      "severity": "high",
+      "intent": "Fallback selection must fail safely when the secondary candidate violates policy.",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/gateway-model-smoke/gateway-model-smoke-fallback-policy-deny.json",
+          "sha256_required": true,
+          "description": "Inert fixture for gateway-model-smoke-fallback-policy-deny."
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-gateway",
+        "project_id": "project-alpha",
+        "route_intent": "/v1/chat/completions",
+        "trace_id": "trace-gateway-model-smoke-fallback-policy-deny"
+      },
+      "inputs": {
+        "method": "POST",
+        "route": "/v1/chat/completions",
+        "primary_candidate": "openai-primary-timeout",
+        "fallback_candidate": "anthropic-restricted-disallowed",
+        "fallback_attempt": 1
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision": "deny",
+        "required_denial_reason": "data_class",
+        "assertions": [
+          "Fallback candidate is evaluated with the same provider/data-class policy as the primary route.",
+          "Secondary candidate is denied and no provider call is attempted."
+        ],
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_RESTRICTED_FALLBACK_CONTENT"
+        ]
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "decision",
+        "denial_reason",
+        "fallback_attempt",
+        "provider_candidate",
+        "policy_version",
+        "registry_version"
+      ],
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Record trace_id for fallback policy denial audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "case_id",
+          "requirement": "Record case_id for fallback policy denial audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record decision for fallback policy denial audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Record denial_reason for fallback policy denial audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "fallback_attempt",
+          "requirement": "Record fallback_attempt for fallback policy denial audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "provider_candidate",
+          "requirement": "Record provider_candidate for fallback policy denial audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "policy_version",
+          "requirement": "Record policy_version for fallback policy denial audit correlation.",
+          "presence": "required"
+        },
+        {
+          "field": "registry_version",
+          "requirement": "Record registry_version for fallback policy denial audit correlation.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "gateway-model-smoke",
+        "fallback",
+        "data-policy",
+        "deny",
+        "synthetic",
+        "track-1"
+      ],
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-policy-deny/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-policy-deny/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-fallback-policy-deny/audit-event.json"
+      }
     }
   ]
 }

@@ -22,6 +22,16 @@ export function buildHealthPayload(options: HealthPayloadOptions): HealthPayload
 
 export function createRequestHandler(port: number) {
     return (request: IncomingMessage, response: ServerResponse) => {
+        void handleRequest(request, response, port).catch((error: unknown) => {
+            writeJson(response, 500, {
+                error: 'admin_portal_error',
+                message: error instanceof Error ? error.message : 'Unknown admin portal error.',
+            });
+        });
+    };
+}
+
+async function handleRequest(request: IncomingMessage, response: ServerResponse, port: number): Promise<void> {
         const path = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`).pathname;
 
         if (path === '/healthz' || path === '/readyz') {
@@ -29,31 +39,19 @@ export function createRequestHandler(port: number) {
             return;
         }
 
-        if (path === '/') {
-            response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-            response.end(`<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DevGateway Admin Portal</title>
-  </head>
-  <body>
-    <main>
-      <h1>DevGateway Admin Portal</h1>
-      <p>Local frontend skeleton is running on port ${port}.</p>
-    </main>
-  </body>
-</html>
-`);
+        if (path === '/' || path === '/operations' || path === '/operations.json') {
+            writeJson(response, 503, {
+                error: 'admin_portal_server_disabled',
+                message:
+                    'The legacy Node operations server is disabled; use the Vite admin portal behind Better Auth session validation.',
+            });
             return;
         }
 
         writeJson(response, 404, {
             error: 'not_found',
-            message: 'DevGateway Admin Portal local skeleton exposes / and /healthz.',
+            message: 'DevGateway Admin Portal exposes /healthz and /readyz from this server entrypoint.',
         });
-    };
 }
 
 export function startServer(port = parsePort(process.env.PORT, 43101)) {

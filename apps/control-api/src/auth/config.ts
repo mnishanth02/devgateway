@@ -1,7 +1,7 @@
 import type { AuthEnvConfig } from '@devgateway/config';
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { twoFactor } from 'better-auth/plugins/two-factor';
-import { createAuthDatabaseHooks, type AuthAuditEmitter } from './audit.js';
+import { createAuthDatabaseHooks, requireAuthAuditEmitter, type AuthAuditEmitter } from './audit.ts';
 
 export const AUTH_BASE_PATH = '/api/auth';
 
@@ -19,6 +19,10 @@ export function createControlAuthOptions(
   env: AuthEnvConfig,
   bindings: ControlAuthRuntimeBindings = {},
 ): BetterAuthOptions {
+  if (env.runtimeEnvironment === 'production' && bindings.database === undefined) {
+    throw new Error('Control API production auth requires an explicit Operational Postgres Better Auth database adapter');
+  }
+
   const options: BetterAuthOptions = {
     appName: 'DevGateway',
     basePath: AUTH_BASE_PATH,
@@ -81,7 +85,7 @@ export function createControlAuthOptions(
         trustDeviceMaxAge: 0,
       }),
     ],
-    databaseHooks: createAuthDatabaseHooks(bindings.auditEmitter),
+    databaseHooks: createAuthDatabaseHooks(requireAuthAuditEmitter(bindings.auditEmitter)),
   };
 
   if (bindings.database !== undefined) {

@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/retrieval-env.test.ts",
+    "test": "node --experimental-strip-types --test src/retrieval-env.test.ts src/auth-env.test.ts",
     "typecheck": "tsc --noEmit"
   }
 }

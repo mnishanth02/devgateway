@@ -5,6 +5,20 @@
   "description": "Placeholder package for observability, logging, and audit helpers.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./otel": "./src/otel.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/index.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opentelemetry/exporter-metrics-otlp-http": "0.219.0",
+    "@opentelemetry/exporter-trace-otlp-http": "0.219.0",
+    "@opentelemetry/resources": "2.2.0",
+    "@opentelemetry/sdk-metrics": "2.2.0",
+    "@opentelemetry/sdk-node": "0.219.0",
+    "@devgateway/shared-types": "workspace:*"
   }
 }

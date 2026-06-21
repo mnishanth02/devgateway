@@ -1,24 +1,66 @@
 {
   "fixture_version": "0.1.0",
+  "case_id": "gateway-model-smoke-usage-attribution",
+  "category": "usage_attribution",
   "synthetic": true,
   "live_external_calls": false,
   "production_enablement": false,
+  "production_retrieval_behavior": false,
   "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
-  "case_id": "gateway-model-smoke-usage-attribution",
-  "category": "usage_attribution",
   "request": {
-    "model_alias": "track0-public-chat",
-    "project_id": "project-alpha"
+    "method": "POST",
+    "route": "/v1/chat/completions",
+    "body": {
+      "model": "track0-public-chat"
+    }
   },
-  "expected_decision": "pass",
+  "gateway_context": {
+    "trace_id": "trace-gateway-model-smoke-usage-attribution",
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "virtual_key_id": "vk_synthetic_alpha",
+    "model_alias": "track0-public-chat",
+    "provider_candidate_id": "fixture-openai-primary",
+    "provider_attempt_count": 1
+  },
+  "synthetic_shape": {},
+  "synthetic_measurement": {
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "budget_scope": "project-alpha:dev",
+    "input_tokens": 120,
+    "output_tokens": 80,
+    "total_tokens": 200,
+    "unit_price_input_usd": "0.000001",
+    "unit_price_output_usd": "0.000004",
+    "estimated_cost_usd": "0.000440",
+    "synthetic_non_billable": true
+  },
+  "expected_engine_decision": {
+    "decision": "pass",
+    "prompt_context_allowed_markers": [
+      "SYNTHETIC_USAGE_LEDGER"
+    ],
+    "prompt_context_forbidden_markers": []
+  },
   "expected_assertions": [
-    "Usage ledger includes input_tokens, output_tokens, total_tokens, and estimated_cost_usd.",
-    "Usage attribution includes principal_id, project_id, model_alias, provider_candidate_id, and trace_id.",
+    "Usage ledger includes input_tokens, output_tokens, total_tokens, unit prices, and estimated_cost_usd.",
+    "Usage attribution includes principal_id, project_id, model_alias, provider_candidate_id, budget_scope, and trace_id.",
     "No usage record is marked billable or production."
   ],
   "artifact_refs": {
     "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-usage-attribution/gate-result.json",
     "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-usage-attribution/trace.jsonl",
     "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-usage-attribution/audit-event.json"
-  }
+  },
+  "audit_expectations": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "usage_event_id",
+    "budget_scope"
+  ]
 }

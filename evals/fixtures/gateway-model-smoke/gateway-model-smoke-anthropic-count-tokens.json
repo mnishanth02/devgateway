@@ -1,0 +1,66 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "gateway-model-smoke-anthropic-count-tokens",
+  "category": "anthropic_count_tokens",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "request": {
+    "method": "POST",
+    "route": "/v1/messages/count_tokens",
+    "headers": {
+      "anthropic-version": "2023-06-01"
+    },
+    "body": {
+      "model": "track0-claude-chat"
+    }
+  },
+  "gateway_context": {
+    "trace_id": "trace-gateway-model-smoke-anthropic-count-tokens",
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "virtual_key_id": "vk_synthetic_alpha",
+    "model_alias": "track0-claude-chat",
+    "provider_candidate_id": "fixture-anthropic-primary",
+    "provider_attempt_count": 1
+  },
+  "synthetic_shape": {
+    "response": {
+      "input_tokens": 9
+    }
+  },
+  "synthetic_measurement": {
+    "input_tokens": 9,
+    "output_tokens": 0,
+    "estimated_cost_usd": "0.000009",
+    "synthetic_non_billable": true
+  },
+  "expected_engine_decision": {
+    "decision": "pass",
+    "prompt_context_allowed_markers": [
+      "SYNTHETIC_COUNT_TOKENS"
+    ],
+    "prompt_context_forbidden_markers": []
+  },
+  "expected_assertions": [
+    "The gateway supports Anthropic count_tokens fixture requests without generating content.",
+    "The response includes input_tokens only and records no completion usage.",
+    "Cost attribution marks the fixture as synthetic_non_billable."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-anthropic-count-tokens/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-anthropic-count-tokens/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-anthropic-count-tokens/audit-event.json"
+  },
+  "audit_expectations": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "usage_event_id"
+  ]
+}

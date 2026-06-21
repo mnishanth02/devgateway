@@ -3,19 +3,19 @@ export const policyPackage = {
   status: 'phase-0-6-github-permission-baseline',
 } as const;
 
-export * from './denial-reasons.js';
+export * from './denial-reasons.ts';
 export {
   DATA_CLASSES,
   DATA_CLASS_ROUTING_RULES,
   POLICY_EVALUATION_ORDER,
   evaluateDataClassPolicy,
   providerDataClassMatrix,
-} from './data-class-policy.js';
+} from './data-class-policy.ts';
 export {
   GITHUB_APP_SCOPE_RULES,
   GITHUB_FIRST_RELEASE_SCM,
   githubAppScopeMatrix,
-} from './github-app-scopes.js';
+} from './github-app-scopes.ts';
 
 export type {
   DataClass,
@@ -30,14 +30,14 @@ export type {
   ProviderPolicy,
   ProviderPolicyMatrix,
   ZeroDataRetentionStatus,
-} from './data-class-policy.js';
+} from './data-class-policy.ts';
 export type {
   GithubAppAccessLevel,
   GithubAppDataClassTouched,
   GithubAppInstallationScope,
   GithubAppRequirement,
   GithubAppScopeMatrixRow,
-} from './github-app-scopes.js';
+} from './github-app-scopes.ts';
 
 export {
   GITHUB_PERMISSION_ACL_ARTIFACT_KINDS,
@@ -50,7 +50,7 @@ export {
   GITHUB_WEBHOOK_REQUIRED_HEADERS,
   GITHUB_WEBHOOK_SIGNATURE_ALGORITHM,
   evaluateGithubRepoAwareRetrieval,
-} from './github-permission-rules.js';
+} from './github-permission-rules.ts';
 
 export type {
   GithubPermissionAclArtifactKind,
@@ -64,7 +64,15 @@ export type {
   GithubPromptAssemblyAclRecheckEvidence,
   GithubRepoAwareRetrievalDecision,
   GithubRepoAwareRetrievalInput,
-} from './github-permission-rules.js';
+} from './github-permission-rules.ts';
+
+export {
+  assertProviderDataClassMatrix,
+  defaultProviderDataClassMatrixPath,
+  getBundledProviderDataClassMatrix,
+  loadProviderDataClassMatrix,
+  type ProviderDataClassMatrixLoadOptions,
+} from './load-policy.ts';
 
 export {
   validatePolicy,
@@ -72,4 +80,4 @@ export {
   validatePolicyNegativeFixtures,
   type PolicyValidationIssue,
   type PolicyValidationResult,
-} from './validate-policy.js';
+} from './validate-policy.ts';

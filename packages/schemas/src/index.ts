@@ -8,6 +8,10 @@ export const schemaCatalog = {
   },
   shared: {
     gateResult: 'schemas/shared/gate-result.v0.1.schema.json',
+    virtualKey: 'schemas/shared/virtual-key.v0.1.schema.json',
+    budgetScope: 'schemas/shared/budget-scope.v0.1.schema.json',
+    costEvent: 'schemas/shared/cost-event.v0.1.schema.json',
+    traceContext: 'schemas/shared/trace-context.v0.1.schema.json',
     evalCase: 'schemas/eval/eval-case.v0.1.schema.json',
   },
 } as const;

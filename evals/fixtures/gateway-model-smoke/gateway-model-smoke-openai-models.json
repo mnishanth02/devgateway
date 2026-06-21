@@ -1,0 +1,66 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "gateway-model-smoke-openai-models",
+  "category": "openai_models",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
+  "request": {
+    "method": "GET",
+    "route": "/v1/models",
+    "auth_state": "valid_virtual_key"
+  },
+  "gateway_context": {
+    "trace_id": "trace-gateway-model-smoke-openai-models",
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "virtual_key_id": "vk_synthetic_alpha",
+    "model_alias": "track0-public-chat",
+    "provider_candidate_id": "fixture-openai-primary",
+    "provider_attempt_count": 1
+  },
+  "synthetic_shape": {
+    "response": {
+      "object": "list",
+      "data": [
+        {
+          "id": "track0-public-chat",
+          "object": "model"
+        },
+        {
+          "id": "track0-claude-chat",
+          "object": "model"
+        }
+      ]
+    }
+  },
+  "synthetic_measurement": {},
+  "expected_engine_decision": {
+    "decision": "pass",
+    "prompt_context_allowed_markers": [
+      "SYNTHETIC_MODEL_LIST"
+    ],
+    "prompt_context_forbidden_markers": []
+  },
+  "expected_assertions": [
+    "The gateway returns an OpenAI-compatible model list shape in fixture mode.",
+    "Model ids are aliases, not live provider model names or credentials.",
+    "Audit records the registry snapshot and virtual key principal."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-models/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-models/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-openai-models/audit-event.json"
+  },
+  "audit_expectations": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "registry_snapshot_id"
+  ]
+}

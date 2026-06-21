@@ -19,19 +19,27 @@ Keep Bifrost route/provider configuration derived from the DevGateway model/prov
 1. Validate registry and policy artifacts with workspace commands.
 2. Materialize immutable registry and policy snapshots with version IDs.
 3. Verify production-enabled aliases/routes have matching passing gate-result records.
-4. Generate Bifrost route/provider config from snapshots, or validate a checked-in/generated config against snapshots.
+4. Generate DevGateway evidence config from snapshots, and separately generate or validate an upstream Bifrost runtime `config.json` artifact.
 5. Attach snapshot version IDs to `BIFROST_ROUTE_CONFIG_VERSION` and `BIFROST_POLICY_VERSION`.
-6. Deploy or restart Bifrost only after config validation succeeds.
-7. Emit an audit event containing snapshot versions, checksum, approver, environment, and deployment ID.
+6. Attach the host-side evidence config location to `BIFROST_CONFIG_PATH`, attach the host-side upstream runtime artifact to `BIFROST_RUNTIME_CONFIG_PATH`, mount the runtime artifact into the Bifrost container at `BIFROST_CONTAINER_CONFIG_PATH=/app/data/config.json`, and verify provider-key variables are safe placeholders/references only until approved secrets are injected out-of-band.
+7. Deploy, restart, or hot reload Bifrost only after config validation succeeds.
+8. Emit an audit event containing snapshot versions, checksum, approver, environment, and deployment ID.
 
 ## Freshness and fail-closed policy
 
 - Missing snapshots fail validation.
-- Stale snapshots fail validation when older than `BIFROST_POLICY_MAX_STALENESS_SECONDS` or the approved release window.
+- Stale snapshots fail validation when their embedded freshness deadline has passed. `BIFROST_POLICY_MAX_STALENESS_SECONDS` is reserved for future live-sync pipelines that provide a runtime sync timestamp; it is not seeded as an active local/default gate for immutable checked-in snapshots.
 - Checksum/signature mismatch fails validation.
 - Bifrost startup fails when generated config and environment versions do not match.
+- Bifrost startup/readiness fails closed when host `BIFROST_CONFIG_PATH`, mounted `/app/data/config.json`, registry evidence, policy evidence, or required gate-result records are missing, stale, or unverifiable.
 - Runtime requests fail closed when their policy or registry version headers are missing, stale, or not equal to the active gateway versions.
 - Break-glass does not bypass freshness checks unless an approved break-glass TTL explicitly names the route and provider scope; all use is audited and followed by provider-key rotation.
+
+## Reload policy
+
+- Prefer atomic hot reload only after the upstream runtime proves a verified config can be swapped without mixed registry/policy versions.
+- Until that evidence exists, use restart-with-readiness promotion: start with the new generated artifact mounted as `/app/data/config.json`, require readiness to prove `BIFROST_ROUTE_CONFIG_VERSION` and `BIFROST_POLICY_VERSION`, then shift traffic.
+- Record zero-downtime reload as an open risk until atomic reload verification, rollback behavior, and load-test evidence are available.
 
 ## Virtual-key integration
 

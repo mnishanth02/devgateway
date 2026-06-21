@@ -1,0 +1,28 @@
+{
+  "providers": {},
+  "governance": {
+    "auth_config": {
+      "is_enabled": false,
+      "disable_auth_on_inference": false
+    },
+    "virtual_keys": [],
+    "budgets": [],
+    "rate_limits": [],
+    "model_configs": [],
+    "routing_rules": []
+  },
+  "config_store": {
+    "enabled": true,
+    "type": "sqlite",
+    "config": {
+      "path": "/app/data/config.db"
+    }
+  },
+  "logs_store": {
+    "enabled": true,
+    "type": "sqlite",
+    "config": {
+      "path": "/app/data/logs.db"
+    }
+  }
+}

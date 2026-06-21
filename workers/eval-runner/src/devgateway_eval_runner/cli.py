@@ -253,33 +253,55 @@ def validate_fixture(case: dict[str, Any], fixture: Any, fixture_path_ref: str) 
 def execute_case(case: dict[str, Any], fixtures: list[dict[str, Any]]) -> dict[str, Any]:
     failures: list[str] = []
     expected = case["expected"]
-    combined_allowed: set[str] = set()
-    combined_forbidden: set[str] = set()
-    observed_decisions: set[str] = set()
-    observed_denial_reasons: set[str] = set()
-
-    for fixture in fixtures:
-        decision = fixture["expected_engine_decision"]
-        observed_decisions.add(decision["decision"])
-        if decision.get("denial_reason"):
-            observed_denial_reasons.add(decision["denial_reason"])
-        combined_allowed.update(decision.get("prompt_context_allowed_markers", []))
-        combined_forbidden.update(decision.get("prompt_context_forbidden_markers", []))
-
-    if expected["outcome"] not in observed_decisions:
-        failures.append(f"expected outcome {expected['outcome']} was not produced by fixture provider")
     required_denial_reason = expected.get("required_denial_reason")
-    if expected["outcome"] == "deny" and required_denial_reason not in observed_denial_reasons:
-        failures.append(f"required denial reason {required_denial_reason!r} was not produced")
+    must_include = expected.get("model_prompt_must_include", [])
+    must_not_include = expected.get("model_prompt_must_not_include", [])
+
+    combined_forbidden: set[str] = set()
+    combined_assertions: set[str] = set()
+
+    # Evaluate every fixture individually ("all"/intersection semantics): a
+    # multi-fixture case passes only when every fixture independently satisfies
+    # the case expectation. Pooling fixtures into a union would let one matching
+    # fixture mask others that bypass the gate.
+    for index, fixture in enumerate(fixtures):
+        context = f"{case['case_id']}.fixture[{index}]"
+        decision = fixture["expected_engine_decision"]
+        observed = decision["decision"]
+        allowed = set(decision.get("prompt_context_allowed_markers", []))
+        combined_forbidden.update(decision.get("prompt_context_forbidden_markers", []))
+        fixture_assertions = fixture.get("expected_assertions")
+        if isinstance(fixture_assertions, list):
+            combined_assertions.update(fixture_assertions)
+
+        if observed != expected["outcome"]:
+            failures.append(f"{context} produced outcome {observed!r}, expected {expected['outcome']!r}")
+        if expected["outcome"] == "deny" and required_denial_reason is not None and decision.get("denial_reason") != required_denial_reason:
+            failures.append(f"{context} denial reason {decision.get('denial_reason')!r} != required {required_denial_reason!r}")
+        for marker in must_include:
+            if marker not in allowed:
+                failures.append(f"{context} did not include required prompt marker: {marker}")
+        for marker in must_not_include:
+            if marker in allowed:
+                failures.append(f"{context} included forbidden prompt marker: {marker}")
+
     if expected["outcome"] == "pass" and required_denial_reason is not None:
         failures.append("pass case must not require a denial reason")
 
-    for marker in expected.get("model_prompt_must_include", []):
-        if marker not in combined_allowed:
-            failures.append(f"required prompt marker was not included by fixture provider: {marker}")
-    for marker in expected.get("model_prompt_must_not_include", []):
-        if marker in combined_allowed:
-            failures.append(f"forbidden prompt marker was included by fixture provider: {marker}")
+    # Forbidden-marker coverage: the fixtures must explicitly carry every
+    # must-not-include marker so the leak assertion is actually exercised rather
+    # than silently absent.
+    for marker in must_not_include:
+        if marker not in combined_forbidden:
+            failures.append(f"must_not_include marker not covered by fixture forbidden markers: {marker}")
+
+    # Assertion coverage: every documented dataset assertion must be reflected in
+    # the fixture expected_assertions so fixture/intent drift fails closed.
+    case_assertions = expected.get("assertions")
+    if isinstance(case_assertions, list):
+        for assertion in case_assertions:
+            if assertion not in combined_assertions:
+                failures.append(f"dataset assertion not covered by fixture expected_assertions: {assertion}")
 
     audit_fields = [
         require_string(evidence, "field", f"{case['case_id']}.audit_evidence")

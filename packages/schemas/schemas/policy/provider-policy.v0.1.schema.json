@@ -8,6 +8,8 @@
     "$schema",
     "schemaVersion",
     "matrixId",
+    "createdAt",
+    "freshnessExpiresAt",
     "status",
     "productionEnablement",
     "dataClasses",
@@ -24,6 +26,14 @@
     "matrixId": {
       "type": "string",
       "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "freshnessExpiresAt": {
+      "type": "string",
+      "format": "date-time"
     },
     "status": {
       "const": "track_0_governance_only"

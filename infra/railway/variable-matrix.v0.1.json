@@ -261,8 +261,30 @@
             "development",
             "production"
           ],
-          "example": "/etc/bifrost/config.yaml",
-          "rotation": "Change only with the Bifrost image/config mount strategy."
+          "example": "/etc/devgateway/bifrost.evidence.json",
+          "rotation": "Host-side DevGateway evidence artifact path; change only with reviewed config evidence strategy."
+        },
+        {
+          "name": "BIFROST_RUNTIME_CONFIG_PATH",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "/etc/devgateway/config.runtime.json",
+          "rotation": "Host-side upstream Bifrost runtime config artifact path; must be generated/validated separately from DevGateway evidence."
+        },
+        {
+          "name": "BIFROST_CONTAINER_CONFIG_PATH",
+          "classification": "non-secret",
+          "exposure": "internal-config",
+          "environments": [
+            "development",
+            "production"
+          ],
+          "example": "/app/data/config.json",
+          "rotation": "Container mount target; upstream Bifrost reads <app-dir>/config.json."
         },
         {
           "name": "BIFROST_ROUTE_CONFIG_VERSION",
@@ -294,8 +316,8 @@
             "development",
             "production"
           ],
-          "example": "300",
-          "rotation": "Review with SLO and policy freshness requirements; production changes require gateway approval."
+          "example": "<optional:live-sync-only>",
+          "rotation": "Reserved for future live-sync pipelines with runtime sync timestamps; do not seed as an active default for immutable checked-in snapshots."
         },
         {
           "name": "BIFROST_BREAK_GLASS_ENABLED",
@@ -309,7 +331,7 @@
           "rotation": "Keep false except during approved break-glass TTL; reset and rotate provider keys after use."
         },
         {
-          "name": "OPENAI_API_KEY",
+          "name": "DEVGATEWAY_OPENAI_API_KEY_PLACEHOLDER",
           "classification": "secret",
           "exposure": "provider-credential",
           "environments": [
@@ -317,10 +339,10 @@
             "production"
           ],
           "example": "<secret:provider-key-placeholder>",
-          "rotation": "Rotate per provider policy, after break-glass, and after any suspected exposure; no source-control values."
+          "rotation": "Placeholder/reference only until provider gates pass; do not expose literal OPENAI_API_KEY to Bifrost before validated config gates provider enablement."
         },
         {
-          "name": "ANTHROPIC_API_KEY",
+          "name": "DEVGATEWAY_ANTHROPIC_API_KEY_PLACEHOLDER",
           "classification": "secret",
           "exposure": "provider-credential",
           "environments": [
@@ -328,7 +350,7 @@
             "production"
           ],
           "example": "<secret:provider-key-placeholder>",
-          "rotation": "Rotate per provider policy, after break-glass, and after any suspected exposure; no source-control values."
+          "rotation": "Placeholder/reference only until provider gates pass; do not expose literal ANTHROPIC_API_KEY to Bifrost before validated config gates provider enablement."
         }
       ]
     },

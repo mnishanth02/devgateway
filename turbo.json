@@ -6,6 +6,10 @@
     "tsconfig.base.json",
     ".npmrc"
   ],
+  "globalPassThroughEnv": [
+    "DATABASE_CHECK_URL",
+    "DATABASE_MIGRATION_URL"
+  ],
   "tasks": {
     "transit": {
       "dependsOn": ["^transit"]

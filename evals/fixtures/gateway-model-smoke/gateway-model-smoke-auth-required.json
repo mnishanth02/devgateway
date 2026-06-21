@@ -1,24 +1,60 @@
 {
   "fixture_version": "0.1.0",
+  "case_id": "gateway-model-smoke-auth-required",
+  "category": "auth",
   "synthetic": true,
   "live_external_calls": false,
   "production_enablement": false,
+  "production_retrieval_behavior": false,
   "source_data_notice": "Synthetic inert Track 0 fixture; not real customer, repository, provider, or production telemetry data.",
-  "case_id": "gateway-model-smoke-auth-required",
-  "category": "auth",
   "request": {
+    "method": "POST",
     "route": "/v1/chat/completions",
     "auth_state": "missing_virtual_key"
   },
-  "expected_decision": "deny",
+  "gateway_context": {
+    "trace_id": "trace-gateway-model-smoke-auth-required",
+    "principal_id": "principal-alpha-gateway",
+    "project_id": "project-alpha",
+    "virtual_key_id": null,
+    "model_alias": null,
+    "provider_candidate_id": null,
+    "provider_attempt_count": 0
+  },
+  "synthetic_shape": {
+    "error": {
+      "status": 401,
+      "code": "auth_required",
+      "retryable": false
+    }
+  },
+  "synthetic_measurement": {},
+  "expected_engine_decision": {
+    "decision": "deny",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": [
+      "SYNTHETIC_PROVIDER_BODY"
+    ],
+    "denial_reason": "auth_required"
+  },
   "expected_assertions": [
-    "Missing or invalid auth must stop before provider selection.",
-    "The error body uses the shared typed denial shape without provider response leakage.",
-    "Audit evidence records virtual_key_id as absent and provider_attempt_count as 0."
+    "Missing auth stops before provider selection.",
+    "The client error uses the typed gateway denial shape.",
+    "Audit records provider_attempt_count=0."
   ],
   "artifact_refs": {
     "expected_gate_result": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-auth-required/gate-result.json",
     "expected_trace_bundle": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-auth-required/trace.jsonl",
     "expected_audit_event": "artifacts/evals/gateway-model-smoke/gateway-model-smoke-auth-required/audit-event.json"
-  }
+  },
+  "audit_expectations": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "auth_state",
+    "provider_attempt_count"
+  ]
 }

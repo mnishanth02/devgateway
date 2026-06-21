@@ -48,6 +48,7 @@ Fixtures must be safe to run before any gateway, provider, retrieval, tool, or w
 | Agent workflow | `evals\datasets\agent-workflow.v0.1.json` | `evals\fixtures\agent-workflow` | Restart/resume, budget, delegation, and state persistence |
 | Persona answers | `evals\datasets\persona-answers.v0.1.json` | `evals\fixtures\persona-answers` | Product, business, architecture, support, and executive answer contracts |
 | Cost/latency | `evals\datasets\cost-latency.v0.1.json` | `evals\fixtures\cost-latency` | Cost attribution and gateway overhead measurement shape |
+| Degraded mode | `evals\datasets\degraded-mode.v0.1.json` | `evals\fixtures\degraded-mode` | Break-glass degraded-mode fail-closed behavior, cache/tool restrictions, audit, rotation, and recovery disablement |
 
 ## Validation expectations
 

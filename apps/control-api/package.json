@@ -9,13 +9,24 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "dev": "node --watch --experimental-strip-types src/server.ts",
-    "start": "node --experimental-strip-types src/server.ts",
-    "test": "node --experimental-strip-types --test src/server.test.ts",
+    "dev": "node --watch --experimental-strip-types src/index.ts",
+    "start": "node --experimental-strip-types src/index.ts",
+    "test": "node --experimental-strip-types --test src/server.test.ts src/routes/control-routes.test.ts src/routes/registry-policy-routes.test.ts src/auth/audit.test.ts src/policies/policies.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@devgateway/config": "workspace:*",
-    "better-auth": "^1.6.11"
+    "@devgateway/policy": "workspace:*",
+    "@devgateway/registry": "workspace:*",
+    "@devgateway/shared-types": "workspace:*",
+    "@fastify/swagger": "9.7.0",
+    "@fastify/swagger-ui": "6.0.0",
+    "@fastify/type-provider-zod": "1.0.0",
+    "better-auth": "^1.6.11",
+    "fastify": "5.8.5",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.4"
   }
 }

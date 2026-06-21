@@ -58,7 +58,7 @@
       "environment_owner": "Platform operations owner",
       "railway_shape": "Container service using upstream Bifrost OSS image or infra\\bifrost Dockerfile once approved.",
       "build_command": "docker build -f infra\\bifrost\\Dockerfile .",
-      "start_command": "upstream Bifrost container entrypoint with BIFROST_CONFIG_PATH",
+      "start_command": "upstream Bifrost container entrypoint with -app-dir /app/data and generated config mounted as /app/data/config.json",
       "watch_patterns": ["infra\\bifrost\\**", "packages\\registry\\**", "packages\\policy\\**", "packages\\observability\\**"],
       "health_expectation": "HTTP /health or upstream equivalent; fail closed if registry/policy snapshot cannot load.",
       "dependencies": ["operational-postgres", "redis", "otel-collector"],

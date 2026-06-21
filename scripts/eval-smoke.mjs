@@ -5,6 +5,28 @@ import { fileURLToPath } from 'node:url';
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const runnerSrc = join(rootDir, 'workers', 'eval-runner', 'src');
 const compileOnly = process.argv.includes('--compile-only');
+const smokeSuites = [
+  {
+    dataset: 'evals/datasets/acl-safety.v0.1.json',
+    suite: 'acl_safety',
+    changeId: 'phase-0.7-fixture-smoke'
+  },
+  {
+    dataset: 'evals/datasets/gateway-model-smoke.v0.1.json',
+    suite: 'gateway_model_smoke',
+    changeId: 'phase-1.7-gateway-model-smoke'
+  },
+  {
+    dataset: 'evals/datasets/cost-latency.v0.1.json',
+    suite: 'cost_latency',
+    changeId: 'phase-1.7-cost-latency'
+  },
+  {
+    dataset: 'evals/datasets/degraded-mode.v0.1.json',
+    suite: 'degraded_mode',
+    changeId: 'phase-1.7-degraded-mode'
+  }
+];
 
 function pythonCandidates() {
   const candidates = [];
@@ -43,9 +65,25 @@ function runPython(args) {
   return 127;
 }
 
-const status = compileOnly
-  ? runPython(['-B', '-c', 'import devgateway_eval_runner.cli'])
-  : runPython([
+function runNode(args) {
+  const result = spawnSync(process.execPath, args, {
+    cwd: rootDir,
+    stdio: 'inherit'
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  return result.status ?? 1;
+}
+
+function runFixtureSmoke() {
+  const layoutStatus = runNode(['scripts/validate-eval-layout.mjs']);
+  if (layoutStatus !== 0) {
+    return layoutStatus;
+  }
+
+  for (const suite of smokeSuites) {
+    const status = runPython([
       '-B',
       '-m',
       'devgateway_eval_runner',
@@ -54,15 +92,23 @@ const status = compileOnly
       '--provider-mode',
       'fixture',
       '--dataset',
-      'evals/datasets/acl-safety.v0.1.json',
+      suite.dataset,
       '--suite',
-      'acl_safety',
+      suite.suite,
       '--change-id',
-      'phase-0.7-fixture-smoke',
+      suite.changeId,
       '--suite-version',
       '0.1.0',
       '--format',
       'pretty'
     ]);
+    if (status !== 0) {
+      return status;
+    }
+  }
+  return 0;
+}
+
+const status = compileOnly ? runPython(['-B', '-c', 'import devgateway_eval_runner.cli']) : runFixtureSmoke();
 
 process.exit(status);

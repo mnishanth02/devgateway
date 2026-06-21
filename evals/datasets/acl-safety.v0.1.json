@@ -21,7 +21,8 @@
     "semantic_cache_acl_scope_leak_prevention",
     "context_ref_leak_prevention",
     "stale_permission_sync_default_deny",
-    "acl_recheck_before_prompt_assembly"
+    "acl_recheck_before_prompt_assembly",
+    "semantic_cache_preenablement_default_deny"
   ],
   "cases": [
     {
@@ -43,8 +44,12 @@
         {
           "principal_id": "principal-alpha-reader",
           "principal_type": "user",
-          "project_ids": ["project-alpha"],
-          "team_ids": ["team-alpha-readers"]
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-readers"
+          ]
         }
       ],
       "request_context": {
@@ -59,7 +64,9 @@
       "input": {
         "prompt": "Summarize the deployment notes from repo-beta.",
         "requested_context_refs": [],
-        "requested_repo_refs": ["repo-beta-private"],
+        "requested_repo_refs": [
+          "repo-beta-private"
+        ],
         "cache_lookup": {
           "enabled": false,
           "cache_key": "cache-none",
@@ -81,10 +88,16 @@
             "assertion": "A fixture candidate from project-alpha with acl_scope_hash=acl-alpha-read remains eligible in the control path."
           }
         ],
-        "blocked_leak_vectors": ["retrieval_candidate", "citation", "prompt_context"],
+        "blocked_leak_vectors": [
+          "retrieval_candidate",
+          "citation",
+          "prompt_context"
+        ],
         "required_denial_reason": "project_mismatch",
         "model_prompt_must_include": [],
-        "model_prompt_must_not_include": ["SYNTHETIC_BETA_SECRET_DEPLOYMENT_NOTE"]
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_BETA_SECRET_DEPLOYMENT_NOTE"
+        ]
       },
       "audit_evidence": [
         {
@@ -134,7 +147,12 @@
         "synthetic_source_data": true,
         "production_retrieval_behavior": false
       },
-      "tags": ["acl", "github-permissions", "retrieval", "synthetic"]
+      "tags": [
+        "acl",
+        "github-permissions",
+        "retrieval",
+        "synthetic"
+      ]
     },
     {
       "contract_version": "0.1.0",
@@ -155,14 +173,22 @@
         {
           "principal_id": "principal-alpha-reader",
           "principal_type": "user",
-          "project_ids": ["project-alpha"],
-          "team_ids": ["team-alpha-readers"]
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-readers"
+          ]
         },
         {
           "principal_id": "principal-alpha-owner",
           "principal_type": "user",
-          "project_ids": ["project-alpha"],
-          "team_ids": ["team-alpha-codeowners"]
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-codeowners"
+          ]
         }
       ],
       "request_context": {
@@ -176,8 +202,12 @@
       },
       "input": {
         "prompt": "Show the restricted architecture decision.",
-        "requested_context_refs": ["ctx-alpha-restricted-design"],
-        "requested_repo_refs": ["repo-alpha-private"],
+        "requested_context_refs": [
+          "ctx-alpha-restricted-design"
+        ],
+        "requested_repo_refs": [
+          "repo-alpha-private"
+        ],
         "cache_lookup": {
           "enabled": false,
           "cache_key": "cache-none",
@@ -199,10 +229,16 @@
             "assertion": "The same candidate is eligible only in the control fixture for principal-alpha-owner with acl-alpha-codeowner."
           }
         ],
-        "blocked_leak_vectors": ["retrieval_candidate", "context_ref", "prompt_context"],
+        "blocked_leak_vectors": [
+          "retrieval_candidate",
+          "context_ref",
+          "prompt_context"
+        ],
         "required_denial_reason": "principal_not_authorized",
         "model_prompt_must_include": [],
-        "model_prompt_must_not_include": ["SYNTHETIC_ALPHA_CODEOWNER_ONLY_DECISION"]
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_ALPHA_CODEOWNER_ONLY_DECISION"
+        ]
       },
       "audit_evidence": [
         {
@@ -252,7 +288,12 @@
         "synthetic_source_data": true,
         "production_retrieval_behavior": false
       },
-      "tags": ["acl", "principal-isolation", "codeowners", "synthetic"]
+      "tags": [
+        "acl",
+        "principal-isolation",
+        "codeowners",
+        "synthetic"
+      ]
     },
     {
       "contract_version": "0.1.0",
@@ -273,8 +314,12 @@
         {
           "principal_id": "principal-alpha-reader",
           "principal_type": "user",
-          "project_ids": ["project-alpha"],
-          "team_ids": ["team-alpha-readers"]
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-readers"
+          ]
         }
       ],
       "request_context": {
@@ -289,7 +334,9 @@
       "input": {
         "prompt": "What is the migration sequence?",
         "requested_context_refs": [],
-        "requested_repo_refs": ["repo-alpha-private"],
+        "requested_repo_refs": [
+          "repo-alpha-private"
+        ],
         "cache_lookup": {
           "enabled": true,
           "cache_key": "semantic:what-is-migration-sequence",
@@ -311,10 +358,16 @@
             "assertion": "The runner records a scoped miss or denied hit and continues only to fixture-mode retrieval candidates authorized for acl-alpha-read."
           }
         ],
-        "blocked_leak_vectors": ["semantic_cache_answer", "cached_citation", "prompt_context"],
+        "blocked_leak_vectors": [
+          "semantic_cache_answer",
+          "cached_citation",
+          "prompt_context"
+        ],
         "required_denial_reason": "cache_acl_scope_mismatch",
         "model_prompt_must_include": [],
-        "model_prompt_must_not_include": ["SYNTHETIC_BETA_CACHED_MIGRATION_SEQUENCE"]
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_BETA_CACHED_MIGRATION_SEQUENCE"
+        ]
       },
       "audit_evidence": [
         {
@@ -364,7 +417,150 @@
         "synthetic_source_data": true,
         "production_retrieval_behavior": false
       },
-      "tags": ["acl", "semantic-cache", "cache-isolation", "synthetic"]
+      "tags": [
+        "acl",
+        "semantic-cache",
+        "cache-isolation",
+        "synthetic"
+      ]
+    },
+    {
+      "contract_version": "0.1.0",
+      "case_id": "acl-safety-semantic-cache-preenablement-deny",
+      "category": "semantic_cache_preenablement_default_deny",
+      "title": "Deny semantic cache use before scoped-cache enablement gate",
+      "severity": "critical",
+      "intent": "Before semantic cache enablement, deny all cache probing and writes; cross-scope leak behavior is covered by acl-safety-semantic-cache-scope-deny.",
+      "fixture_refs": [
+        {
+          "kind": "semantic_cache_snapshot",
+          "path": "evals/fixtures/acl-safety/semantic-cache-preenablement-deny.json",
+          "sha256_required": true,
+          "description": "Synthetic pre-enablement semantic-cache entry and request metadata proving default-deny behavior."
+        }
+      ],
+      "actors": [
+        {
+          "principal_id": "principal-alpha-reader",
+          "principal_type": "user",
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-readers"
+          ]
+        }
+      ],
+      "request_context": {
+        "principal_id": "principal-alpha-reader",
+        "project_id": "project-alpha",
+        "route_intent": "semantic_cache",
+        "acl_scope_hash": "acl-alpha-read",
+        "index_version": "idx-fixture-2026-06-20",
+        "sync_state_ref": "sync-fresh-alpha",
+        "trace_id": "trace-acl-007",
+        "semantic_cache_enablement_state": "disabled_pending_scope_gate"
+      },
+      "input": {
+        "prompt": "Reuse the cached incident summary if available.",
+        "requested_context_refs": [],
+        "requested_repo_refs": [
+          "repo-alpha-private"
+        ],
+        "cache_lookup": {
+          "enabled": false,
+          "cache_key": "semantic:incident-summary",
+          "acl_scope_hash": "acl-alpha-read",
+          "enablement_gate": "disabled_pending_scope_gate"
+        }
+      },
+      "expected": {
+        "outcome": "deny",
+        "decision_point": "semantic_cache_enablement_gate",
+        "denial_conditions": [
+          {
+            "condition_id": "cache-preenablement-default-deny",
+            "assertion": "Semantic cache lookup and write are denied until scope isolation, ACL hash binding, and audit fields are enabled."
+          },
+          {
+            "condition_id": "cache-scope-probe-blocked",
+            "assertion": "The runner cannot disclose whether any cross-project or cross-principal semantic cache entry exists."
+          }
+        ],
+        "pass_conditions": [
+          {
+            "condition_id": "retrieval-only-safe-fallback",
+            "assertion": "A future runner may continue only to fixture-mode retrieval candidates authorized for project-alpha and acl-alpha-read."
+          }
+        ],
+        "blocked_leak_vectors": [
+          "semantic_cache_answer",
+          "cache_existence_probe",
+          "cached_citation",
+          "prompt_context"
+        ],
+        "required_denial_reason": "semantic_cache_not_enabled",
+        "model_prompt_must_include": [],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_BETA_CACHED_INCIDENT_SUMMARY"
+        ]
+      },
+      "audit_evidence": [
+        {
+          "field": "trace_id",
+          "requirement": "Correlate request, enablement gate decision, and prompt assembly attempt.",
+          "presence": "required"
+        },
+        {
+          "field": "principal_id",
+          "requirement": "Record the requesting principal used for cache enablement and ACL evaluation.",
+          "presence": "required"
+        },
+        {
+          "field": "project_id",
+          "requirement": "Record the project boundary used for semantic cache scoping.",
+          "presence": "required"
+        },
+        {
+          "field": "decision",
+          "requirement": "Record the deny decision from the cache enablement gate.",
+          "presence": "required"
+        },
+        {
+          "field": "acl_scope_hash",
+          "requirement": "Record the request ACL hash; do not expose stored cross-scope hashes in user output.",
+          "presence": "required"
+        },
+        {
+          "field": "semantic_cache_enablement_state",
+          "requirement": "Record disabled_pending_scope_gate before semantic cache enablement.",
+          "presence": "required"
+        },
+        {
+          "field": "cache_key",
+          "requirement": "Record denied cache key semantic:incident-summary without disclosing matching entry bodies.",
+          "presence": "required"
+        },
+        {
+          "field": "denial_reason",
+          "requirement": "Emit semantic_cache_not_enabled for pre-enablement default-deny.",
+          "presence": "required"
+        }
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_retrieval_behavior": false
+      },
+      "tags": [
+        "acl",
+        "semantic-cache",
+        "cache-isolation",
+        "pre-enablement",
+        "synthetic",
+        "default-deny"
+      ]
     },
     {
       "contract_version": "0.1.0",
@@ -385,8 +581,12 @@
         {
           "principal_id": "principal-alpha-reader",
           "principal_type": "user",
-          "project_ids": ["project-alpha"],
-          "team_ids": ["team-alpha-readers"]
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-readers"
+          ]
         }
       ],
       "request_context": {
@@ -400,7 +600,9 @@
       },
       "input": {
         "prompt": "Use ctxpack-beta-incident to explain the incident.",
-        "requested_context_refs": ["ctxpack-beta-incident"],
+        "requested_context_refs": [
+          "ctxpack-beta-incident"
+        ],
         "requested_repo_refs": [],
         "cache_lookup": {
           "enabled": false,
@@ -423,10 +625,16 @@
             "assertion": "The fixture runner returns a typed denial without revealing the context-pack title, content, source path, or citations."
           }
         ],
-        "blocked_leak_vectors": ["context_ref", "context_pack_body", "citation"],
+        "blocked_leak_vectors": [
+          "context_ref",
+          "context_pack_body",
+          "citation"
+        ],
         "required_denial_reason": "context_ref_not_authorized",
         "model_prompt_must_include": [],
-        "model_prompt_must_not_include": ["SYNTHETIC_BETA_INCIDENT_TIMELINE"]
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_BETA_INCIDENT_TIMELINE"
+        ]
       },
       "audit_evidence": [
         {
@@ -476,7 +684,12 @@
         "synthetic_source_data": true,
         "production_retrieval_behavior": false
       },
-      "tags": ["acl", "context-ref", "opaque-ref", "synthetic"]
+      "tags": [
+        "acl",
+        "context-ref",
+        "opaque-ref",
+        "synthetic"
+      ]
     },
     {
       "contract_version": "0.1.0",
@@ -497,8 +710,12 @@
         {
           "principal_id": "principal-alpha-reader",
           "principal_type": "user",
-          "project_ids": ["project-alpha"],
-          "team_ids": ["team-alpha-readers"]
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-readers"
+          ]
         }
       ],
       "request_context": {
@@ -513,7 +730,9 @@
       "input": {
         "prompt": "Find the latest rollout checklist.",
         "requested_context_refs": [],
-        "requested_repo_refs": ["repo-alpha-private"],
+        "requested_repo_refs": [
+          "repo-alpha-private"
+        ],
         "cache_lookup": {
           "enabled": false,
           "cache_key": "cache-none",
@@ -535,10 +754,16 @@
             "assertion": "The same synthetic grant may be evaluated only when sync_state_ref is fresh and version-verifiable."
           }
         ],
-        "blocked_leak_vectors": ["retrieval_candidate", "semantic_cache_answer", "prompt_context"],
+        "blocked_leak_vectors": [
+          "retrieval_candidate",
+          "semantic_cache_answer",
+          "prompt_context"
+        ],
         "required_denial_reason": "permission_sync_stale",
         "model_prompt_must_include": [],
-        "model_prompt_must_not_include": ["SYNTHETIC_ALPHA_ROLLOUT_CHECKLIST"]
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_ALPHA_ROLLOUT_CHECKLIST"
+        ]
       },
       "audit_evidence": [
         {
@@ -593,7 +818,12 @@
         "synthetic_source_data": true,
         "production_retrieval_behavior": false
       },
-      "tags": ["acl", "sync-freshness", "default-deny", "synthetic"]
+      "tags": [
+        "acl",
+        "sync-freshness",
+        "default-deny",
+        "synthetic"
+      ]
     },
     {
       "contract_version": "0.1.0",
@@ -614,8 +844,12 @@
         {
           "principal_id": "principal-alpha-reader",
           "principal_type": "user",
-          "project_ids": ["project-alpha"],
-          "team_ids": ["team-alpha-readers"]
+          "project_ids": [
+            "project-alpha"
+          ],
+          "team_ids": [
+            "team-alpha-readers"
+          ]
         }
       ],
       "request_context": {
@@ -629,8 +863,13 @@
       },
       "input": {
         "prompt": "Draft a summary using the selected context.",
-        "requested_context_refs": ["ctx-alpha-public-note", "ctx-alpha-revoked-secret"],
-        "requested_repo_refs": ["repo-alpha-private"],
+        "requested_context_refs": [
+          "ctx-alpha-public-note",
+          "ctx-alpha-revoked-secret"
+        ],
+        "requested_repo_refs": [
+          "repo-alpha-private"
+        ],
         "cache_lookup": {
           "enabled": false,
           "cache_key": "cache-none",
@@ -652,10 +891,18 @@
             "assertion": "Prompt assembly passes only when ctx-alpha-public-note is included and all revoked candidates are excluded with audit evidence."
           }
         ],
-        "blocked_leak_vectors": ["revoked_context", "prompt_context", "citation"],
+        "blocked_leak_vectors": [
+          "revoked_context",
+          "prompt_context",
+          "citation"
+        ],
         "required_denial_reason": null,
-        "model_prompt_must_include": ["SYNTHETIC_ALPHA_PUBLIC_NOTE"],
-        "model_prompt_must_not_include": ["SYNTHETIC_ALPHA_REVOKED_SECRET"]
+        "model_prompt_must_include": [
+          "SYNTHETIC_ALPHA_PUBLIC_NOTE"
+        ],
+        "model_prompt_must_not_include": [
+          "SYNTHETIC_ALPHA_REVOKED_SECRET"
+        ]
       },
       "audit_evidence": [
         {
@@ -705,7 +952,12 @@
         "synthetic_source_data": true,
         "production_retrieval_behavior": false
       },
-      "tags": ["acl", "prompt-assembly", "recheck", "synthetic"]
+      "tags": [
+        "acl",
+        "prompt-assembly",
+        "recheck",
+        "synthetic"
+      ]
     }
   ]
 }

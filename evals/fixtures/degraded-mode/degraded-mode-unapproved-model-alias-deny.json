@@ -1,0 +1,52 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "production_retrieval_behavior": false,
+  "source_data_notice": "Synthetic inert Track 1 degraded-mode fixture; not real customer, repository, provider, credential, or production telemetry data.",
+  "case_id": "degraded-mode-unapproved-model-alias-deny",
+  "category": "unapproved_model_alias_denied",
+  "activation_id": "bg-activation-fixture-001",
+  "incident_id": "inc-fixture-001",
+  "break_glass_design_ref": "docs/governance/break-glass-design.md#required-degraded-mode-tests",
+  "inputs": {
+    "provider_key_access": "requested",
+    "approval_state": "approved",
+    "requested_model_alias": "devgateway/unapproved-live-alias",
+    "approved_model_aliases": [
+      "devgateway/code-review"
+    ],
+    "data_class": "confidential"
+  },
+  "expected_decision": "deny",
+  "expected_denial_reason": "approval_required",
+  "expected_engine_decision": {
+    "decision": "deny",
+    "denial_reason": "approval_required",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": []
+  },
+  "expected_assertions": [
+    "Break-glass access remains scoped to explicitly approved provider/model aliases.",
+    "Unapproved alias is denied even with an approved activation."
+  ],
+  "expected_audit_fields": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "activation_id",
+    "incident_id",
+    "requested_model_alias",
+    "approved_model_aliases",
+    "denial_reason"
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-unapproved-model-alias-deny/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-unapproved-model-alias-deny/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-unapproved-model-alias-deny/audit-event.json"
+  }
+}

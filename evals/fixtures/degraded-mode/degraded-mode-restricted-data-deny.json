@@ -1,0 +1,51 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 1 degraded-mode fixture; not real customer, repository, provider, credential, or production telemetry data.",
+  "case_id": "degraded-mode-restricted-data-deny",
+  "category": "restricted_data_denied",
+  "activation_id": "bg-activation-fixture-001",
+  "incident_id": "inc-fixture-001",
+  "break_glass_design_ref": "docs/governance/break-glass-design.md#required-degraded-mode-tests",
+  "inputs": {
+    "requested_data_class": "restricted",
+    "explicit_restricted_scope": false,
+    "restricted_approver_present": false
+  },
+  "expected_decision": "deny",
+  "expected_denial_reason": "restricted_data_not_allowed",
+  "expected_assertions": [
+    "Restricted data is denied unless explicitly scoped, approved, and audited for the activation.",
+    "Denied request does not include restricted synthetic markers in provider input.",
+    "Approved exception requirements remain visible as audit prerequisites."
+  ],
+  "expected_audit_fields": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "activation_id",
+    "incident_id",
+    "requested_data_class",
+    "allowed_data_classes",
+    "denied_data_classes",
+    "approver_id",
+    "denial_reason"
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-restricted-data-deny/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-restricted-data-deny/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-restricted-data-deny/audit-event.json"
+  },
+  "production_retrieval_behavior": false,
+  "expected_engine_decision": {
+    "decision": "deny",
+    "denial_reason": "restricted_data_not_allowed",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": []
+  }
+}

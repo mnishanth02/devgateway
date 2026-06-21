@@ -1,0 +1,49 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 1 degraded-mode fixture; not real customer, repository, provider, credential, or production telemetry data.",
+  "case_id": "degraded-mode-bifrost-unavailable-pending-request",
+  "category": "bifrost_unavailable_fail_closed",
+  "activation_id": "bg-activation-fixture-001",
+  "incident_id": "inc-fixture-001",
+  "break_glass_design_ref": "docs/governance/break-glass-design.md#required-degraded-mode-tests",
+  "inputs": {
+    "bifrost_health": "unavailable",
+    "existing_activation": "none",
+    "incident_id": "inc-fixture-001"
+  },
+  "expected_decision": "deny",
+  "expected_denial_reason": "break_glass_request_pending",
+  "expected_assertions": [
+    "Control plane creates or links a pending break-glass request for incident inc-fixture-001.",
+    "Provider route fails closed and does not silently bypass Bifrost.",
+    "No provider key, virtual key, or service principal is exposed while approval is pending."
+  ],
+  "expected_audit_fields": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "activation_id",
+    "incident_id",
+    "approval_status",
+    "bifrost_health",
+    "denial_reason"
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-bifrost-unavailable-pending-request/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-bifrost-unavailable-pending-request/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-bifrost-unavailable-pending-request/audit-event.json"
+  },
+  "production_retrieval_behavior": false,
+  "expected_engine_decision": {
+    "decision": "deny",
+    "denial_reason": "break_glass_request_pending",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": []
+  }
+}

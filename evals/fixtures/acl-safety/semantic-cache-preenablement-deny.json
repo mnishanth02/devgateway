@@ -1,0 +1,48 @@
+{
+  "fixture_version": "0.1.0",
+  "case_id": "acl-safety-semantic-cache-preenablement-deny",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_retrieval_behavior": false,
+  "semantic_cache_enablement_state": "disabled_pending_scope_gate",
+  "semantic_cache_entries": [
+    {
+      "cache_entry_id": "cache-beta-incident-summary",
+      "cache_key": "semantic:incident-summary",
+      "project_id": "project-beta",
+      "principal_id": "principal-beta-reader",
+      "acl_scope_hash": "acl-beta-read",
+      "index_version": "idx-fixture-2026-06-20",
+      "answer_marker": "SYNTHETIC_BETA_CACHED_INCIDENT_SUMMARY",
+      "authorized_for_request": false,
+      "existence_must_not_be_disclosed": true
+    }
+  ],
+  "permission_sync_state": {
+    "sync_state_ref": "sync-fresh-alpha",
+    "permission_sync_version": "sync-run-alpha-current",
+    "sync_staleness_ms": 3200,
+    "permission_sync_slo_ms": 300000,
+    "fresh": true
+  },
+  "expected_engine_decision": {
+    "decision": "deny",
+    "denial_reason": "semantic_cache_not_enabled",
+    "deny_cache_entry_ids": [
+      "cache-beta-incident-summary"
+    ],
+    "prompt_context_forbidden_markers": [
+      "SYNTHETIC_BETA_CACHED_INCIDENT_SUMMARY"
+    ]
+  },
+  "audit_expectations": [
+    "trace_id",
+    "principal_id",
+    "project_id",
+    "decision",
+    "acl_scope_hash",
+    "semantic_cache_enablement_state",
+    "cache_key",
+    "denial_reason"
+  ]
+}

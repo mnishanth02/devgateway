@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/shared/budget-scope.v0.1.schema.json",
+  "title": "DevGateway Shared Budget Scope Contract v0.1",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "budget_scope_id",
+    "external_budget_scope_id",
+    "scope_type",
+    "status",
+    "production_posture",
+    "owner_ref",
+    "parent_scope_ref",
+    "inheritance",
+    "period",
+    "currency",
+    "limits",
+    "spend_state",
+    "reservation_state",
+    "rate_limit_interaction",
+    "denial_semantics",
+    "policy_version",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "budget_scope_id": { "$ref": "#/$defs/nonEmptyString" },
+    "external_budget_scope_id": { "$ref": "#/$defs/nonEmptyString" },
+    "scope_type": { "$ref": "#/$defs/budgetScopeType" },
+    "status": { "type": "string", "enum": ["draft", "active", "disabled", "archived"] },
+    "production_posture": { "$ref": "#/$defs/productionPosture" },
+    "owner_ref": { "$ref": "#/$defs/ownerRef" },
+    "parent_scope_ref": { "$ref": "#/$defs/nullableScopeRef" },
+    "inheritance": { "$ref": "#/$defs/inheritancePolicy" },
+    "period": { "$ref": "#/$defs/budgetPeriod" },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "limits": { "$ref": "#/$defs/budgetLimits" },
+    "spend_state": { "$ref": "#/$defs/spendState" },
+    "reservation_state": { "$ref": "#/$defs/reservationState" },
+    "rate_limit_interaction": { "$ref": "#/$defs/rateLimitInteraction" },
+    "denial_semantics": { "$ref": "#/$defs/denialSemantics" },
+    "policy_version": { "$ref": "#/$defs/nonEmptyString" },
+    "policy_snapshot_checksum": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "nullableNonEmptyString": {
+      "anyOf": [
+        { "$ref": "#/$defs/nonEmptyString" },
+        { "type": "null" }
+      ]
+    },
+    "nullableDateTime": {
+      "anyOf": [
+        { "type": "string", "format": "date-time" },
+        { "type": "null" }
+      ]
+    },
+    "productionPosture": {
+      "type": "object",
+      "required": ["production_enabled", "fail_closed_on_missing_scope", "success_fallback_allowed"],
+      "properties": {
+        "production_enabled": { "const": false },
+        "fail_closed_on_missing_scope": { "const": true },
+        "success_fallback_allowed": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "budgetScopeType": {
+      "type": "string",
+      "enum": ["org", "team", "project", "principal", "virtual_key"]
+    },
+    "ownerRef": {
+      "type": "object",
+      "required": ["owner_type", "owner_id", "tenant_id", "project_id", "principal_id", "virtual_key_id"],
+      "properties": {
+        "owner_type": { "$ref": "#/$defs/budgetScopeType" },
+        "owner_id": { "$ref": "#/$defs/nonEmptyString" },
+        "tenant_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "project_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "principal_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "virtual_key_id": { "$ref": "#/$defs/nullableNonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "scopeRef": {
+      "type": "object",
+      "required": ["budget_scope_id", "scope_type"],
+      "properties": {
+        "budget_scope_id": { "$ref": "#/$defs/nonEmptyString" },
+        "scope_type": { "$ref": "#/$defs/budgetScopeType" }
+      },
+      "additionalProperties": false
+    },
+    "nullableScopeRef": {
+      "anyOf": [
+        { "$ref": "#/$defs/scopeRef" },
+        { "type": "null" }
+      ]
+    },
+    "inheritancePolicy": {
+      "type": "object",
+      "required": ["inherits_parent_limit", "rolls_up_to_parent", "child_scope_types"],
+      "properties": {
+        "inherits_parent_limit": { "type": "boolean" },
+        "rolls_up_to_parent": { "type": "boolean" },
+        "child_scope_types": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/budgetScopeType" },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "budgetPeriod": {
+      "type": "object",
+      "required": ["reset_period", "period_started_at", "period_ends_at", "timezone"],
+      "properties": {
+        "reset_period": { "type": "string", "enum": ["none", "daily", "weekly", "monthly", "rolling_24h", "rolling_7d", "rolling_30d"] },
+        "period_started_at": { "type": "string", "format": "date-time" },
+        "period_ends_at": { "$ref": "#/$defs/nullableDateTime" },
+        "timezone": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "budgetLimits": {
+      "type": "object",
+      "required": ["hard_cap_amount", "soft_cap_amount", "input_token_limit", "output_token_limit", "request_limit"],
+      "properties": {
+        "hard_cap_amount": { "type": ["number", "null"], "minimum": 0 },
+        "soft_cap_amount": { "type": ["number", "null"], "minimum": 0 },
+        "input_token_limit": { "type": ["integer", "null"], "minimum": 0 },
+        "output_token_limit": { "type": ["integer", "null"], "minimum": 0 },
+        "request_limit": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "spendState": {
+      "type": "object",
+      "required": ["actual_spend_amount", "actual_input_tokens", "actual_output_tokens", "actual_request_count", "last_cost_event_id"],
+      "properties": {
+        "actual_spend_amount": { "type": "number", "minimum": 0 },
+        "actual_input_tokens": { "type": "integer", "minimum": 0 },
+        "actual_output_tokens": { "type": "integer", "minimum": 0 },
+        "actual_request_count": { "type": "integer", "minimum": 0 },
+        "last_cost_event_id": { "$ref": "#/$defs/nullableNonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "reservationState": {
+      "type": "object",
+      "required": ["reserved_amount", "reserved_input_tokens", "reserved_output_tokens", "reservation_count"],
+      "properties": {
+        "reserved_amount": { "type": "number", "minimum": 0 },
+        "reserved_input_tokens": { "type": "integer", "minimum": 0 },
+        "reserved_output_tokens": { "type": "integer", "minimum": 0 },
+        "reservation_count": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "rateLimitInteraction": {
+      "type": "object",
+      "required": ["rate_limit_scope_id", "rate_limit_denial_reason", "shared_window", "enforce_budget_before_rate_limit"],
+      "properties": {
+        "rate_limit_scope_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "rate_limit_denial_reason": { "const": "rate_limit" },
+        "shared_window": { "type": "boolean" },
+        "enforce_budget_before_rate_limit": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "denialSemantics": {
+      "type": "object",
+      "required": ["denial_reason", "hard_cap_action", "soft_cap_action", "reservation_failure_action"],
+      "properties": {
+        "denial_reason": { "const": "budget" },
+        "hard_cap_action": { "const": "deny" },
+        "soft_cap_action": { "type": "string", "enum": ["warn", "deny"] },
+        "reservation_failure_action": { "const": "deny" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

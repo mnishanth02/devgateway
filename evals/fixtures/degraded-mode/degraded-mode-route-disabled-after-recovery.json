@@ -1,0 +1,50 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 1 degraded-mode fixture; not real customer, repository, provider, credential, or production telemetry data.",
+  "case_id": "degraded-mode-route-disabled-after-recovery",
+  "category": "route_disabled_after_recovery",
+  "activation_id": "bg-activation-fixture-001",
+  "incident_id": "inc-fixture-001",
+  "break_glass_design_ref": "docs/governance/break-glass-design.md#required-degraded-mode-tests",
+  "inputs": {
+    "normal_gateway_health": "healthy",
+    "route_disable_timestamp": "2026-06-20T18:40:00Z",
+    "virtual_key_status": "revoked"
+  },
+  "expected_decision": "deny",
+  "expected_denial_reason": "break_glass_route_disabled",
+  "expected_assertions": [
+    "Emergency route is unusable after recovery and normal gateway health verification.",
+    "Break-glass virtual key and service principal are revoked or expired.",
+    "Attempted post-recovery use emits route-disabled audit evidence."
+  ],
+  "expected_audit_fields": [
+    "trace_id",
+    "case_id",
+    "suite",
+    "decision",
+    "policy_version",
+    "dataset_version",
+    "activation_id",
+    "incident_id",
+    "route_disable_timestamp",
+    "service_principal_revocation_timestamp",
+    "virtual_key_id",
+    "denial_reason"
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/degraded-mode/degraded-mode-route-disabled-after-recovery/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/degraded-mode/degraded-mode-route-disabled-after-recovery/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/degraded-mode/degraded-mode-route-disabled-after-recovery/audit-event.json"
+  },
+  "production_retrieval_behavior": false,
+  "expected_engine_decision": {
+    "decision": "deny",
+    "denial_reason": "break_glass_route_disabled",
+    "prompt_context_allowed_markers": [],
+    "prompt_context_forbidden_markers": []
+  }
+}

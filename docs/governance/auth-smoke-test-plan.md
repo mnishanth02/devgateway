@@ -34,7 +34,7 @@ Future executable tests should use only local fixtures/fakes:
 | `auth-admin-sign-in-session-audit` | Valid admin sign-in creates a session and emits audit. | Invited, verified admin with fixture-only credentials. | Allow; session created; no credential secret returned. | `auth.sign_in.succeeded` with actor, session identifier/fingerprint, timestamp, and trace identifier. |
 | `auth-sensitive-rate-limit-deny` | Sensitive endpoint rate limit denies excess attempts with typed error. | Counter preloaded to cross threshold on final attempt. | Deny; typed `rate_limit`; generic external body; no session mutation. | `auth.rate_limit.denied` with limit scope, threshold/reset metadata, and trace identifier. |
 | `auth-admin-totp-production-gate-deny` | Admin without TOTP after production gate is denied from provider-key/admin-sensitive actions. | Production-gate fixture, valid admin credentials, no verified TOTP. | Deny before provider-key/admin-sensitive mutation; typed `totp_required`; account-enumeration safe. | `auth.policy.denied` with actor, action, reason, and trace identifier. |
-| `auth-session-revoke-invalidated-audit` | Session revoke invalidates session and emits audit. | Active admin session in fixture session store. | Allow revoke; follow-up use of revoked session denied with typed `session_revoked`; generic external body. | `auth.session.revoked` with actor, revoked session fingerprint, timestamp, and trace identifier. |
+| `auth-session-revoke-invalidated-audit` | Session revoke invalidates session and emits audit. | Active admin session in fixture session store. | Allow revoke; follow-up use of revoked session denied with typed `session_revoked`; generic external body. | `auth.session.revoke_requested` pre-mutation event with actor, revoked session fingerprint, timestamp, and trace identifier; production success evidence must be transactionally coupled before enablement. |
 
 ## Generic auth error and account-enumeration expectations
 
@@ -63,3 +63,7 @@ No smoke scenario should pass if a required audit event is missing, mutable, unc
 - No production route, cookie, provider key, TOTP enrollment, invite delivery, or admin bootstrap enablement.
 - No migration ownership changes.
 - No dependency on external services or production secrets.
+
+## Break-glass/client-smoke prerequisites
+
+Before any executable auth smoke promotes gateway or client compatibility evidence beyond fixture notes, capture the authenticated principal, virtual-key scope, trace ID, and generic denial behavior for break-glass degraded-mode paths. Manual client smoke evidence must state whether it was actually run; unrun Continue, Cline, Kilo Code, Aider, Claude Code, and Roo-lineage checks remain prerequisites rather than support claims.

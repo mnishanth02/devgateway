@@ -2,6 +2,7 @@ import {
   DENIAL_REASON_CODES,
   DENIAL_REASONS,
   DENIAL_TAXONOMY,
+  validateDenialReasonMapping,
 } from './denial-reasons.ts';
 import {
   DATA_CLASSES,
@@ -294,6 +295,14 @@ function validateDenialTaxonomy(issues: PolicyValidationIssue[]): void {
         message: 'denial reason code must be consistent in audit and gateway contracts',
       });
     }
+  }
+
+  for (const issue of validateDenialReasonMapping()) {
+    issues.push({
+      code: 'denial_taxonomy',
+      path: `$.DENIAL_REASONS${issue.path.slice(1)}`,
+      message: issue.message,
+    });
   }
 }
 

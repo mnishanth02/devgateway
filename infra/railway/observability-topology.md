@@ -27,12 +27,37 @@ Every Railway environment must keep `PRODUCTION_PROVISIONING_ENABLED=false` and 
 
 The collector is the default ingestion path for app telemetry. Direct app-to-Prometheus scraping is allowed for `/metrics` endpoints, but trace IDs and audit correlation fields must still be emitted through OpenTelemetry instrumentation.
 
+## Track 1 gateway/control trace plan
+
+Track 1 dashboards must make a single gateway/control decision traceable from ingress to persisted evidence:
+
+1. Gateway receives the request and starts a root span with `request_id`, `trace_id`, `virtual_key_id`, `project_id`, and `route_intent`.
+2. Control/policy decision spans record route matching, policy/gate result, selected `model_alias`, provider allow/deny, and fallback eligibility.
+3. Bifrost decision spans record the concrete provider attempt sequence, selected provider/model, retry/fallback transitions, latency, error class, and final decision.
+4. Audit and cost events persist the same `trace_id`/`request_id` so dashboards can link the trace waterfall to immutable audit evidence and cost aggregates.
+
+Required dashboard dimensions for Track 1 gateway/control views are:
+
+| Dimension | Example attribute / label | Use |
+|---|---|---|
+| Provider | `provider_id` | Provider health, errors, fallbacks, and cost. |
+| Model alias | `model_alias` | Alias routing quality and budget allocation. |
+| Virtual key | `virtual_key_id` | Tenant/key-scoped traffic and denied-route triage; never emit raw key material. |
+| Project | `project_id` | Project budgets, route ownership, and SLO slices. |
+| Route intent | `route_intent` | Chat/tool/eval/retrieval route class latency and policy behavior. |
+| Decision | `decision` | Allow, deny, fallback, budget block, policy block, provider error. |
+| Fallback | `fallback_applied`, `fallback_reason` | Fallback rate and root-cause analysis. |
+| Latency | `latency_ms`, span duration | p50/p95/p99 by route/provider/model alias. |
+| Cost | `cost_estimate_usd`, `input_tokens`, `output_tokens` | Cost dashboard and budget evidence. |
+
+Raw prompts, provider API keys, raw virtual keys, database URLs, and private repository content must not be emitted in any Track 1 telemetry dimension.
+
 ## Service instrumentation plan
 
 | Service/store | Required telemetry | Required labels / attributes | First dashboard coverage |
 |---|---|---|---|
-| Bifrost gateway | OTLP spans, request metrics, route decision logs, cost estimates, provider latency/error counters. | `service.name`, `deployment.environment`, `project_id`, `route_id`, `model_alias`, `provider_id`, `policy_version`, `gate_version`, `trace_id`. | Gateway, cost, SLO |
-| Control API | OTLP spans/logs, HTTP metrics, auth/admin action audit references. | `service.name`, `deployment.environment`, `project_id`, `actor_id`, `request_id`, `trace_id`, `audit_event_id`. | Gateway, audit, SLO |
+| Bifrost gateway | OTLP spans, request metrics, route decision logs, provider attempt/fallback counters, cost estimates, provider latency/error counters. | `service.name`, `deployment.environment`, `project_id`, `route_id`, `route_intent`, `model_alias`, `provider_id`, `virtual_key_id`, `decision`, `fallback_applied`, `fallback_reason`, `policy_version`, `gate_version`, `trace_id`, `request_id`. | Gateway/control, cost, SLO |
+| Control API | OTLP spans/logs, HTTP metrics, auth/admin action audit references, policy decision traces. | `service.name`, `deployment.environment`, `project_id`, `actor_id`, `request_id`, `trace_id`, `audit_event_id`, `route_intent`, `decision`, `policy_version`, `gate_version`. | Gateway/control, audit, SLO |
 | Admin portal | Web vitals or frontend request metrics where available, API correlation headers. | `service.name`, `deployment.environment`, `request_id`, `trace_id`. | SLO |
 | Tool Broker | Tool-call spans, approval decision counters, denied-action counters, sandbox/runtime metrics. | `tool_id`, `policy_version`, `approval_request_id`, `project_id`, `trace_id`. | Workflow, audit, SLO |
 | Agent/workflow workers | Workflow run spans, queue/lease metrics, retry/cancel/dead-letter logs. | `workflow_run_id`, `workflow_step_id`, `queue_name`, `lease_id`, `project_id`, `trace_id`. | Workflow, SLO |
@@ -84,13 +109,19 @@ Sensitive values must never be emitted as span attributes, metric labels, logs, 
 
 Dashboard provisioning must use reviewed JSON/config artifacts. Manual dashboard edits in Railway/Grafana are temporary only and must be backported to versioned configuration before first production release.
 
+## Audit sink unavailable behavior
+
+Audit writes are part of the production safety boundary. If the audit sink is unavailable in production, services must fail closed: deny or stop the auditable operation, return a safe error, emit a structured non-secret operational log with `trace_id` and `request_id`, and preserve retry/dead-letter evidence where applicable. Production must not silently continue a gateway/control/provider/tool/admin action that requires an audit record.
+
+In non-production environments, teams may explicitly allow fixture or development flows to continue when the audit sink is unavailable only when the behavior is configured, documented in the test/runbook context, and logged at error level with `audit_sink_unavailable=true`, environment, service, `trace_id`, `request_id`, and the safe decision outcome. Non-production continuation must never be used as evidence for production readiness.
+
 ## Validation gates
 
 Before first production provisioning:
 
 1. Collector config review confirms OTLP receivers, safe exporters, resource labels, and no secret logging.
 2. Development smoke emits at least one trace, metric, structured log, audit correlation ID, eval gate metric, and cost event sample.
-3. Prometheus scrape target review covers Bifrost, Control API, Tool Broker, workers, OTel Collector, and available store/exporter metrics.
+3. Prometheus scrape target review covers OTel Collector OTLP metrics, Collector self-metrics, Bifrost gateway `/metrics`, and documented pending `/metrics` endpoints for Control API, Tool Broker, workers, and available store/exporter metrics.
 4. Grafana dashboard review confirms gateway, workflow, retrieval, cost, eval, audit, and SLO views have owners.
 5. Backup/restore validation evidence links to `infra\runbooks\backup-restore-plan.md`.
 6. No production Railway service, store, credential, volume, or bucket is created by this plan.
