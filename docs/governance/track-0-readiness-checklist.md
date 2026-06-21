@@ -35,8 +35,8 @@ Track 0 readiness evidence must reference the Phase 0.2 local development comman
 | Deployment can be planned without provisioning production. | Railway topology, service/store plan, environment plan, variable matrix, monorepo deploy command plan, and operations checks. | Deployment/ops review evidence. | [ ] Railway deployment plan defines services, stores, environments, variables, and operational checks. |
 | Observability is ready for Track 1 SLO evidence. | OpenTelemetry Collector, Prometheus, Grafana, trace/eval/cost table, and dashboard ownership plan. | Observability review evidence. | [ ] OpenTelemetry Collector, Prometheus, and Grafana are represented in the deployment plan. |
 | Sensitive data and audit behavior are locked before implementation. | Encrypted credential storage convention, tenant/ACL scope convention, retention convention, and audit immutability convention. | Security/data review evidence. | [ ] Encrypted credential storage, tenant/ACL scope, high-volume retention, and audit immutability conventions are locked. |
-| Emergency access has approved limits. | Break-glass runbook covering TTL, scope, approvers, audit, recovery, and provider-key rotation. | Break-glass approval record. | [ ] Break-glass runbook is approved. |
-| Release ownership is accountable. | First-release scope table and owner matrix with named people or explicit interim accountable roles. | Owner approval evidence. | [ ] First-release scope and owners are assigned. |
+| Emergency access has approved limits. | Break-glass runbook covering TTL, scope, approvers, audit, recovery, and provider-key rotation. | Break-glass approval record `mnishanth02-track0-approval-2026-06-21`. | [x] Break-glass runbook is approved. |
+| Release ownership is accountable. | First-release scope table and owner matrix with named people or explicit interim accountable roles. | Owner approval evidence `mnishanth02-track0-approval-2026-06-21`. | [x] First-release scope and owners are assigned. |
 | Track 1 cannot bypass Track 0 gates. | Readiness decision tying registry, provider-policy, auth, eval, deployment, and break-glass gates to Track 1 entry. | Final Track 0 exit decision evidence. | [ ] Track 1 is blocked from production enablement without registry, provider-policy, auth, eval, deployment, and break-glass gates. |
 
 ## Section 16 acceptance checklist
@@ -54,18 +54,18 @@ Track 0 readiness evidence must reference the Phase 0.2 local development comman
 - [ ] Railway deployment plan defines services, stores, environments, variables, and operational checks.
 - [ ] OpenTelemetry Collector, Prometheus, and Grafana are represented in the deployment plan.
 - [ ] Encrypted credential storage, tenant/ACL scope, high-volume retention, and audit immutability conventions are locked.
-- [ ] Break-glass runbook is approved.
-- [ ] First-release scope and owners are assigned.
+- [x] Break-glass runbook is approved under `mnishanth02-track0-approval-2026-06-21`.
+- [x] First-release scope and owners are assigned under `mnishanth02-track0-approval-2026-06-21`.
 - [ ] Track 1 is blocked from production enablement without registry, provider-policy, auth, eval, deployment, and break-glass gates.
 
 ## Track 0 exit checklist
 
 - [ ] no production model/tool/retrieval path can be enabled without eval gate.
-- [ ] break-glass approved.
-- [ ] first-release scope/owners assigned.
+- [x] break-glass approved under `mnishanth02-track0-approval-2026-06-21`.
+- [x] first-release scope/owners assigned under `mnishanth02-track0-approval-2026-06-21`.
 - [ ] Validators enforce the production gate; the gate is not documentation-only.
-- [ ] Break-glass design approval covers TTL, scope, approvers, audit, recovery, and provider-key rotation.
-- [ ] First-release scope and owners include named people or explicit interim accountable roles.
+- [x] Break-glass design approval covers TTL, scope, approvers, audit, recovery, and provider-key rotation.
+- [x] First-release scope and owners include named people or explicit interim accountable roles.
 - [ ] No production capability enablement occurs as part of this readiness approval.
 
 ## Final readiness decision
@@ -73,4 +73,4 @@ Track 0 readiness evidence must reference the Phase 0.2 local development comman
 - [ ] All Track 0 artifacts above have owners, evidence locations, and unresolved gaps recorded.
 - [ ] All required validation gates are passing or explicitly marked unavailable with a blocking follow-up.
 - [ ] Track 1 prerequisites map to Track 0 artifacts and validation gates.
-- [ ] Track 0 exit is approved, rejected, or deferred with documented rationale.
+- [x] Track 0 exit is approved with documented rationale in `docs\governance\track-0-exit-decision.md`.

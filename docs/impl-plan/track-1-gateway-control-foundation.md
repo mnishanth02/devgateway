@@ -4,7 +4,7 @@
 
 Track 1 turns the Track 0 governance baseline into a non-production gateway and control-plane foundation. It should make model traffic routeable through Bifrost in development, issue and revoke principal-bound virtual keys through the Control API, enforce provider/data-class/budget policy, emit per-request audit/cost/latency telemetry, and prove OpenAI and Anthropic client compatibility through smoke evals.
 
-Track 1 must not enable production model routes, provider credentials, break-glass access, Railway production provisioning, durable workflows, retrieval, MCP tool execution, or semantic cache reuse. Formal Track 0 exit is not approved yet: `docs\governance\track-0-exit-decision.md` records that owner assignment approval and break-glass approval remain blocking. Track 1 can continue non-production implementation and validation, but production enablement remains fail-closed until the Track 0 blockers and Track 1 gates are satisfied.
+Track 1 must not enable production model routes, provider credentials, break-glass access, Railway production provisioning, durable workflows, retrieval, MCP tool execution, or semantic cache reuse. Formal Track 0 governance exit is approved in `docs\governance\track-0-exit-decision.md` under approval record `mnishanth02-track0-approval-2026-06-21`, but Track 1 production enablement remains fail-closed until the Track 1 production gates are satisfied.
 
 The plan below incorporates the existing roadmap, current repository state, Track 0 governance artifacts, and two model reviews:
 
@@ -23,7 +23,7 @@ The plan below incorporates the existing roadmap, current repository state, Trac
 | Runtime | Node.js `>=22.0.0`, pnpm `>=11.0.0`; root `packageManager` is `pnpm@11.8.0`. |
 | Root commands | `lint`, `typecheck`, `test`, `build`, `eval:smoke`, `db:check`, `registry:validate`, `policy:validate`, and local launcher commands exist. |
 | Track 0 validation | `docs\governance\track-0-readiness-validation.md` records passing validation commands and negative gate checks. |
-| Track 0 exit | `docs\governance\track-0-exit-decision.md` says formal exit is not approved due to pending break-glass approval and owner assignment approval. |
+| Track 0 exit | `docs\governance\track-0-exit-decision.md` says formal governance exit is approved under `mnishanth02-track0-approval-2026-06-21`; production enablement remains separately gated. |
 
 ### Existing packages and skeletons
 
@@ -508,7 +508,7 @@ Track 1 exits only when these conditions are met:
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Track 0 formal exit remains blocked | Production enablement cannot proceed | Treat Track 1 as non-production implementation; keep production gates disabled and visible. |
+| Track 1 production gates remain blocked | Production enablement cannot proceed | Treat Track 1 as non-production implementation until provider-policy, registry, eval, auth, budget, audit, Bifrost route, and deployment gates pass. |
 | DB/Better Auth reconciliation takes longer than expected | Blocks auth, keys, budgets, audit | Start Drizzle/Better Auth migration work immediately after Phase 1.0; keep migrations small and reviewed. |
 | Bifrost config drift from registry | Wrong provider route or policy bypass | Generate/validate Bifrost config from signed/checksummed registry and policy snapshots. |
 | Bifrost lacks atomic hot reload | Route updates may require restart | Validate support early; if absent, document restart-with-readiness promotion and keep zero-downtime reload as a future operations task. |

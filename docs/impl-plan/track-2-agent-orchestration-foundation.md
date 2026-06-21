@@ -4,7 +4,7 @@
 
 Track 2 builds the first agent orchestration foundation on top of the Track 0 governance baseline and the Track 1 gateway/control foundation. It should introduce persisted agent tasks, supervisor/sub-agent delegation, validated result synthesis, read-only tool execution through the Tool Broker, skill metadata, task trace visibility, and per-delegation budget reservation/settlement.
 
-Track 2 may proceed as non-production implementation work, but its formal exit is intentionally strict: the parent agent must delegate to at least two **production-enabled model aliases** through the governed Bifrost path. Because Track 0 formal exit is not approved and Track 1 production routes are still disabled, this exit gate cannot pass until the required production gates, owners, break-glass approvals, eval evidence, provider policy, and registry state are all satisfied.
+Track 2 may proceed as non-production implementation work, but its formal exit is intentionally strict: the parent agent must delegate to at least two **production-enabled model aliases** through the governed Bifrost path. Track 0 owner and break-glass approvals are recorded under `mnishanth02-track0-approval-2026-06-21`, but Track 1 production routes are still disabled, so the Track 2 production-alias exit gate cannot pass until production routes, eval evidence, provider policy, registry state, budget/audit/cost wiring, and exact OpenAI-class plus Anthropic-class provider configurations are all satisfied.
 
 The plan incorporates repository analysis and independent model reviews from Claude Opus 4.8, GPT-5.5, and Gemini 3.1 Pro. The reviews agreed that the roadmap bullets are directionally correct but insufficient without schema contracts, database state, idempotency, trace propagation, artifact handling, budget race controls, read-only tool policy, and explicit Track 2/Track 3 durability boundaries.
 
@@ -14,7 +14,7 @@ The plan incorporates repository analysis and independent model reviews from Cla
 |---|---|---|
 | Track 2 delegation exit gate | Require delegation to at least two production-enabled model aliases. | Track 2 implementation can be developed in fixture/local/non-production mode, but formal Track 2 exit stays blocked until production aliases are gated and enabled. |
 | Track 2 vs Track 3 durability boundary | Track 2 includes persisted state machine, idempotency, basic leases, and restart smoke. Track 3 adds robust retries, cancellation, approvals, and event outbox. | Prevents duplicate model/tool calls early without pulling the full durable workflow feature set into Track 2. |
-| Track 0 blockers | Pending owner and break-glass approvals are production blockers only. | Non-production Track 2 implementation can start; production enablement remains fail-closed. |
+| Track 0 blockers | Owner and break-glass approvals are recorded under `mnishanth02-track0-approval-2026-06-21`; production capability remains separately gated. | Non-production Track 2 implementation can continue; production enablement remains fail-closed until Track 1+ production gates pass. |
 | Plan artifact | `docs\impl-plan\track-2-agent-orchestration-foundation.md`. | Matches existing Track 0 and Track 1 implementation plan location. |
 
 ## 2.1 Implementation progress
@@ -45,7 +45,7 @@ Track 0 produced the architecture and governance setup needed to start non-produ
 - Canonical architecture baseline: `AI-Platform-Proposal.md`, `docs\01-system-architecture-and-interfaces.md`, `docs\02-agent-workflows-tools.md`, `docs\03-knowledge-retrieval-evaluation.md`, and `docs\04-technology-roadmap-operations.md`.
 - Governance artifacts: dependency rules, gateway policy enforcement contract, denial taxonomy, provider data-class policy, model/provider registry, eval dataset layout, eval runner skeleton, schema/migration conventions, GitHub permission model, and break-glass design/runbook drafts.
 - Readiness validation recorded passing root checks: `pnpm workspace:validate`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm db:check`, `pnpm registry:validate`, `pnpm policy:validate`, and `pnpm eval:smoke`.
-- Production enablement remains blocked. `docs\governance\track-0-exit-decision.md` says formal Track 0 exit is not approved until owner assignment approval and break-glass approval are recorded.
+- Track 0 governance exit is approved by `docs\governance\track-0-exit-decision.md` under approval record `mnishanth02-track0-approval-2026-06-21`; production enablement remains blocked until Track 1+ production gates pass.
 
 ### 3.2 Track 1 status
 
@@ -634,10 +634,10 @@ Acceptance criteria:
 
 Deliverables:
 
-1. Confirm Track 0 owner/break-glass blockers are tracked as production blockers.
+1. Confirm Track 0 owner/break-glass approvals are recorded and production capability remains separately gated.
 2. Confirm Track 1 production routes remain disabled.
 3. Record that Track 2 can proceed only in non-production implementation mode until gates pass.
-4. Define the Track 2 production-alias exit gate as blocked until production aliases are approved.
+4. Define the Track 2 production-alias exit gate as blocked until exact OpenAI-class and Anthropic-class production aliases are configured, approved, eval-gated, and routeable through Bifrost.
 
 Acceptance criteria:
 
@@ -836,7 +836,7 @@ Parallel-safe work after Phase 2.1:
 
 Track 2 formally exits only when all criteria below pass:
 
-1. Track 0 production blockers are resolved or explicitly carried as production blockers with owner approval.
+1. Track 0 owner and break-glass approvals remain recorded and production capability remains separately gated.
 2. Track 1 production prerequisites needed by Track 2 are satisfied: production-enabled model aliases, provider policy, registry snapshots, virtual keys, budget, audit, cost, and Bifrost route evidence.
 3. Parent agent delegates to at least two production-enabled model aliases through Bifrost.
 4. Sub-agent results are schema-validated, stored, and synthesized with provenance.
@@ -853,7 +853,7 @@ Track 2 formally exits only when all criteria below pass:
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Production-alias exit gate is blocked by Track 0/1 state | Track 2 implementation may finish in non-production but cannot formally exit. | Keep a non-production milestone separate from formal exit; mark production blockers visibly in validation evidence. |
+| Production-alias exit gate is blocked by Track 1 production state | Track 2 implementation may finish in non-production but cannot formally exit. | Keep a non-production milestone separate from formal exit; mark production blockers visibly in validation evidence. |
 | Idempotency added too late | Worker restart can duplicate model/tool calls and cost. | Build idempotency keys before dispatch and require them for every executable step. |
 | SQL runtime leaks into agent logic | Later Hatchet/Temporal migration becomes expensive. | Use workflow repository/activity interfaces and keep SQL in infrastructure adapters. |
 | Postgres polling contention | Worker dispatch can waste DB CPU. | Use bounded batch size, backoff, and future `LISTEN/NOTIFY` option if needed. |

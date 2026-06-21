@@ -4,7 +4,17 @@ This Track 0 governance artifact assigns interim accountable roles for the first
 
 ## Track 0 exit owner requirement
 
-Named people may replace the interim roles below during implementation. Track 0 cannot exit until each row has either a named accountable person or an explicitly approved accountable role, and until the approval roles have accepted the assignment. Production provisioning and production capability enablement remain separately gated.
+Named people may replace the interim roles below during implementation. Track 0 required each row to have either a named accountable person or an explicitly approved accountable role, and required the approval roles to accept the assignment. That governance requirement is satisfied by the approval record below. Production provisioning and production capability enablement remain separately gated.
+
+## Track 0 approval record
+
+| Field | Value |
+|---|---|
+| Approval record ID | `mnishanth02-track0-approval-2026-06-21` |
+| Approval timestamp | `2026-06-21T20:47:32.272+05:30` |
+| Approver / accountable principal | `@mnishanth02` |
+| Approved owner model | Existing interim accountable roles are explicitly approved for first-release Track 0 governance exit. |
+| Production enablement | Not enabled; production provisioning and production capability remain separately gated. |
 
 ## Interim role coverage
 

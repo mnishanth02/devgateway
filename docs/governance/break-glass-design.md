@@ -1,9 +1,19 @@
 # Break-glass design
 
-Status: Track 0.8 governance artifact; approval status pending.  
+Status: Track 0.8 governance artifact; approved under `mnishanth02-track0-approval-2026-06-21`.
 Production capability: this design is documentation only and contains no real credentials.
 
 Break-glass design approval is a Track 0 exit requirement and must be complete before Track 1 enables gateway or model routes.
+
+## Approval record
+
+| Field | Value |
+|---|---|
+| Approval record ID | `mnishanth02-track0-approval-2026-06-21` |
+| Approval timestamp | `2026-06-21T20:47:32.272+05:30` |
+| Approver / accountable principal | `@mnishanth02` |
+| Approved scope | TTL, scope, approvers, audit, recovery, degraded-mode restrictions, and provider-key rotation requirements in this design and `infra\runbooks\break-glass.md`. |
+| Production enablement | Not enabled; each activation still requires incident-scoped approval, audit, TTL, recovery, and key-rotation evidence. |
 
 ## Design goals
 
@@ -69,4 +79,4 @@ Each break-glass event must be append-only and include:
 
 ## Track 1 gate
 
-Track 1 gateway/model route implementation must check this design before enabling any production route. The gate is blocked until approval status changes from `pending` to approved with approver names, incident/audit schema review, degraded-mode test implementation plan, and provider-key rotation procedure evidence.
+Track 1 gateway/model route implementation must check this approved design before enabling any production route. Production route enablement remains blocked until runtime implementation evidence shows the approved controls fail closed, provider-key rotation evidence can be recorded, and the relevant registry, provider-policy, eval, auth, audit, budget, and deployment gates pass.

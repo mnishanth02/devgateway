@@ -162,5 +162,10 @@ Scope: non-production contract, database, Control API, workflow runtime, fixture
 | Blocker | Impact |
 |---|---|
 | No disposable database URL configured | Database-backed migration application evidence is still pending. |
-| Track 0 owner/break-glass approvals remain unresolved | Formal Track 2 exit cannot pass. |
-| Track 1 production routes and production-enabled model aliases remain unavailable | Formal Track 2 two-production-alias delegation gate cannot pass. |
+| Track 1 production routes and production-enabled model aliases remain unavailable | Formal Track 2 two-production-alias delegation gate cannot pass. Initial provider-family direction is OpenAI-class plus Anthropic-class under approval record `mnishanth02-track0-approval-2026-06-21`, but exact production aliases, provider/model IDs, Bifrost route evidence, provider-policy eligibility, budget/audit/cost wiring, and passing eval gates are still pending. |
+
+## Resolved approval blockers
+
+| Resolved item | Evidence |
+|---|---|
+| Track 0 owner assignment and break-glass approvals | Approved under `mnishanth02-track0-approval-2026-06-21` in `docs\governance\track-0-owner-breakglass-confirmation.md`, `docs\governance\track-0-exit-decision.md`, `docs\governance\break-glass-design.md`, and `infra\runbooks\break-glass.md`. |
