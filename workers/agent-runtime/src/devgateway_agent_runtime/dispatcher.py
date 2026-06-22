@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, Sequence
 
-from .contracts import TraceContext, WorkflowStep, StepKind, StepState
+from .contracts import CancellationAction, TraceContext, WorkflowStep, StepKind, StepState
 from .leases import LeasePolicy, StepClaim
 from .repositories import RuntimeRepository
 
@@ -116,11 +116,37 @@ class BoundedDispatcher:
         step_trace = (trace_context or TraceContext.new(correlation_id=claim.workflow_id)).child(
             baggage_refs=(f"fixture-ref:step:{step.step_id}",)
         )
+
+        # --- Cancellation checkpoint -------------------------------------------
+        # Check before transitioning to RUNNING so we never start a handler under
+        # an active cancellation.  We use duck-typing (hasattr) to keep
+        # InMemoryRuntimeRepository fully unchanged.
+        if hasattr(self.repository, "has_active_cancellation") and hasattr(
+            self.repository, "cancel_step"
+        ):
+            try:
+                if self.repository.has_active_cancellation(claim.workflow_id, step.step_id):  # type: ignore[union-attr]
+                    self.repository.cancel_step(  # type: ignore[union-attr]
+                        step.step_id,
+                        lease=lease,
+                        safe_interruptible=False,
+                        trace_context=step_trace.child(),
+                    )
+                    self.repository.release_lease(
+                        claim.lease.lease_id, owner_id=self.policy.owner_id
+                    )
+                    return
+            except Exception:
+                self.repository.release_lease(claim.lease.lease_id, owner_id=self.policy.owner_id)
+                raise
+        # -----------------------------------------------------------------------
+
         running = self.repository.update_step_state(
             step.step_id,
             StepState.RUNNING,
             trace_context=step_trace,
             refs={"lease_ref": f"fixture-ref:lease:{lease.lease_id}"},
+            lease=lease,
         )
         try:
             result = self.handler(running, step_trace.child())
@@ -129,6 +155,7 @@ class BoundedDispatcher:
                 output_ref=result.output_ref,
                 trace_context=step_trace.child(),
                 refs=result.event_refs,
+                lease=lease,
             )
         except Exception:
             self.repository.update_step_state(
@@ -136,6 +163,7 @@ class BoundedDispatcher:
                 StepState.FAILED,
                 trace_context=step_trace.child(),
                 refs={"error_ref": f"fixture-ref:error:{running.step_id}"},
+                lease=lease,
             )
             raise
         finally:

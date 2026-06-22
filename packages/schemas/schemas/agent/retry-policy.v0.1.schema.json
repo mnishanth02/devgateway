@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/agent/retry-policy.v0.1.schema.json",
+  "title": "DevGateway Retry Policy Contract v0.1",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "retry_policy_id",
+    "max_attempts",
+    "backoff_policy",
+    "timeout_policy",
+    "failure_class_policies",
+    "idempotency_required_for_auto_retry",
+    "non_idempotent_fallback",
+    "policy_ref",
+    "owner_ref",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "retry_policy_id": { "$ref": "#/$defs/nonEmptyString" },
+    "max_attempts": { "type": "integer", "minimum": 1, "maximum": 100 },
+    "backoff_policy": { "$ref": "#/$defs/backoffPolicy" },
+    "timeout_policy": { "$ref": "#/$defs/timeoutPolicy" },
+    "failure_class_policies": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/failureClassPolicy" },
+      "minItems": 1
+    },
+    "idempotency_required_for_auto_retry": { "type": "boolean" },
+    "non_idempotent_fallback": { "$ref": "#/$defs/nonIdempotentFallback" },
+    "policy_ref": { "$ref": "#/$defs/policyRef" },
+    "owner_ref": { "$ref": "#/$defs/ownerRef" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "nullableNonEmptyString": {
+      "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+    },
+    "failureClass": {
+      "type": "string",
+      "enum": [
+        "transient_timeout_before_accept",
+        "provider_request_id_returned_commit_failed",
+        "tool_adapter_transient",
+        "validation_failure",
+        "budget_denial",
+        "policy_denial",
+        "non_idempotent_unknown_side_effect",
+        "worker_crash_active_lease"
+      ]
+    },
+    "backoffType": {
+      "type": "string",
+      "enum": ["fixed", "linear", "exponential", "exponential_with_jitter"]
+    },
+    "backoffPolicy": {
+      "type": "object",
+      "required": [
+        "backoff_type",
+        "initial_delay_seconds",
+        "max_delay_seconds",
+        "jitter_fraction",
+        "multiplier"
+      ],
+      "properties": {
+        "backoff_type": { "$ref": "#/$defs/backoffType" },
+        "initial_delay_seconds": { "type": "number", "exclusiveMinimum": 0 },
+        "max_delay_seconds": { "type": "number", "exclusiveMinimum": 0 },
+        "jitter_fraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "multiplier": { "type": "number", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "timeoutPolicy": {
+      "type": "object",
+      "required": ["queue_seconds", "execution_seconds", "idle_seconds", "overall_seconds"],
+      "properties": {
+        "queue_seconds": { "type": "number", "minimum": 0 },
+        "execution_seconds": { "type": "number", "minimum": 0 },
+        "idle_seconds": { "type": "number", "minimum": 0 },
+        "overall_seconds": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "failureClassPolicy": {
+      "type": "object",
+      "required": [
+        "failure_class",
+        "retryable",
+        "idempotency_required",
+        "non_idempotent_fallback"
+      ],
+      "properties": {
+        "failure_class": { "$ref": "#/$defs/failureClass" },
+        "retryable": { "type": "boolean" },
+        "idempotency_required": { "type": "boolean" },
+        "non_idempotent_fallback": { "$ref": "#/$defs/nonIdempotentFallback" }
+      },
+      "additionalProperties": false
+    },
+    "nonIdempotentFallback": {
+      "type": "string",
+      "enum": ["manual_review", "terminal_failure", "replan_within_budget"]
+    },
+    "policyRef": {
+      "type": "object",
+      "required": ["policy_version", "policy_decision_ref", "evaluated_at"],
+      "properties": {
+        "policy_version": { "$ref": "#/$defs/nonEmptyString" },
+        "policy_decision_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "evaluated_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "ownerRef": {
+      "type": "object",
+      "required": ["owner_type", "owner_id", "project_id", "principal_id"],
+      "properties": {
+        "owner_type": { "type": "string", "enum": ["principal", "team", "project", "service"] },
+        "owner_id": { "$ref": "#/$defs/nonEmptyString" },
+        "project_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "principal_id": { "$ref": "#/$defs/nullableNonEmptyString" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

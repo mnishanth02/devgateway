@@ -52,6 +52,7 @@ export interface ControlRouteReply {
 export interface ControlRouteAuthContext {
   readonly principalId: string;
   readonly authSubjectRef: string;
+  readonly roles?: readonly string[];
 }
 
 export interface VirtualKeyRouteOptions {

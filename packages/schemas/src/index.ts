@@ -24,6 +24,13 @@ export const schemaCatalog = {
     taskArtifact: 'schemas/agent/task-artifact.v0.1.schema.json',
     toolCall: 'schemas/agent/tool-call.v0.1.schema.json',
     skillDefinition: 'schemas/agent/skill-definition.v0.1.schema.json',
+    approvalRequest: 'schemas/agent/approval-request.v0.1.schema.json',
+    retryPolicy: 'schemas/agent/retry-policy.v0.1.schema.json',
+    cancellation: 'schemas/agent/cancellation.v0.1.schema.json',
+    workflowOutbox: 'schemas/agent/workflow-outbox.v0.1.schema.json',
+    workflowTemplate: 'schemas/agent/workflow-template.v0.1.schema.json',
+    manualReview: 'schemas/agent/manual-review.v0.1.schema.json',
+    artifactLifecycle: 'schemas/agent/artifact-lifecycle.v0.1.schema.json',
   },
 } as const;
 

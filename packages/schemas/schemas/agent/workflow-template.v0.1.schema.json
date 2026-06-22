@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/agent/workflow-template.v0.1.schema.json",
+  "title": "DevGateway Workflow Template Contracts v0.1",
+  "oneOf": [
+    { "$ref": "#/$defs/workflowTemplateRecord" },
+    { "$ref": "#/$defs/workflowTemplateVersionRecord" }
+  ],
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "nullableNonEmptyString": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+    "rolloutState": {
+      "type": "string",
+      "enum": ["draft", "eval_ready", "approved", "limited_rollout", "production", "disabled"]
+    },
+    "opaqueRef": {
+      "type": "object",
+      "required": ["ref_id", "ref_type", "scope_ref"],
+      "properties": {
+        "ref_id": { "$ref": "#/$defs/nonEmptyString" },
+        "ref_type": { "$ref": "#/$defs/nonEmptyString" },
+        "scope_ref": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "ownerRef": {
+      "type": "object",
+      "required": ["owner_type", "owner_id", "project_id", "principal_id"],
+      "properties": {
+        "owner_type": { "type": "string", "enum": ["principal", "team", "project", "service"] },
+        "owner_id": { "$ref": "#/$defs/nonEmptyString" },
+        "project_id": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "principal_id": { "$ref": "#/$defs/nullableNonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "evalSuiteRef": {
+      "type": "object",
+      "required": ["eval_suite_id", "eval_suite_version", "gate_result_ref"],
+      "properties": {
+        "eval_suite_id": { "$ref": "#/$defs/nonEmptyString" },
+        "eval_suite_version": { "$ref": "#/$defs/nonEmptyString" },
+        "gate_result_ref": { "$ref": "#/$defs/opaqueRef" }
+      },
+      "additionalProperties": false
+    },
+    "rolloutPolicy": {
+      "type": "object",
+      "required": ["rollout_state", "production_enabled", "allowed_project_refs", "allowed_principal_refs"],
+      "properties": {
+        "rollout_state": { "type": "string", "enum": ["none", "limited", "production", "disabled"] },
+        "production_enabled": { "type": "boolean" },
+        "allowed_project_refs": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" }, "uniqueItems": true },
+        "allowed_principal_refs": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "auditRef": {
+      "type": "object",
+      "required": ["audit_event_id", "audit_stream", "recorded_at"],
+      "properties": {
+        "audit_event_id": { "$ref": "#/$defs/nonEmptyString" },
+        "audit_stream": { "$ref": "#/$defs/nonEmptyString" },
+        "recorded_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "schemaRef": {
+      "type": "object",
+      "required": ["schema_id", "json_pointer", "schema_version", "enforcement"],
+      "properties": {
+        "schema_id": { "$ref": "#/$defs/nonEmptyString" },
+        "json_pointer": { "$ref": "#/$defs/nonEmptyString" },
+        "schema_version": { "$ref": "#/$defs/nonEmptyString" },
+        "enforcement": {
+          "type": "string",
+          "enum": ["validate_before_dispatch", "validate_before_execution", "validate_before_synthesis", "validate_before_persist"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "agentDefinitionRef": {
+      "type": "object",
+      "required": ["agent_definition_id", "agent_definition_version", "role"],
+      "properties": {
+        "agent_definition_id": { "$ref": "#/$defs/nonEmptyString" },
+        "agent_definition_version": { "$ref": "#/$defs/nonEmptyString" },
+        "role": { "type": "string", "enum": ["supervisor", "planner", "researcher", "synthesizer", "reviewer", "tool_executor", "custom"] }
+      },
+      "additionalProperties": false
+    },
+    "toolRef": {
+      "type": "object",
+      "required": ["tool_definition_id", "tool_version", "risk_tier"],
+      "properties": {
+        "tool_definition_id": { "$ref": "#/$defs/nonEmptyString" },
+        "tool_version": { "$ref": "#/$defs/nonEmptyString" },
+        "risk_tier": { "type": "string", "enum": ["read_only_low", "read_only_medium", "approval_required", "disallowed_write", "network_restricted"] }
+      },
+      "additionalProperties": false
+    },
+    "toolBundleRef": {
+      "type": "object",
+      "required": ["tool_bundle_id", "tool_bundle_version", "allowed_tool_refs", "disallowed_tool_refs", "policy_version"],
+      "properties": {
+        "tool_bundle_id": { "$ref": "#/$defs/nonEmptyString" },
+        "tool_bundle_version": { "$ref": "#/$defs/nonEmptyString" },
+        "allowed_tool_refs": { "type": "array", "items": { "$ref": "#/$defs/toolRef" }, "uniqueItems": true },
+        "disallowed_tool_refs": { "type": "array", "items": { "$ref": "#/$defs/toolRef" }, "uniqueItems": true },
+        "policy_version": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "approverPolicyRef": {
+      "type": "object",
+      "required": ["required_role", "required_principal_ref", "fallback_approver_ref", "policy_version"],
+      "properties": {
+        "required_role": { "$ref": "#/$defs/nonEmptyString" },
+        "required_principal_ref": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "fallback_approver_ref": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "policy_version": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "workflowTemplateRecord": {
+      "type": "object",
+      "required": [
+        "contract_version",
+        "template_id",
+        "display_name",
+        "description_ref",
+        "current_version_id",
+        "rollout_state",
+        "owner_ref",
+        "eval_suite_refs",
+        "rollout_policy",
+        "audit_refs",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "contract_version": { "const": "0.1.0" },
+        "template_id": { "$ref": "#/$defs/nonEmptyString" },
+        "display_name": { "$ref": "#/$defs/nonEmptyString" },
+        "description_ref": { "$ref": "#/$defs/opaqueRef" },
+        "current_version_id": { "$ref": "#/$defs/nonEmptyString" },
+        "rollout_state": { "$ref": "#/$defs/rolloutState" },
+        "owner_ref": { "$ref": "#/$defs/ownerRef" },
+        "eval_suite_refs": { "type": "array", "items": { "$ref": "#/$defs/evalSuiteRef" }, "uniqueItems": true },
+        "rollout_policy": { "$ref": "#/$defs/rolloutPolicy" },
+        "audit_refs": { "type": "array", "items": { "$ref": "#/$defs/auditRef" }, "uniqueItems": true },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "workflowTemplateVersionRecord": {
+      "type": "object",
+      "required": [
+        "contract_version",
+        "template_id",
+        "template_version_id",
+        "version",
+        "allowed_step_graph_ref",
+        "required_approval_policies",
+        "retry_policy_ids",
+        "allowed_agent_definition_refs",
+        "allowed_tool_bundles",
+        "allowed_model_aliases",
+        "eval_gate_refs",
+        "rollout_state",
+        "schema_ref",
+        "created_by_principal_id",
+        "created_at"
+      ],
+      "properties": {
+        "contract_version": { "const": "0.1.0" },
+        "template_id": { "$ref": "#/$defs/nonEmptyString" },
+        "template_version_id": { "$ref": "#/$defs/nonEmptyString" },
+        "version": { "$ref": "#/$defs/nonEmptyString" },
+        "allowed_step_graph_ref": { "$ref": "#/$defs/opaqueRef" },
+        "required_approval_policies": { "type": "array", "items": { "$ref": "#/$defs/approverPolicyRef" }, "uniqueItems": true },
+        "retry_policy_ids": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" }, "uniqueItems": true },
+        "allowed_agent_definition_refs": { "type": "array", "items": { "$ref": "#/$defs/agentDefinitionRef" }, "uniqueItems": true },
+        "allowed_tool_bundles": { "type": "array", "items": { "$ref": "#/$defs/toolBundleRef" }, "uniqueItems": true },
+        "allowed_model_aliases": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" }, "uniqueItems": true },
+        "eval_gate_refs": { "type": "array", "items": { "$ref": "#/$defs/evalSuiteRef" }, "uniqueItems": true },
+        "rollout_state": { "$ref": "#/$defs/rolloutState" },
+        "schema_ref": { "$ref": "#/$defs/schemaRef" },
+        "created_by_principal_id": { "$ref": "#/$defs/nonEmptyString" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -17,6 +17,15 @@ class IdempotencyScope(str, Enum):
     COST_EVENT = "cost_event"
     AUDIT_EVENT = "audit_event"
     ARTIFACT_WRITE = "artifact_write"
+    # Track 3: durable workflow / approval / outbox scopes
+    APPROVAL = "approval"
+    OUTBOX = "outbox"
+    CANCELLATION = "cancellation"
+    RETRY = "retry"
+    MANUAL_REVIEW = "manual_review"
+    RESERVATION_RELEASE = "reservation_release"
+    ARTIFACT_LIFECYCLE = "artifact_lifecycle"
+    TEMPLATE_INSTANTIATION = "template_instantiation"
 
 
 class IdempotencyStatus(str, Enum):

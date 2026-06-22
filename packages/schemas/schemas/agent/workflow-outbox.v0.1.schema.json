@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/agent/workflow-outbox.v0.1.schema.json",
+  "title": "DevGateway Workflow Outbox Contract v0.1",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "outbox_id",
+    "workflow_run_id",
+    "source_event_ref",
+    "destination_kind",
+    "payload_artifact_ref",
+    "delivery_state",
+    "attempt_count",
+    "next_attempt_at",
+    "idempotency",
+    "last_failure_ref",
+    "enqueued_at",
+    "delivered_at"
+  ],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "outbox_id": { "$ref": "#/$defs/nonEmptyString" },
+    "workflow_run_id": { "$ref": "#/$defs/nonEmptyString" },
+    "source_event_ref": { "$ref": "#/$defs/opaqueRef" },
+    "destination_kind": { "$ref": "#/$defs/destinationKind" },
+    "payload_artifact_ref": { "anyOf": [{ "$ref": "#/$defs/artifactRef" }, { "type": "null" }] },
+    "delivery_state": { "$ref": "#/$defs/deliveryState" },
+    "attempt_count": { "type": "integer", "minimum": 0 },
+    "next_attempt_at": { "$ref": "#/$defs/nullableDateTime" },
+    "idempotency": { "$ref": "#/$defs/idempotencyRef" },
+    "last_failure_ref": { "anyOf": [{ "$ref": "#/$defs/opaqueRef" }, { "type": "null" }] },
+    "enqueued_at": { "type": "string", "format": "date-time" },
+    "delivered_at": { "$ref": "#/$defs/nullableDateTime" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "nullableDateTime": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
+    "dataClass": { "type": "string", "enum": ["public", "internal", "confidential", "restricted"] },
+    "destinationKind": {
+      "type": "string",
+      "enum": ["trace", "audit", "notification", "eval_evidence", "portal_update", "webhook_ref"]
+    },
+    "deliveryState": {
+      "type": "string",
+      "enum": ["pending", "delivering", "delivered", "failed", "dead_lettered"]
+    },
+    "opaqueRef": {
+      "type": "object",
+      "required": ["ref_id", "ref_type", "scope_ref"],
+      "properties": {
+        "ref_id": { "$ref": "#/$defs/nonEmptyString" },
+        "ref_type": { "$ref": "#/$defs/nonEmptyString" },
+        "scope_ref": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "artifactRef": {
+      "type": "object",
+      "required": ["artifact_id", "artifact_kind", "data_class", "sha256", "size_bytes"],
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/nonEmptyString" },
+        "artifact_kind": { "$ref": "#/$defs/nonEmptyString" },
+        "data_class": { "$ref": "#/$defs/dataClass" },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "size_bytes": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "idempotencyRef": {
+      "type": "object",
+      "required": ["idempotency_key", "scope", "dedupe_ref", "expires_at"],
+      "properties": {
+        "idempotency_key": { "$ref": "#/$defs/nonEmptyString" },
+        "scope": { "type": "string", "enum": ["workflow", "step", "delegation", "agent_run", "tool_call", "artifact_write", "outbox"] },
+        "dedupe_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "expires_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

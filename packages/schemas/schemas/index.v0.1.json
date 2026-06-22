@@ -26,7 +26,14 @@
     "workflow_event": "https://devgateway.local/schemas/agent/workflow-event.v0.1.schema.json",
     "task_artifact": "https://devgateway.local/schemas/agent/task-artifact.v0.1.schema.json",
     "tool_call": "https://devgateway.local/schemas/agent/tool-call.v0.1.schema.json",
-    "skill_definition": "https://devgateway.local/schemas/agent/skill-definition.v0.1.schema.json"
+    "skill_definition": "https://devgateway.local/schemas/agent/skill-definition.v0.1.schema.json",
+    "approval_request": "https://devgateway.local/schemas/agent/approval-request.v0.1.schema.json",
+    "retry_policy": "https://devgateway.local/schemas/agent/retry-policy.v0.1.schema.json",
+    "cancellation": "https://devgateway.local/schemas/agent/cancellation.v0.1.schema.json",
+    "workflow_outbox": "https://devgateway.local/schemas/agent/workflow-outbox.v0.1.schema.json",
+    "workflow_template": "https://devgateway.local/schemas/agent/workflow-template.v0.1.schema.json",
+    "manual_review": "https://devgateway.local/schemas/agent/manual-review.v0.1.schema.json",
+    "artifact_lifecycle": "https://devgateway.local/schemas/agent/artifact-lifecycle.v0.1.schema.json"
   },
   "endpoints": [
     {
@@ -147,6 +154,13 @@
     "tool_call": "https://devgateway.local/schemas/agent/tool-call.v0.1.schema.json",
     "tool_definition_ref": "https://devgateway.local/schemas/agent/tool-call.v0.1.schema.json#/$defs/toolDefinitionRef",
     "tool_call_result_reference": "https://devgateway.local/schemas/agent/tool-call.v0.1.schema.json#/$defs/toolCallResultReference",
-    "skill_definition": "https://devgateway.local/schemas/agent/skill-definition.v0.1.schema.json"
+    "skill_definition": "https://devgateway.local/schemas/agent/skill-definition.v0.1.schema.json",
+    "approval_request": "https://devgateway.local/schemas/agent/approval-request.v0.1.schema.json",
+    "retry_policy": "https://devgateway.local/schemas/agent/retry-policy.v0.1.schema.json",
+    "cancellation": "https://devgateway.local/schemas/agent/cancellation.v0.1.schema.json",
+    "workflow_outbox": "https://devgateway.local/schemas/agent/workflow-outbox.v0.1.schema.json",
+    "workflow_template": "https://devgateway.local/schemas/agent/workflow-template.v0.1.schema.json",
+    "manual_review": "https://devgateway.local/schemas/agent/manual-review.v0.1.schema.json",
+    "artifact_lifecycle": "https://devgateway.local/schemas/agent/artifact-lifecycle.v0.1.schema.json"
   }
 }

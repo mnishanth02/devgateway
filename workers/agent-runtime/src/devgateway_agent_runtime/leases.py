@@ -24,12 +24,17 @@ class Lease:
     lease_id: str = field(default_factory=lambda: uuid4().hex)
     acquired_at: datetime = field(default_factory=utc_now)
     heartbeat_at: datetime = field(default_factory=utc_now)
+    # Monotonically increasing fencing token; incremented by the repository on each
+    # new acquisition of the same resource. Defaults to 0 for backward compat with
+    # in-memory fixture repository which does not yet track the counter.
+    fencing_token: int = 0
 
     def is_expired(self, now: datetime | None = None) -> bool:
         return (now or utc_now()) >= self.expires_at
 
     def heartbeat(self, policy: LeasePolicy, *, now: datetime | None = None) -> "Lease":
         timestamp = now or utc_now()
+        # fencing_token is preserved on heartbeat; it only advances on new acquisition.
         return replace(self, heartbeat_at=timestamp, expires_at=policy.expires_at(timestamp))
 
     def to_dict(self) -> dict[str, object]:
@@ -40,6 +45,7 @@ class Lease:
             "acquired_at": isoformat_utc(self.acquired_at),
             "heartbeat_at": isoformat_utc(self.heartbeat_at),
             "expires_at": isoformat_utc(self.expires_at),
+            "fencing_token": self.fencing_token,
         }
 
 

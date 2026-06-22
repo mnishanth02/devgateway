@@ -6,24 +6,36 @@ export const workflowStates = [
   'created',
   'queued',
   'planning',
+  'delegating',
   'running',
   'waiting_on_child',
   'synthesizing',
+  // Track 3: pause/gate states
+  'pending_approval',
+  'cancel_requested',
+  'manual_review',
   'succeeded',
+  'completed',
   'failed',
   'cancelled',
   'timed_out',
   'denied',
 ] as const;
-export const workflowTerminalStates = ['succeeded', 'failed', 'cancelled', 'timed_out', 'denied'] as const;
+export const workflowTerminalStates = ['succeeded', 'completed', 'failed', 'cancelled', 'timed_out', 'denied'] as const;
 export const workflowAllowedTransitions = {
   created: ['queued', 'failed', 'denied'],
-  queued: ['planning', 'cancelled', 'timed_out', 'failed', 'denied'],
-  planning: ['running', 'waiting_on_child', 'cancelled', 'timed_out', 'failed', 'denied'],
-  running: ['waiting_on_child', 'synthesizing', 'succeeded', 'cancelled', 'timed_out', 'failed', 'denied'],
-  waiting_on_child: ['running', 'synthesizing', 'cancelled', 'timed_out', 'failed', 'denied'],
-  synthesizing: ['succeeded', 'cancelled', 'timed_out', 'failed', 'denied'],
+  queued: ['planning', 'pending_approval', 'cancel_requested', 'cancelled', 'timed_out', 'failed', 'denied'],
+  planning: ['delegating', 'running', 'waiting_on_child', 'pending_approval', 'cancel_requested', 'manual_review', 'cancelled', 'timed_out', 'failed', 'denied'],
+  delegating: ['running', 'pending_approval', 'cancel_requested', 'manual_review', 'cancelled', 'timed_out', 'failed', 'denied'],
+  running: ['waiting_on_child', 'synthesizing', 'pending_approval', 'cancel_requested', 'manual_review', 'succeeded', 'cancelled', 'timed_out', 'failed', 'denied'],
+  waiting_on_child: ['running', 'synthesizing', 'cancel_requested', 'cancelled', 'timed_out', 'failed', 'denied'],
+  synthesizing: ['succeeded', 'completed', 'cancel_requested', 'manual_review', 'cancelled', 'timed_out', 'failed', 'denied'],
+  // Track 3 pause/gate transitions
+  pending_approval: ['running', 'planning', 'cancel_requested', 'cancelled', 'timed_out', 'failed', 'denied'],
+  cancel_requested: ['cancelled', 'manual_review', 'failed'],
+  manual_review: ['running', 'cancelled', 'failed'],
   succeeded: [],
+  completed: [],
   failed: [],
   cancelled: [],
   timed_out: [],
@@ -55,6 +67,29 @@ export const workflowEventTypes = [
   'workflow_failed',
   'error',
   'cancel_requested',
+  // Track 3: approval events
+  'approval_requested',
+  'approval_approved',
+  'approval_denied',
+  'approval_expired',
+  // Track 3: retry events
+  'retry_scheduled',
+  'retry_executed',
+  'retry_exhausted',
+  // Track 3: outbox events
+  'outbox_enqueued',
+  'outbox_delivered',
+  'outbox_failed',
+  // Track 3: cancellation events
+  'cancellation_observed',
+  'cancellation_completed',
+  // Track 3: manual-review events
+  'manual_review_opened',
+  'manual_review_resolved',
+  // Track 3: artifact lifecycle events
+  'artifact_lifecycle_changed',
+  // Track 3: template events
+  'template_instantiated',
 ] as const;
 
 export const agentRoles = ['supervisor', 'planner', 'researcher', 'synthesizer', 'reviewer', 'tool_executor', 'custom'] as const;
@@ -146,7 +181,23 @@ export type SkillLifecycleState = (typeof skillLifecycleStates)[number];
 export type AgentWorkflowMetadataForbiddenField = (typeof agentWorkflowMetadataForbiddenFields)[number];
 export type ToolClass = string;
 export type NullableDateTime = string | null;
-export type IdempotencyScope = 'workflow' | 'step' | 'delegation' | 'agent_run' | 'tool_call' | 'artifact_write' | 'skill_publish';
+export type IdempotencyScope =
+  | 'workflow'
+  | 'step'
+  | 'delegation'
+  | 'agent_run'
+  | 'tool_call'
+  | 'artifact_write'
+  | 'skill_publish'
+  // Track 3 scopes
+  | 'approval'
+  | 'outbox'
+  | 'cancellation'
+  | 'retry'
+  | 'manual_review'
+  | 'reservation_release'
+  | 'artifact_lifecycle'
+  | 'template_instantiation';
 export type SchemaEnforcement =
   | 'validate_before_dispatch'
   | 'validate_before_execution'
@@ -326,7 +377,7 @@ export type FailureCause = FailureRef;
 
 export interface WorkflowStepRef {
   readonly step_id: string;
-  readonly step_type: 'plan' | 'delegate' | 'agent' | 'tool' | 'synthesize' | 'review' | 'artifact';
+  readonly step_type: 'plan' | 'delegate' | 'agent' | 'tool' | 'synthesize' | 'review' | 'artifact' | 'approval_gate';
   readonly step_status: WorkflowState;
   readonly agent_run_id: string | null;
   readonly delegation_id: string | null;
@@ -404,6 +455,12 @@ export interface ArtifactSignedAccessPolicy {
 }
 
 export interface ArtifactSignedUrlPolicy extends ArtifactSignedAccessPolicy {}
+
+export interface ArtifactSignedAccessEligibility {
+  readonly eligible: boolean;
+  readonly requires_approval: boolean;
+  readonly max_signed_duration_seconds: number | null;
+}
 
 export interface ArtifactAclScope {
   readonly budget_scope_id: string;
@@ -687,6 +744,368 @@ export interface SkillVersionRecord {
   readonly lifecycle_state: SkillLifecycleState;
   readonly created_by_principal_id: string;
   readonly created_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Track 3: Approval constants and types
+// ---------------------------------------------------------------------------
+
+export const approvalStatuses = [
+  'pending',
+  'approved',
+  'denied',
+  'expired',
+  'cancelled',
+  'superseded',
+] as const;
+
+export const approvalDecisions = ['approved', 'denied', 'expired', 'cancelled'] as const;
+
+export const approvalRiskTiers = [
+  'low',
+  'medium',
+  'high',
+  'critical',
+] as const;
+
+export type ApprovalStatus = (typeof approvalStatuses)[number];
+export type ApprovalDecision = (typeof approvalDecisions)[number];
+export type ApprovalRiskTier = (typeof approvalRiskTiers)[number];
+
+// ---------------------------------------------------------------------------
+// Track 3: Retry policy constants and types
+// ---------------------------------------------------------------------------
+
+export const retryBackoffTypes = ['fixed', 'linear', 'exponential', 'exponential_with_jitter'] as const;
+
+export const failureClasses = [
+  'transient_timeout_before_accept',
+  'provider_request_id_returned_commit_failed',
+  'tool_adapter_transient',
+  'validation_failure',
+  'budget_denial',
+  'policy_denial',
+  'non_idempotent_unknown_side_effect',
+  'worker_crash_active_lease',
+] as const;
+
+export const nonIdempotentFallbackBehaviors = ['manual_review', 'terminal_failure', 'replan_within_budget'] as const;
+
+export type RetryBackoffType = (typeof retryBackoffTypes)[number];
+export type FailureClass = (typeof failureClasses)[number];
+export type NonIdempotentFallbackBehavior = (typeof nonIdempotentFallbackBehaviors)[number];
+
+// ---------------------------------------------------------------------------
+// Track 3: Outbox delivery constants and types
+// ---------------------------------------------------------------------------
+
+export const outboxDeliveryStates = [
+  'pending',
+  'delivering',
+  'delivered',
+  'failed',
+  'dead_lettered',
+] as const;
+
+export const outboxDestinationKinds = [
+  'trace',
+  'audit',
+  'notification',
+  'eval_evidence',
+  'portal_update',
+  'webhook_ref',
+] as const;
+
+export type OutboxDeliveryState = (typeof outboxDeliveryStates)[number];
+export type OutboxDestinationKind = (typeof outboxDestinationKinds)[number];
+
+// ---------------------------------------------------------------------------
+// Track 3: Cancellation constants and types
+// ---------------------------------------------------------------------------
+
+export const cancellationPropagationStates = [
+  'requested',
+  'propagating',
+  'pending_manual_review',
+  'unwinding',
+  'releasing_reservations',
+  'completed',
+  'partially_completed',
+  'partially_completed_manual_review',
+] as const;
+
+export type CancellationPropagationState = (typeof cancellationPropagationStates)[number];
+
+// ---------------------------------------------------------------------------
+// Track 3: Manual-review constants and types
+// ---------------------------------------------------------------------------
+
+export const manualReviewReasons = [
+  'non_idempotent_side_effect',
+  'stuck_lease_recovery',
+  'stuck_lease',
+  'ambiguous_external_call',
+  'partial_artifact_write',
+  'retry_exhausted_non_idempotent',
+  'retry_exhausted',
+  'worker_crash_non_recoverable',
+  'budget_anomaly',
+  'policy_ambiguity',
+  'cancellation_unresolvable',
+] as const;
+
+export const manualReviewStates = ['open', 'in_progress', 'resolved', 'closed'] as const;
+export const manualReviewBlockingStates = ['blocking_workflow', 'blocking_step', 'informational'] as const;
+
+export type ManualReviewReason = (typeof manualReviewReasons)[number];
+export type ManualReviewState = (typeof manualReviewStates)[number];
+export type ManualReviewBlockingState = (typeof manualReviewBlockingStates)[number];
+
+// ---------------------------------------------------------------------------
+// Track 3: Artifact lifecycle constants and types
+// ---------------------------------------------------------------------------
+
+export const artifactLifecycleActions = [
+  'created',
+  'verified',
+  'expiry_set',
+  'retained',
+  'legal_hold_applied',
+  'legal_hold_released',
+  'redacted',
+  'deletion_scheduled',
+  'deleted',
+  'signed_access_granted',
+  'signed_access_revoked',
+] as const;
+export const artifactLifecycleStates = [
+  'pending',
+  'active',
+  'expiring',
+  'redacted',
+  'expired',
+  'deletion_pending',
+  'deleted',
+  'legal_hold_active',
+] as const;
+
+export type ArtifactLifecycleAction = (typeof artifactLifecycleActions)[number];
+export type ArtifactLifecycleState = (typeof artifactLifecycleStates)[number];
+
+// ---------------------------------------------------------------------------
+// Track 3: Workflow template constants and types
+// ---------------------------------------------------------------------------
+
+export const workflowTemplateRolloutStates = ['draft', 'eval_ready', 'approved', 'limited_rollout', 'production', 'disabled'] as const;
+
+export type WorkflowTemplateRolloutState = (typeof workflowTemplateRolloutStates)[number];
+
+// ---------------------------------------------------------------------------
+// Track 3: Approval supporting refs
+// ---------------------------------------------------------------------------
+
+export interface ApproverPolicyRef {
+  readonly required_role: string;
+  readonly required_principal_ref: string | null;
+  readonly fallback_approver_ref: string | null;
+  readonly policy_version: string;
+}
+
+export interface ApprovalDecisionRef {
+  readonly decision_id: string;
+  readonly decision: ApprovalDecision;
+  readonly approver_principal_id: string;
+  readonly policy_version_at_decision: string;
+  readonly decision_audit_ref: AuditRef;
+  readonly decided_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Track 3: Retry policy supporting types
+// ---------------------------------------------------------------------------
+
+export interface RetryBackoffPolicy {
+  readonly backoff_type: RetryBackoffType;
+  readonly initial_delay_seconds: number;
+  readonly max_delay_seconds: number;
+  readonly jitter_fraction: number;
+  readonly multiplier: number;
+}
+
+export interface RetryFailureClassPolicy {
+  readonly failure_class: FailureClass;
+  readonly retryable: boolean;
+  readonly idempotency_required: boolean;
+  readonly non_idempotent_fallback: NonIdempotentFallbackBehavior;
+}
+
+// ---------------------------------------------------------------------------
+// Track 3: Cancellation supporting refs
+// ---------------------------------------------------------------------------
+
+export interface CancellationTargetRef {
+  readonly workflow_run_id: string;
+  readonly step_ids: readonly string[];
+  readonly delegation_ids: readonly string[];
+  readonly agent_run_ids: readonly string[];
+  readonly tool_call_ids: readonly string[];
+}
+
+// ---------------------------------------------------------------------------
+// Track 3: Record interfaces
+// ---------------------------------------------------------------------------
+
+/** Durable human approval gate for a workflow step, tool call, or delegation. */
+export interface ApprovalRequestRecord extends ScopedAgentContractFields {
+  readonly approval_request_id: string;
+  readonly workflow_run_id: string;
+  readonly task_id: string;
+  readonly step_id: string | null;
+  readonly delegation_id: string | null;
+  readonly tool_call_id: string | null;
+  readonly requester_principal_id: string;
+  readonly approver_principal_id: string | null;
+  readonly required_role: string;
+  readonly approver_policy: ApproverPolicyRef;
+  readonly risk_tier: ApprovalRiskTier;
+  readonly action_summary_artifact_ref: ArtifactRef;
+  readonly state: ApprovalStatus;
+  readonly decision_ref: ApprovalDecisionRef | null;
+  readonly expires_at: string;
+  readonly policy_ref: PolicyRef;
+  readonly audit_refs: readonly AuditRef[];
+  readonly idempotency: IdempotencyRef;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+/** Retry policy attached to a workflow step or delegation, enforcing backoff and failure classification. */
+export interface RetryPolicyRecord {
+  readonly contract_version: GatewayControlContractVersion;
+  readonly retry_policy_id: string;
+  readonly max_attempts: number;
+  readonly backoff_policy: RetryBackoffPolicy;
+  readonly timeout_policy: TimeoutPolicy;
+  readonly failure_class_policies: readonly RetryFailureClassPolicy[];
+  readonly idempotency_required_for_auto_retry: boolean;
+  readonly non_idempotent_fallback: NonIdempotentFallbackBehavior;
+  readonly policy_ref: PolicyRef;
+  readonly owner_ref: OwnerRef;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+/** Records the propagation and resolution of a cancellation request through a workflow. */
+export interface WorkflowCancellationRecord extends ScopedAgentContractFields {
+  readonly cancellation_id: string;
+  readonly workflow_run_id: string;
+  readonly task_id: string;
+  readonly requester_principal_id: string;
+  readonly cancellation_reason_ref: OpaqueRef;
+  readonly propagation_state: CancellationPropagationState;
+  readonly target_ref: CancellationTargetRef;
+  readonly cancellation_deadline: string;
+  readonly budget_release_refs: readonly CostRef[];
+  readonly terminal_artifact_refs: readonly ArtifactRef[];
+  readonly manual_review_item_ids: readonly string[];
+  readonly audit_refs: readonly AuditRef[];
+  readonly idempotency: IdempotencyRef;
+  readonly requested_at: string;
+  readonly completed_at: NullableDateTime;
+}
+
+/** Transactional event publication record for at-least-once delivery to trace/audit/notification/portal consumers. */
+export interface WorkflowOutboxRecord {
+  readonly contract_version: GatewayControlContractVersion;
+  readonly outbox_id: string;
+  readonly workflow_run_id: string;
+  readonly source_event_ref: OpaqueRef;
+  readonly destination_kind: OutboxDestinationKind;
+  readonly payload_artifact_ref: ArtifactRef | null;
+  readonly delivery_state: OutboxDeliveryState;
+  readonly attempt_count: number;
+  readonly next_attempt_at: NullableDateTime;
+  readonly last_failure_ref: OpaqueRef | null;
+  readonly idempotency: IdempotencyRef;
+  readonly enqueued_at: string;
+  readonly delivered_at: NullableDateTime;
+}
+
+/** Immutable workflow template definition governing allowed steps, agents, tools, models, and policies. */
+export interface WorkflowTemplateRecord {
+  readonly contract_version: GatewayControlContractVersion;
+  readonly template_id: string;
+  readonly display_name: string;
+  readonly description_ref: OpaqueRef;
+  readonly current_version_id: string;
+  readonly rollout_state: WorkflowTemplateRolloutState;
+  readonly owner_ref: OwnerRef;
+  readonly eval_suite_refs: readonly EvalSuiteRef[];
+  readonly rollout_policy: RolloutPolicy;
+  readonly audit_refs: readonly AuditRef[];
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+/** An immutable snapshot of a workflow template at a specific version. */
+export interface WorkflowTemplateVersionRecord {
+  readonly contract_version: GatewayControlContractVersion;
+  readonly template_id: string;
+  readonly template_version_id: string;
+  readonly version: string;
+  readonly allowed_step_graph_ref: OpaqueRef;
+  readonly required_approval_policies: readonly ApproverPolicyRef[];
+  readonly retry_policy_ids: readonly string[];
+  readonly allowed_agent_definition_refs: readonly AgentDefinitionRef[];
+  readonly allowed_tool_bundles: readonly ToolBundleRef[];
+  readonly allowed_model_aliases: readonly string[];
+  readonly eval_gate_refs: readonly EvalSuiteRef[];
+  readonly rollout_state: WorkflowTemplateRolloutState;
+  readonly schema_ref: SchemaRef;
+  readonly created_by_principal_id: string;
+  readonly created_at: string;
+}
+
+/** Safe-handling record for non-idempotent side effects, stuck leases, or ambiguous external calls requiring human resolution. */
+export interface ManualReviewItemRecord extends ScopedAgentContractFields {
+  readonly manual_review_item_id: string;
+  readonly workflow_run_id: string;
+  readonly task_id: string;
+  readonly step_id: string | null;
+  readonly agent_run_id: string | null;
+  readonly delegation_id: string | null;
+  readonly reason: ManualReviewReason;
+  readonly blocking_state: ManualReviewBlockingState;
+  readonly review_state: ManualReviewState;
+  readonly side_effect_artifact_refs: readonly ArtifactRef[];
+  readonly safe_action_refs: readonly OpaqueRef[];
+  readonly owner_ref: OwnerRef;
+  readonly required_role: string;
+  readonly resolution_artifact_ref: ArtifactRef | null;
+  readonly audit_refs: readonly AuditRef[];
+  readonly idempotency: IdempotencyRef;
+  readonly opened_at: string;
+  readonly resolved_at: NullableDateTime;
+}
+
+/** Append-only lifecycle event for an artifact: verification, retention, legal hold, redaction, expiry, deletion, signed access. */
+export interface ArtifactLifecycleEventRecord extends ScopedAgentContractFields {
+  readonly lifecycle_event_id: string;
+  readonly artifact_id: string;
+  readonly workflow_run_id: string;
+  readonly task_id: string;
+  readonly action: ArtifactLifecycleAction;
+  readonly state: ArtifactLifecycleState;
+  readonly storage_ref: StorageRef;
+  readonly checksum_sha256: string;
+  readonly retention_policy: ArtifactRetentionPolicy;
+  readonly signed_access_eligibility: ArtifactSignedAccessEligibility;
+  readonly legal_hold: boolean;
+  readonly redacted: boolean;
+  readonly deletion_scheduled_at: NullableDateTime;
+  readonly audit_refs: readonly AuditRef[];
+  readonly idempotency: IdempotencyRef;
+  readonly occurred_at: string;
 }
 
 export interface AgentWorkflowMetadataValidationIssue {

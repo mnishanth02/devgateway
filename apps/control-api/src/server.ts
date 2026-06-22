@@ -16,6 +16,9 @@ import type { SnapshotRoute } from './routes/snapshot-common.ts';
 import { registerTaskRoutes } from './routes/tasks.ts';
 import { registerVirtualKeyRoutes, type ControlRouteDefinition } from './routes/virtual-keys.ts';
 import { registerWorkflowRoutes } from './routes/workflows.ts';
+import { registerApprovalRoutes } from './routes/approvals.ts';
+import { registerOutboxRoutes } from './routes/outbox.ts';
+import { registerTemplateRoutes } from './routes/templates.ts';
 import { missingAuthControlError } from './policies/control-errors.ts';
 import {
     controlApiServiceName,
@@ -232,6 +235,9 @@ function registerTrackOneControlPlaneRoutes(
     registerWorkflowRoutes(controlRegistrar, { runtimeEnvironment: options.runtimeEnvironment, authenticate });
     registerAgentRunRoutes(controlRegistrar, { runtimeEnvironment: options.runtimeEnvironment, authenticate });
     registerSkillRoutes(controlRegistrar, { runtimeEnvironment: options.runtimeEnvironment, authenticate });
+    registerApprovalRoutes(controlRegistrar, { runtimeEnvironment: options.runtimeEnvironment, authenticate });
+    registerOutboxRoutes(controlRegistrar, { runtimeEnvironment: options.runtimeEnvironment, authenticate });
+    registerTemplateRoutes(controlRegistrar, { runtimeEnvironment: options.runtimeEnvironment, authenticate });
     const snapshotOptions = { runtimeEnvironment: options.runtimeEnvironment } as const;
     registerRegistryRoutes(snapshotRegistrar, snapshotOptions);
     registerPolicyRoutes(snapshotRegistrar, snapshotOptions);

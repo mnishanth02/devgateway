@@ -61,8 +61,8 @@
   "$defs": {
     "nonEmptyString": { "type": "string", "minLength": 1 },
     "nullableNonEmptyString": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
-    "eventType": { "type": "string", "enum": ["workflow_created", "state_transitioned", "workflow_state_changed", "step_created", "step_state_changed", "agent_run_started", "delegation_created", "delegation_completed", "delegation_state_changed", "tool_call_decided", "agent_run_state_changed", "tool_call_state_changed", "artifact_recorded", "budget_recorded", "budget_reserved", "cost_recorded", "audit_recorded", "heartbeat", "lease_acquired", "lease_released", "workflow_completed", "workflow_failed", "error", "cancel_requested"] },
-    "workflowStatus": { "type": "string", "enum": ["created", "draft", "queued", "planning", "delegating", "dispatched", "leased", "running", "waiting", "waiting_on_child", "synthesizing", "succeeded", "completed", "failed", "authorized", "denied", "invalid_output", "skipped", "cancel_requested", "cancelled", "timed_out"] },
+    "eventType": { "type": "string", "enum": ["workflow_created", "state_transitioned", "workflow_state_changed", "step_created", "step_state_changed", "agent_run_started", "delegation_created", "delegation_completed", "delegation_state_changed", "tool_call_decided", "agent_run_state_changed", "tool_call_state_changed", "artifact_recorded", "budget_recorded", "budget_reserved", "cost_recorded", "audit_recorded", "heartbeat", "lease_acquired", "lease_released", "workflow_completed", "workflow_failed", "error", "cancel_requested", "approval_requested", "approval_approved", "approval_denied", "approval_expired", "retry_scheduled", "retry_executed", "retry_exhausted", "outbox_enqueued", "outbox_delivered", "outbox_failed", "cancellation_observed", "cancellation_completed", "manual_review_opened", "manual_review_resolved", "artifact_lifecycle_changed", "template_instantiated"] },
+    "workflowStatus": { "type": "string", "enum": ["created", "draft", "queued", "planning", "delegating", "dispatched", "leased", "running", "waiting", "waiting_on_child", "synthesizing", "pending_approval", "manual_review", "succeeded", "completed", "failed", "authorized", "denied", "invalid_output", "skipped", "cancel_requested", "cancelled", "timed_out", "retry_scheduled"] },
     "dataClass": { "type": "string", "enum": ["public", "internal", "confidential", "restricted"] },
     "traceContextRef": {
       "type": "object",
@@ -109,7 +109,7 @@
       "required": ["idempotency_key", "scope", "dedupe_ref", "expires_at"],
       "properties": {
         "idempotency_key": { "$ref": "#/$defs/nonEmptyString" },
-        "scope": { "type": "string", "enum": ["workflow", "step", "delegation", "agent_run", "tool_call", "artifact_write"] },
+        "scope": { "type": "string", "enum": ["workflow", "step", "delegation", "agent_run", "tool_call", "artifact_write", "approval", "outbox", "cancellation", "retry", "manual_review", "reservation_release", "artifact_lifecycle", "template_instantiation"] },
         "dedupe_ref": { "$ref": "#/$defs/nonEmptyString" },
         "expires_at": { "type": "string", "format": "date-time" }
       },

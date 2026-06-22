@@ -60,7 +60,7 @@
     "nonEmptyString": { "type": "string", "minLength": 1 },
     "nullableNonEmptyString": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
     "nullableDateTime": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
-    "workflowStatus": { "type": "string", "enum": ["created", "draft", "queued", "planning", "delegating", "dispatched", "leased", "running", "waiting", "waiting_on_child", "synthesizing", "succeeded", "completed", "failed", "authorized", "denied", "invalid_output", "skipped", "cancel_requested", "cancelled", "timed_out"] },
+    "workflowStatus": { "type": "string", "enum": ["created", "draft", "queued", "planning", "delegating", "dispatched", "leased", "running", "waiting", "waiting_on_child", "synthesizing", "pending_approval", "manual_review", "succeeded", "completed", "failed", "authorized", "denied", "invalid_output", "skipped", "cancel_requested", "cancelled", "timed_out", "retry_scheduled"] },
     "dataClass": { "type": "string", "enum": ["public", "internal", "confidential", "restricted"] },
     "traceContextRef": {
       "type": "object",
@@ -77,7 +77,7 @@
       "required": ["step_id", "step_type", "step_status", "agent_run_id", "delegation_id"],
       "properties": {
         "step_id": { "$ref": "#/$defs/nonEmptyString" },
-        "step_type": { "type": "string", "enum": ["plan", "delegate", "agent", "tool", "synthesize", "review", "artifact"] },
+        "step_type": { "type": "string", "enum": ["plan", "delegate", "agent", "tool", "synthesize", "review", "artifact", "approval_gate"] },
         "step_status": { "$ref": "#/$defs/workflowStatus" },
         "agent_run_id": { "$ref": "#/$defs/nullableNonEmptyString" },
         "delegation_id": { "$ref": "#/$defs/nullableNonEmptyString" }
@@ -89,7 +89,7 @@
       "required": ["idempotency_key", "scope", "dedupe_ref", "expires_at"],
       "properties": {
         "idempotency_key": { "$ref": "#/$defs/nonEmptyString" },
-        "scope": { "type": "string", "enum": ["workflow", "step", "delegation", "agent_run", "tool_call", "artifact_write"] },
+        "scope": { "type": "string", "enum": ["workflow", "step", "delegation", "agent_run", "tool_call", "artifact_write", "approval", "outbox", "cancellation", "retry", "manual_review", "reservation_release", "artifact_lifecycle", "template_instantiation"] },
         "dedupe_ref": { "$ref": "#/$defs/nonEmptyString" },
         "expires_at": { "type": "string", "format": "date-time" }
       },

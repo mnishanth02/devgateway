@@ -27,8 +27,14 @@ import {
   registerCostEventRoutes,
 } from './cost-events.ts';
 import { AGENT_RUNS_BASE_PATH, registerAgentRunRoutes } from './agent-runs.ts';
-import { createInMemoryAgentWorkflowStore } from './agent-workflow-store.ts';
-import { TASK_ARTIFACTS_PATH, registerArtifactRoutes } from './artifacts.ts';
+import { createInMemoryAgentWorkflowStore, type ApprovalControlRecord } from './agent-workflow-store.ts';
+import {
+  ARTIFACT_LIFECYCLE_PATH,
+  ARTIFACT_LIFECYCLE_STATUS_PATH,
+  ARTIFACT_SIGNED_ACCESS_PATH,
+  TASK_ARTIFACTS_PATH,
+  registerArtifactRoutes,
+} from './artifacts.ts';
 import { SKILLS_BASE_PATH, registerSkillRoutes } from './skills.ts';
 import { TASKS_BASE_PATH, registerTaskRoutes } from './tasks.ts';
 import {
@@ -38,6 +44,13 @@ import {
   type ControlRouteRequest,
 } from './virtual-keys.ts';
 import { WORKFLOWS_BASE_PATH, registerWorkflowRoutes } from './workflows.ts';
+import { APPROVALS_BASE_PATH, registerApprovalRoutes } from './approvals.ts';
+import { OUTBOX_BASE_PATH, registerOutboxRoutes } from './outbox.ts';
+import {
+  WORKFLOW_TEMPLATE_VERSIONS_BASE_PATH,
+  WORKFLOW_TEMPLATES_BASE_PATH,
+  registerTemplateRoutes,
+} from './templates.ts';
 
 describe('control API virtual key routes', () => {
   it('issues one-time placeholder secrets but never returns stored secret material from list', async () => {
@@ -753,7 +766,8 @@ describe('control API agent workflow routes', () => {
     assert.equal(result.count, 1);
     assert.equal(result.artifacts[0]?.artifact_id, 'artifact_demo_001');
     assert.equal(result.artifacts[0]?.signed_download_eligible, false);
-    assert.equal(result.artifacts[0]?.storage_ref.object_path_ref, 'opaque-artifact-ref:artifact_demo_001');
+    assert.equal(result.artifacts[0]?.storage_ref.ref_id, 'storage_ref_artifact_demo_001');
+    assert.equal(result.artifacts[0]?.storage_ref.ref_type, 'artifact_storage_ref');
     assertNoSensitiveControlPayload(result);
   });
 
@@ -1036,10 +1050,1298 @@ describe('control API agent workflow routes', () => {
   });
 });
 
+describe('control API approval routes', () => {
+  it('lists pending fixture approvals with metadata-only response', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', APPROVALS_BASE_PATH).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        query: {},
+      },
+      reply,
+    )) as ApprovalListEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.count, 1);
+    assert.equal(result.approvals[0]?.approval_request_id, 'approval_request_demo_001');
+    assert.equal(result.approvals[0]?.state, 'pending');
+    assert.equal(result.approvals[0]?.workflow_id, 'workflow_demo_001');
+    assert.equal(result.approvals[0]?.task_id, 'task_demo_001');
+    assert.equal(result.approvals[0]?.risk_tier, 'medium');
+    assert.equal(result.approvals[0]?.decision_ref, null);
+    assertNoSensitiveControlPayload(result);
+  });
+
+  it('returns empty list when filtering by non-pending state with no matching approvals', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', APPROVALS_BASE_PATH).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        query: { state: 'approved' },
+      },
+      reply,
+    )) as ApprovalListEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.count, 0);
+    assert.deepEqual(result.approvals, []);
+  });
+
+  it('gets a single approval by id', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', `${APPROVALS_BASE_PATH}/:approval_request_id`).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { approval_request_id: 'approval_request_demo_001' },
+      },
+      reply,
+    )) as ApprovalEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.approval.approval_request_id, 'approval_request_demo_001');
+    assert.equal(result.approval.state, 'pending');
+    assert.equal(result.approval.principal_id, 'principal_demo');
+    assert.equal(result.approval.project_id, 'project_demo');
+    assertNoSensitiveControlPayload(result);
+  });
+
+  it('approves a pending approval with trusted actor decision ref', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'POST', `${APPROVALS_BASE_PATH}/:approval_request_id/approve`).handler(
+      {
+        headers: authHeaders('principal_approver', 'project_demo', ['approver']),
+        params: { approval_request_id: 'approval_request_demo_001' },
+        body: validApproveBody(),
+      },
+      reply,
+    )) as ApprovalEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.approval.approval_request_id, 'approval_request_demo_001');
+    assert.equal(result.approval.state, 'approved');
+    assert.equal(result.approval.approver_principal_id, 'principal_approver');
+    assert.ok(result.approval.decision_ref !== null);
+    assert.equal(result.approval.decision_ref.decision, 'approved');
+    assert.equal(result.approval.decision_ref.approver_principal_id, 'principal_approver');
+    assert.match(result.approval.decision_ref.decision_id, /^decision_approve_/u);
+    assertNoSensitiveControlPayload(result);
+  });
+
+  it('denies a pending approval with trusted actor decision ref', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'POST', `${APPROVALS_BASE_PATH}/:approval_request_id/deny`).handler(
+      {
+        headers: authHeaders('principal_approver', 'project_demo', ['approver']),
+        params: { approval_request_id: 'approval_request_demo_001' },
+        body: validDenyBody(),
+      },
+      reply,
+    )) as ApprovalEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.approval.state, 'denied');
+    assert.equal(result.approval.approver_principal_id, 'principal_approver');
+    assert.ok(result.approval.decision_ref !== null);
+    assert.equal(result.approval.decision_ref.decision, 'denied');
+    assertNoSensitiveControlPayload(result);
+  });
+
+  it('rejects approval decisions when the actor lacks the required approver role', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'POST', `${APPROVALS_BASE_PATH}/:approval_request_id/approve`).handler(
+      {
+        headers: authHeaders('principal_approver', 'project_demo'),
+        params: { approval_request_id: 'approval_request_demo_001' },
+        body: validApproveBody(),
+      },
+      reply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(reply.statusCode, 403);
+    assert.equal(result.error.code, 'invalid_state');
+    assert.match(result.error.message, /required approver role/u);
+  });
+
+  it('rejects approval decisions without an explicit project scope', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'POST', `${APPROVALS_BASE_PATH}/:approval_request_id/approve`).handler(
+      {
+        headers: authHeaders('principal_approver', undefined, ['approver']),
+        params: { approval_request_id: 'approval_request_demo_001' },
+        body: validApproveBody(),
+      },
+      reply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(reply.statusCode, 404);
+    assert.equal(result.error.code, 'not_found');
+  });
+
+  it('allows required-role approval decisions when no required principal is pinned', async () => {
+    const registrar = new CapturingRegistrar();
+    const now = '2026-01-01T00:00:00.000Z';
+    const roleOnlyApproval: ApprovalControlRecord = {
+      contract_version: gatewayControlContractVersion,
+      approval_request_id: 'approval_request_role_only_001',
+      workflow_run_id: 'workflow_role_only_001',
+      workflow_id: 'workflow_role_only_001',
+      task_id: 'task_role_only_001',
+      request_id: 'request_role_only_001',
+      step_id: null,
+      delegation_id: null,
+      tool_call_id: null,
+      requester_principal_id: 'principal_requester',
+      approver_principal_id: null,
+      required_role: 'approver',
+      approver_policy: {
+        required_role: 'approver',
+        required_principal_ref: null,
+        fallback_approver_ref: null,
+        policy_version: 'policy-role-only-v1',
+      },
+      risk_tier: 'medium',
+      action_summary_artifact_ref: {
+        artifact_id: 'artifact_role_only_001',
+        artifact_kind: 'trace_evidence',
+        data_class: 'internal',
+        sha256: 'a'.repeat(64),
+        size_bytes: 64,
+      },
+      state: 'pending',
+      decision_ref: null,
+      expires_at: '2099-01-01T00:00:00.000Z',
+      policy_ref: {
+        policy_version: 'policy-role-only-v1',
+        policy_decision_ref: 'policy_decision_role_only_001',
+        evaluated_at: now,
+      },
+      audit_refs: [
+        {
+          audit_event_id: 'audit_role_only_approval_requested',
+          audit_stream: 'control-api-test',
+          recorded_at: now,
+        },
+      ],
+      idempotency: {
+        idempotency_key: 'idem-role-only-approval',
+        scope: 'approval',
+        dedupe_ref: 'approval_request_role_only_001',
+        expires_at: '2099-01-01T00:00:00.000Z',
+      },
+      principal_id: 'principal_requester',
+      project_id: 'project_demo',
+      data_class: 'internal',
+      budget_scope_id: 'budget_scope_role_only_001',
+      policy_version: 'policy-role-only-v1',
+      registry_version: 'registry-role-only-v1',
+      trace_id: 'trace_role_only_001',
+      trace_context_ref: {
+        trace_context_id: 'trace_role_only_001',
+        span_id: '0000000000000001',
+        propagation_ref: 'traceparent-role-only-001',
+      },
+      created_at: now,
+      updated_at: now,
+    };
+    registerApprovalRoutes(registrar, {
+      runtimeEnvironment: 'development',
+      store: createInMemoryAgentWorkflowStore({
+        includeFixtures: false,
+        initialState: { approvals: [roleOnlyApproval] },
+      }),
+      authenticate: async (request: ControlRouteRequest) => ({
+        principalId: headerValueForTest(request.headers, 'x-devgateway-principal-id') ?? 'principal_test',
+        authSubjectRef: headerValueForTest(request.headers, 'x-devgateway-auth-subject') ?? 'subject_test',
+        roles: rolesHeaderValueForTest(request.headers, 'x-devgateway-roles') ?? [],
+      }),
+    });
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'POST', `${APPROVALS_BASE_PATH}/:approval_request_id/approve`).handler(
+      {
+        headers: authHeaders('principal_role_approver', 'project_demo', ['approver']),
+        params: { approval_request_id: 'approval_request_role_only_001' },
+        body: {
+          ...validApproveBody(),
+          policy_version: 'policy-role-only-v1',
+          registry_version: 'registry-role-only-v1',
+        },
+      },
+      reply,
+    )) as ApprovalEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.approval.state, 'approved');
+    assert.equal(result.approval.approver_principal_id, 'principal_role_approver');
+  });
+
+  it('rejects approval transition on already-terminal state (approved immutability)', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+    await route(registrar, 'POST', `${APPROVALS_BASE_PATH}/:approval_request_id/approve`).handler({
+      headers: authHeaders('principal_approver', 'project_demo', ['approver']),
+      params: { approval_request_id: 'approval_request_demo_001' },
+      body: validApproveBody(),
+    });
+
+    const reapproveReply = new CapturingReply();
+    const reapprove = (await route(registrar, 'POST', `${APPROVALS_BASE_PATH}/:approval_request_id/approve`).handler(
+      {
+        headers: authHeaders('principal_approver', 'project_demo', ['approver']),
+        params: { approval_request_id: 'approval_request_demo_001' },
+        body: validApproveBody(),
+      },
+      reapproveReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(reapproveReply.statusCode, 409);
+    assert.equal(reapprove.error.code, 'invalid_state');
+    assert.match(reapprove.error.message, /terminal state/u);
+  });
+
+  it('fails closed with stale_policy on policy version mismatch', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'POST', `${APPROVALS_BASE_PATH}/:approval_request_id/approve`).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { approval_request_id: 'approval_request_demo_001' },
+        body: { ...validApproveBody(), policy_version: 'wrong-policy-v999' },
+      },
+      reply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(reply.statusCode, 409);
+    assert.equal(result.error.code, 'stale_policy');
+    assert.equal(result.error.denial_reason, 'policy_stale');
+  });
+
+  it('hides approvals from other principals (cross-principal denial returns 404)', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+    const itemDenialCases = [
+      {
+        label: 'get approval other principal',
+        method: 'GET' as const,
+        url: `${APPROVALS_BASE_PATH}/:approval_request_id`,
+        request: { headers: authHeaders('principal_other'), params: { approval_request_id: 'approval_request_demo_001' } },
+      },
+      {
+        label: 'approve other principal',
+        method: 'POST' as const,
+        url: `${APPROVALS_BASE_PATH}/:approval_request_id/approve`,
+        request: {
+          headers: authHeaders('principal_other'),
+          params: { approval_request_id: 'approval_request_demo_001' },
+          body: validApproveBody(),
+        },
+      },
+      {
+        label: 'deny other principal',
+        method: 'POST' as const,
+        url: `${APPROVALS_BASE_PATH}/:approval_request_id/deny`,
+        request: {
+          headers: authHeaders('principal_other'),
+          params: { approval_request_id: 'approval_request_demo_001' },
+          body: validDenyBody(),
+        },
+      },
+    ];
+
+    for (const denialCase of itemDenialCases) {
+      const reply = new CapturingReply();
+      const result = (await route(registrar, denialCase.method, denialCase.url).handler(
+        denialCase.request,
+        reply,
+      )) as ControlErrorEnvelope;
+
+      assert.equal(reply.statusCode, 404, denialCase.label);
+      assert.equal(result.error.code, 'not_found', denialCase.label);
+    }
+
+    const listReply = new CapturingReply();
+    const listResult = (await route(registrar, 'GET', APPROVALS_BASE_PATH).handler(
+      { headers: authHeaders('principal_other'), query: {} },
+      listReply,
+    )) as ApprovalListEnvelope;
+    assert.equal(listReply.statusCode, 200);
+    assert.equal(listResult.count, 0);
+  });
+
+  it('fails closed in production with production_disabled_route', async () => {
+    const registrar = new CapturingRegistrar();
+    registerApprovalRoutes(registrar, { runtimeEnvironment: 'production' });
+
+    const listReply = new CapturingReply();
+    const listResult = (await route(registrar, 'GET', APPROVALS_BASE_PATH).handler(
+      { headers: authHeaders(), query: {} },
+      listReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(listReply.statusCode, 503);
+    assert.equal(listResult.error.code, 'production_disabled_route');
+
+    const approveReply = new CapturingReply();
+    const approveResult = (await route(registrar, 'POST', `${APPROVALS_BASE_PATH}/:approval_request_id/approve`).handler(
+      {
+        headers: authHeaders(),
+        params: { approval_request_id: 'approval_request_demo_001' },
+        body: validApproveBody(),
+      },
+      approveReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(approveReply.statusCode, 503);
+    assert.equal(approveResult.error.code, 'production_disabled_route');
+  });
+
+  it('rejects approve/deny body with missing required fields', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const missingPolicyReply = new CapturingReply();
+    const missingPolicy = (await route(registrar, 'POST', `${APPROVALS_BASE_PATH}/:approval_request_id/approve`).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { approval_request_id: 'approval_request_demo_001' },
+        body: { request_id: 'req', trace_id: 'trace' },
+      },
+      missingPolicyReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(missingPolicyReply.statusCode, 400);
+    assert.equal(missingPolicy.error.code, 'invalid_request');
+  });
+
+  it('response contains no raw, signed, or secret fields', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const listResult = await route(registrar, 'GET', APPROVALS_BASE_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      query: {},
+    });
+
+    const approveResult = await route(registrar, 'POST', `${APPROVALS_BASE_PATH}/:approval_request_id/approve`).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      params: { approval_request_id: 'approval_request_demo_001' },
+      body: validApproveBody(),
+    });
+
+    assertNoSensitiveControlPayload(listResult);
+    assertNoSensitiveControlPayload(approveResult);
+  });
+});
+
+describe('control API outbox routes', () => {
+  it('lists fixture outbox records with metadata-only response', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', OUTBOX_BASE_PATH).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        query: {},
+      },
+      reply,
+    )) as OutboxListEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.count, 1);
+    assert.equal(result.outboxes[0]?.outbox_id, 'outbox_demo_001');
+    assert.equal(result.outboxes[0]?.delivery_state, 'pending');
+    assert.equal(result.outboxes[0]?.destination_kind, 'portal_update');
+    assert.equal(result.outboxes[0]?.workflow_id, 'workflow_demo_001');
+    assert.equal(result.outboxes[0]?.principal_id, 'principal_demo');
+    assert.equal(result.outboxes[0]?.project_id, 'project_demo');
+    assertNoSensitiveControlPayload(result);
+  });
+
+  it('filters outbox records by workflow_id', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const matched = (await route(registrar, 'GET', OUTBOX_BASE_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      query: { workflow_id: 'workflow_demo_001' },
+    })) as OutboxListEnvelope;
+
+    const unmatched = (await route(registrar, 'GET', OUTBOX_BASE_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      query: { workflow_id: 'workflow_does_not_exist' },
+    })) as OutboxListEnvelope;
+
+    assert.equal(matched.count, 1);
+    assert.equal(matched.outboxes[0]?.outbox_id, 'outbox_demo_001');
+    assert.equal(unmatched.count, 0);
+    assert.deepEqual(unmatched.outboxes, []);
+  });
+
+  it('filters outbox records by delivery_state', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const pending = (await route(registrar, 'GET', OUTBOX_BASE_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      query: { delivery_state: 'pending' },
+    })) as OutboxListEnvelope;
+
+    const delivered = (await route(registrar, 'GET', OUTBOX_BASE_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      query: { delivery_state: 'delivered' },
+    })) as OutboxListEnvelope;
+
+    assert.equal(pending.count, 1);
+    assert.equal(delivered.count, 0);
+  });
+
+  it('filters outbox records by destination_kind', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const portalUpdate = (await route(registrar, 'GET', OUTBOX_BASE_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      query: { destination_kind: 'portal_update' },
+    })) as OutboxListEnvelope;
+
+    const trace = (await route(registrar, 'GET', OUTBOX_BASE_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      query: { destination_kind: 'trace' },
+    })) as OutboxListEnvelope;
+
+    assert.equal(portalUpdate.count, 1);
+    assert.equal(trace.count, 0);
+  });
+
+  it('returns outbox status summary with counts by state and destination', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', `${OUTBOX_BASE_PATH}/status`).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        query: {},
+      },
+      reply,
+    )) as OutboxStatusEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.status.total, 1);
+    assert.equal(result.status.failed_count, 0);
+    assert.equal(result.status.dead_lettered_count, 0);
+    assert.equal(result.status.counts_by_state.pending, 1);
+    assert.equal(result.status.counts_by_destination.portal_update, 1);
+    assertNoSensitiveControlPayload(result);
+  });
+
+  it('returns empty status for unmatched workflow_id filter', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const result = (await route(registrar, 'GET', `${OUTBOX_BASE_PATH}/status`).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      query: { workflow_id: 'workflow_does_not_exist' },
+    })) as OutboxStatusEnvelope;
+
+    assert.equal(result.status.total, 0);
+    assert.equal(result.status.failed_count, 0);
+    assert.deepEqual(result.status.counts_by_state, {});
+    assert.deepEqual(result.status.counts_by_destination, {});
+  });
+
+  it('gets a single outbox record by id', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', `${OUTBOX_BASE_PATH}/:outbox_id`).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { outbox_id: 'outbox_demo_001' },
+      },
+      reply,
+    )) as OutboxEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.outbox.outbox_id, 'outbox_demo_001');
+    assert.equal(result.outbox.delivery_state, 'pending');
+    assert.equal(result.outbox.destination_kind, 'portal_update');
+    assert.equal(result.outbox.workflow_id, 'workflow_demo_001');
+    assert.equal(result.outbox.principal_id, 'principal_demo');
+    assertNoSensitiveControlPayload(result);
+  });
+
+  it('returns 404 for unknown outbox_id', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', `${OUTBOX_BASE_PATH}/:outbox_id`).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { outbox_id: 'outbox_does_not_exist' },
+      },
+      reply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(reply.statusCode, 404);
+    assert.equal(result.error.code, 'not_found');
+  });
+
+  it('hides outbox records from other principals (cross-principal denial returns empty list / 404)', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const listReply = new CapturingReply();
+    const listResult = (await route(registrar, 'GET', OUTBOX_BASE_PATH).handler(
+      { headers: authHeaders('principal_other'), query: {} },
+      listReply,
+    )) as OutboxListEnvelope;
+
+    assert.equal(listReply.statusCode, 200);
+    assert.equal(listResult.count, 0);
+
+    const statusReply = new CapturingReply();
+    const statusResult = (await route(registrar, 'GET', `${OUTBOX_BASE_PATH}/status`).handler(
+      { headers: authHeaders('principal_other'), query: {} },
+      statusReply,
+    )) as OutboxStatusEnvelope;
+
+    assert.equal(statusReply.statusCode, 200);
+    assert.equal(statusResult.status.total, 0);
+
+    const getReply = new CapturingReply();
+    const getResult = (await route(registrar, 'GET', `${OUTBOX_BASE_PATH}/:outbox_id`).handler(
+      {
+        headers: authHeaders('principal_other'),
+        params: { outbox_id: 'outbox_demo_001' },
+      },
+      getReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(getReply.statusCode, 404, 'get outbox other principal');
+    assert.equal(getResult.error.code, 'not_found', 'get outbox other principal');
+    assert.doesNotMatch(getResult.error.message, /demo_001/u, 'get outbox other principal');
+  });
+
+  it('hides outbox records when project_id header does not match', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', `${OUTBOX_BASE_PATH}/:outbox_id`).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_other'),
+        params: { outbox_id: 'outbox_demo_001' },
+      },
+      reply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(reply.statusCode, 404);
+    assert.equal(result.error.code, 'not_found');
+  });
+
+  it('fails closed in production with production_disabled_route', async () => {
+    const registrar = new CapturingRegistrar();
+    registerOutboxRoutes(registrar, { runtimeEnvironment: 'production' });
+
+    const listReply = new CapturingReply();
+    const listResult = (await route(registrar, 'GET', OUTBOX_BASE_PATH).handler(
+      { headers: authHeaders(), query: {} },
+      listReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(listReply.statusCode, 503);
+    assert.equal(listResult.error.code, 'production_disabled_route');
+
+    const statusReply = new CapturingReply();
+    const statusResult = (await route(registrar, 'GET', `${OUTBOX_BASE_PATH}/status`).handler(
+      { headers: authHeaders(), query: {} },
+      statusReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(statusReply.statusCode, 503);
+    assert.equal(statusResult.error.code, 'production_disabled_route');
+
+    const getReply = new CapturingReply();
+    const getResult = (await route(registrar, 'GET', `${OUTBOX_BASE_PATH}/:outbox_id`).handler(
+      {
+        headers: authHeaders(),
+        params: { outbox_id: 'outbox_demo_001' },
+      },
+      getReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(getReply.statusCode, 503);
+    assert.equal(getResult.error.code, 'production_disabled_route');
+  });
+
+  it('response contains no raw payload bodies, signed URLs, or forbidden fields', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const listResult = await route(registrar, 'GET', OUTBOX_BASE_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      query: {},
+    });
+
+    const statusResult = await route(registrar, 'GET', `${OUTBOX_BASE_PATH}/status`).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      query: {},
+    });
+
+    const getResult = await route(registrar, 'GET', `${OUTBOX_BASE_PATH}/:outbox_id`).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      params: { outbox_id: 'outbox_demo_001' },
+    });
+
+    assertNoSensitiveControlPayload(listResult);
+    assertNoSensitiveControlPayload(statusResult);
+    assertNoSensitiveControlPayload(getResult);
+  });
+});
+
+describe('control API artifact lifecycle routes', () => {
+  it('lists lifecycle events for fixture artifact with metadata-only response', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', ARTIFACT_LIFECYCLE_PATH).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { artifact_id: 'artifact_demo_001' },
+      },
+      reply,
+    )) as ArtifactLifecycleListEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.count, 1);
+    assert.equal(result.events[0]?.lifecycle_event_id, 'lifecycle_event_artifact_demo_001_1');
+    assert.equal(result.events[0]?.artifact_id, 'artifact_demo_001');
+    assert.equal(result.events[0]?.action, 'created');
+    assert.equal(result.events[0]?.state, 'active');
+    assert.equal(result.events[0]?.legal_hold, false);
+    assert.equal(result.events[0]?.redacted, false);
+    assert.equal(result.events[0]?.deletion_scheduled_at, null);
+    assert.equal(result.events[0]?.signed_access_eligibility.eligible, false);
+    assert.equal(result.events[0]?.signed_access_eligibility.requires_approval, true);
+    assertNoSensitiveControlPayload(result);
+  });
+
+  it('returns lifecycle status summary for fixture artifact', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', ARTIFACT_LIFECYCLE_STATUS_PATH).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { artifact_id: 'artifact_demo_001' },
+      },
+      reply,
+    )) as ArtifactLifecycleStatusEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.status.artifact_id, 'artifact_demo_001');
+    assert.equal(result.status.latest_state, 'active');
+    assert.equal(result.status.latest_action, 'created');
+    assert.equal(result.status.legal_hold, false);
+    assert.equal(result.status.redacted, false);
+    assert.equal(result.status.deletion_scheduled_at, null);
+    assert.equal(result.status.event_count, 1);
+    assert.equal(result.status.signed_access_eligibility.eligible, false);
+    assert.equal(result.status.signed_access_eligibility.requires_approval, true);
+    assert.equal(result.status.signed_access_eligibility.max_signed_duration_seconds, 900);
+    assertNoSensitiveControlPayload(result);
+  });
+
+  it('returns signed-access denial metadata without signed URL for approval-required artifact', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'POST', ARTIFACT_SIGNED_ACCESS_PATH).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { artifact_id: 'artifact_demo_001' },
+        body: validArtifactSignedAccessBody(),
+      },
+      reply,
+    )) as ArtifactSignedAccessDecisionEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.decision.artifact_id, 'artifact_demo_001');
+    assert.equal(result.decision.decision, 'approval_required');
+    assert.equal(result.decision.eligible, false);
+    assert.equal(result.decision.requires_approval, true);
+    assert.equal(result.decision.max_signed_duration_seconds, 900);
+    // Must not contain signed URL, object body, or credentials
+    const serialized = JSON.stringify(result);
+    assert.doesNotMatch(serialized, /signed_url|object_body|provider_key|provider_token|api_key/i);
+    assertNoSensitiveControlPayload(result);
+  });
+
+  it('fails closed for signed-access policy or registry pin mismatch', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'POST', ARTIFACT_SIGNED_ACCESS_PATH).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { artifact_id: 'artifact_demo_001' },
+        body: { ...validArtifactSignedAccessBody(), policy_version: 'wrong-policy-v999' },
+      },
+      reply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(reply.statusCode, 409);
+    assert.equal(result.error.code, 'stale_policy');
+    assert.equal(result.error.denial_reason, 'policy_stale');
+  });
+
+  it('hides lifecycle from other principals (cross-principal denial returns 404 or empty)', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+    const denialCases = [
+      {
+        label: 'lifecycle list other principal',
+        method: 'GET' as const,
+        url: ARTIFACT_LIFECYCLE_PATH,
+        request: { headers: authHeaders('principal_other'), params: { artifact_id: 'artifact_demo_001' } },
+      },
+      {
+        label: 'lifecycle status other principal',
+        method: 'GET' as const,
+        url: ARTIFACT_LIFECYCLE_STATUS_PATH,
+        request: { headers: authHeaders('principal_other'), params: { artifact_id: 'artifact_demo_001' } },
+      },
+      {
+        label: 'signed-access other principal',
+        method: 'POST' as const,
+        url: ARTIFACT_SIGNED_ACCESS_PATH,
+        request: {
+          headers: authHeaders('principal_other'),
+          params: { artifact_id: 'artifact_demo_001' },
+          body: validArtifactSignedAccessBody(),
+        },
+      },
+      {
+        label: 'lifecycle list project mismatch',
+        method: 'GET' as const,
+        url: ARTIFACT_LIFECYCLE_PATH,
+        request: { headers: authHeaders('principal_demo', 'project_other'), params: { artifact_id: 'artifact_demo_001' } },
+      },
+      {
+        label: 'lifecycle status project mismatch',
+        method: 'GET' as const,
+        url: ARTIFACT_LIFECYCLE_STATUS_PATH,
+        request: { headers: authHeaders('principal_demo', 'project_other'), params: { artifact_id: 'artifact_demo_001' } },
+      },
+    ];
+
+    for (const denialCase of denialCases) {
+      const reply = new CapturingReply();
+      const result = (await route(registrar, denialCase.method, denialCase.url).handler(
+        denialCase.request,
+        reply,
+      )) as ControlErrorEnvelope;
+
+      assert.equal(reply.statusCode, 404, denialCase.label);
+      assert.equal(result.error.code, 'not_found', denialCase.label);
+      assert.doesNotMatch(result.error.message, /demo_001/u, denialCase.label);
+    }
+  });
+
+  it('returns 404 for unknown artifact_id', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    for (const [method, url] of [
+      ['GET' as const, ARTIFACT_LIFECYCLE_PATH],
+      ['GET' as const, ARTIFACT_LIFECYCLE_STATUS_PATH],
+    ] as const) {
+      const reply = new CapturingReply();
+      const result = (await route(registrar, method, url).handler(
+        {
+          headers: authHeaders('principal_demo', 'project_demo'),
+          params: { artifact_id: 'artifact_does_not_exist' },
+        },
+        reply,
+      )) as ControlErrorEnvelope;
+
+      assert.equal(reply.statusCode, 404, `${method} ${url}`);
+      assert.equal(result.error.code, 'not_found', `${method} ${url}`);
+    }
+
+    const postReply = new CapturingReply();
+    const postResult = (await route(registrar, 'POST', ARTIFACT_SIGNED_ACCESS_PATH).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { artifact_id: 'artifact_does_not_exist' },
+        body: validArtifactSignedAccessBody(),
+      },
+      postReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(postReply.statusCode, 404, 'POST signed-access unknown artifact');
+    assert.equal(postResult.error.code, 'not_found', 'POST signed-access unknown artifact');
+  });
+
+  it('fails closed in production with production_disabled_route', async () => {
+    const registrar = new CapturingRegistrar();
+    registerArtifactRoutes(registrar, { runtimeEnvironment: 'production' });
+
+    for (const [method, url] of [
+      ['GET' as const, ARTIFACT_LIFECYCLE_PATH],
+      ['GET' as const, ARTIFACT_LIFECYCLE_STATUS_PATH],
+      ['POST' as const, ARTIFACT_SIGNED_ACCESS_PATH],
+    ] as const) {
+      const reply = new CapturingReply();
+      const result = (await route(registrar, method, url).handler(
+        {
+          headers: authHeaders(),
+          params: { artifact_id: 'artifact_demo_001' },
+          ...(method === 'POST' ? { body: validArtifactSignedAccessBody() } : {}),
+        },
+        reply,
+      )) as ControlErrorEnvelope;
+
+      assert.equal(reply.statusCode, 503, `${method} ${url} should be disabled in production`);
+      assert.equal(result.error.code, 'production_disabled_route', `${method} ${url}`);
+    }
+  });
+
+  it('rejects signed-access request body with forbidden fields', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const forbiddenReply = new CapturingReply();
+    const forbiddenResult = (await route(registrar, 'POST', ARTIFACT_SIGNED_ACCESS_PATH).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { artifact_id: 'artifact_demo_001' },
+        body: { ...validArtifactSignedAccessBody(), signed_url: 'https://evil.example.com/secret' },
+      },
+      forbiddenReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(forbiddenReply.statusCode, 400);
+    assert.equal(forbiddenResult.error.code, 'invalid_request');
+
+    const extraFieldReply = new CapturingReply();
+    const extraFieldResult = (await route(registrar, 'POST', ARTIFACT_SIGNED_ACCESS_PATH).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { artifact_id: 'artifact_demo_001' },
+        body: { ...validArtifactSignedAccessBody(), provider_key: 'sk-secret-key' },
+      },
+      extraFieldReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(extraFieldReply.statusCode, 400);
+    assert.equal(extraFieldResult.error.code, 'invalid_request');
+  });
+
+  it('lifecycle and signed-access responses contain no signed URLs, object bodies, or secrets', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const lifecycleResult = await route(registrar, 'GET', ARTIFACT_LIFECYCLE_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      params: { artifact_id: 'artifact_demo_001' },
+    });
+
+    const statusResult = await route(registrar, 'GET', ARTIFACT_LIFECYCLE_STATUS_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      params: { artifact_id: 'artifact_demo_001' },
+    });
+
+    const decisionResult = await route(registrar, 'POST', ARTIFACT_SIGNED_ACCESS_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      params: { artifact_id: 'artifact_demo_001' },
+      body: validArtifactSignedAccessBody(),
+    });
+
+    assertNoSensitiveControlPayload(lifecycleResult);
+    assertNoSensitiveControlPayload(statusResult);
+    assertNoSensitiveControlPayload(decisionResult);
+  });
+});
+
+describe('control API workflow template routes', () => {
+  it('lists fixture templates with metadata-only response', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', WORKFLOW_TEMPLATES_BASE_PATH).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        query: {},
+      },
+      reply,
+    )) as WorkflowTemplateListEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.count, 1);
+    assert.equal(result.templates[0]?.template_id, 'template_demo_001');
+    assert.equal(result.templates[0]?.rollout_state, 'approved');
+    assert.equal(result.templates[0]?.rollout_policy.production_enabled, false);
+    assert.equal(result.templates[0]?.current_version_id, 'template_version_demo_001_v1');
+    assertNoSensitiveControlPayload(result);
+  });
+
+  it('gets a single template by id', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', `${WORKFLOW_TEMPLATES_BASE_PATH}/:template_id`).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { template_id: 'template_demo_001' },
+      },
+      reply,
+    )) as WorkflowTemplateEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.template.template_id, 'template_demo_001');
+    assert.equal(result.template.rollout_state, 'approved');
+    assertNoSensitiveControlPayload(result);
+  });
+
+  it('returns 404 for unknown template_id', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', `${WORKFLOW_TEMPLATES_BASE_PATH}/:template_id`).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { template_id: 'template_does_not_exist' },
+      },
+      reply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(reply.statusCode, 404);
+    assert.equal(result.error.code, 'not_found');
+  });
+
+  it('filters templates by rollout_state', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const approved = (await route(registrar, 'GET', WORKFLOW_TEMPLATES_BASE_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      query: { rollout_state: 'approved' },
+    })) as WorkflowTemplateListEnvelope;
+
+    const draft = (await route(registrar, 'GET', WORKFLOW_TEMPLATES_BASE_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      query: { rollout_state: 'draft' },
+    })) as WorkflowTemplateListEnvelope;
+
+    assert.equal(approved.count, 1);
+    assert.equal(approved.templates[0]?.rollout_state, 'approved');
+    assert.equal(draft.count, 0);
+    assert.deepEqual(draft.templates, []);
+  });
+
+  it('filters templates by project_id', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const matched = (await route(registrar, 'GET', WORKFLOW_TEMPLATES_BASE_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      query: { project_id: 'project_demo' },
+    })) as WorkflowTemplateListEnvelope;
+
+    const unmatched = (await route(registrar, 'GET', WORKFLOW_TEMPLATES_BASE_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      query: { project_id: 'project_does_not_match' },
+    })) as WorkflowTemplateListEnvelope;
+
+    assert.equal(matched.count, 1);
+    assert.equal(unmatched.count, 0);
+  });
+
+  it('lists template versions with metadata-only response', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', `${WORKFLOW_TEMPLATES_BASE_PATH}/:template_id/versions`).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { template_id: 'template_demo_001' },
+        query: {},
+      },
+      reply,
+    )) as WorkflowTemplateVersionListEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.count, 2);
+    const ids = result.versions.map((v) => v.template_version_id);
+    assert.ok(ids.includes('template_version_demo_001_v1'));
+    assert.ok(ids.includes('template_version_demo_001_v2_draft'));
+    assertNoSensitiveControlPayload(result);
+  });
+
+  it('filters template versions by rollout_state', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const approvedVersions = (await route(registrar, 'GET', `${WORKFLOW_TEMPLATES_BASE_PATH}/:template_id/versions`).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      params: { template_id: 'template_demo_001' },
+      query: { rollout_state: 'approved' },
+    })) as WorkflowTemplateVersionListEnvelope;
+
+    const draftVersions = (await route(registrar, 'GET', `${WORKFLOW_TEMPLATES_BASE_PATH}/:template_id/versions`).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      params: { template_id: 'template_demo_001' },
+      query: { rollout_state: 'draft' },
+    })) as WorkflowTemplateVersionListEnvelope;
+
+    assert.equal(approvedVersions.count, 1);
+    assert.equal(approvedVersions.versions[0]?.rollout_state, 'approved');
+    assert.equal(draftVersions.count, 1);
+    assert.equal(draftVersions.versions[0]?.rollout_state, 'draft');
+  });
+
+  it('returns 404 for unknown template_id on version list', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', `${WORKFLOW_TEMPLATES_BASE_PATH}/:template_id/versions`).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { template_id: 'template_does_not_exist' },
+        query: {},
+      },
+      reply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(reply.statusCode, 404);
+    assert.equal(result.error.code, 'not_found');
+  });
+
+  it('gets a single template version by template_version_id', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', `${WORKFLOW_TEMPLATE_VERSIONS_BASE_PATH}/:template_version_id`).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { template_version_id: 'template_version_demo_001_v1' },
+      },
+      reply,
+    )) as WorkflowTemplateVersionEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.version.template_version_id, 'template_version_demo_001_v1');
+    assert.equal(result.version.template_id, 'template_demo_001');
+    assert.equal(result.version.rollout_state, 'approved');
+    assert.equal(result.version.allowed_model_aliases[0], 'default-safe-model-alias');
+    assertNoSensitiveControlPayload(result);
+  });
+
+  it('returns 404 for unknown template_version_id', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'GET', `${WORKFLOW_TEMPLATE_VERSIONS_BASE_PATH}/:template_version_id`).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { template_version_id: 'template_version_does_not_exist' },
+      },
+      reply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(reply.statusCode, 404);
+    assert.equal(result.error.code, 'not_found');
+  });
+
+  it('hides templates from other principals (cross-principal denial returns 404 or empty list)', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const listReply = new CapturingReply();
+    const listResult = (await route(registrar, 'GET', WORKFLOW_TEMPLATES_BASE_PATH).handler(
+      { headers: authHeaders('principal_other'), query: {} },
+      listReply,
+    )) as WorkflowTemplateListEnvelope;
+
+    assert.equal(listReply.statusCode, 200);
+    assert.equal(listResult.count, 0);
+    assert.deepEqual(listResult.templates, []);
+
+    const getReply = new CapturingReply();
+    const getResult = (await route(registrar, 'GET', `${WORKFLOW_TEMPLATES_BASE_PATH}/:template_id`).handler(
+      {
+        headers: authHeaders('principal_other'),
+        params: { template_id: 'template_demo_001' },
+      },
+      getReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(getReply.statusCode, 404);
+    assert.equal(getResult.error.code, 'not_found');
+    assert.doesNotMatch(getResult.error.message, /demo_001/u);
+
+    const versionGetReply = new CapturingReply();
+    const versionGetResult = (await route(registrar, 'GET', `${WORKFLOW_TEMPLATE_VERSIONS_BASE_PATH}/:template_version_id`).handler(
+      {
+        headers: authHeaders('principal_other'),
+        params: { template_version_id: 'template_version_demo_001_v1' },
+      },
+      versionGetReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(versionGetReply.statusCode, 404);
+    assert.equal(versionGetResult.error.code, 'not_found');
+  });
+
+  it('hides templates when project_id header does not match', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const getReply = new CapturingReply();
+    const getResult = (await route(registrar, 'GET', `${WORKFLOW_TEMPLATES_BASE_PATH}/:template_id`).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_other'),
+        params: { template_id: 'template_demo_001' },
+      },
+      getReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(getReply.statusCode, 404);
+    assert.equal(getResult.error.code, 'not_found');
+  });
+
+  it('fails closed in production with production_disabled_route', async () => {
+    const registrar = new CapturingRegistrar();
+    registerTemplateRoutes(registrar, { runtimeEnvironment: 'production' });
+
+    for (const [method, url, params] of [
+      ['GET' as const, WORKFLOW_TEMPLATES_BASE_PATH, {}],
+      ['GET' as const, `${WORKFLOW_TEMPLATES_BASE_PATH}/:template_id`, { template_id: 'template_demo_001' }],
+      ['GET' as const, `${WORKFLOW_TEMPLATES_BASE_PATH}/:template_id/versions`, { template_id: 'template_demo_001' }],
+      ['GET' as const, `${WORKFLOW_TEMPLATE_VERSIONS_BASE_PATH}/:template_version_id`, { template_version_id: 'template_version_demo_001_v1' }],
+    ] as const) {
+      const reply = new CapturingReply();
+      const result = (await route(registrar, method, url).handler(
+        { headers: authHeaders(), query: {}, params },
+        reply,
+      )) as ControlErrorEnvelope;
+
+      assert.equal(reply.statusCode, 503, `${method} ${url} should be production_disabled`);
+      assert.equal(result.error.code, 'production_disabled_route', `${method} ${url}`);
+    }
+  });
+
+  it('template and version responses contain no raw step graphs, tool bodies, prompts, or secrets', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const listResult = await route(registrar, 'GET', WORKFLOW_TEMPLATES_BASE_PATH).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      query: {},
+    });
+
+    const getResult = await route(registrar, 'GET', `${WORKFLOW_TEMPLATES_BASE_PATH}/:template_id`).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      params: { template_id: 'template_demo_001' },
+    });
+
+    const versionsResult = await route(registrar, 'GET', `${WORKFLOW_TEMPLATES_BASE_PATH}/:template_id/versions`).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      params: { template_id: 'template_demo_001' },
+      query: {},
+    });
+
+    const versionGetResult = await route(registrar, 'GET', `${WORKFLOW_TEMPLATE_VERSIONS_BASE_PATH}/:template_version_id`).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      params: { template_version_id: 'template_version_demo_001_v1' },
+    });
+
+    assertNoSensitiveControlPayload(listResult);
+    assertNoSensitiveControlPayload(getResult);
+    assertNoSensitiveControlPayload(versionsResult);
+    assertNoSensitiveControlPayload(versionGetResult);
+  });
+});
+
+type WorkflowTemplateForTest = {
+  readonly template_id: string;
+  readonly rollout_state: string;
+  readonly current_version_id: string;
+  readonly rollout_policy: {
+    readonly production_enabled: boolean;
+  };
+};
+
+type WorkflowTemplateEnvelope = {
+  readonly template: WorkflowTemplateForTest;
+};
+
+type WorkflowTemplateListEnvelope = {
+  readonly templates: readonly WorkflowTemplateForTest[];
+  readonly count: number;
+};
+
+type WorkflowTemplateVersionForTest = {
+  readonly template_version_id: string;
+  readonly template_id: string;
+  readonly rollout_state: string;
+  readonly allowed_model_aliases: readonly string[];
+};
+
+type WorkflowTemplateVersionEnvelope = {
+  readonly version: WorkflowTemplateVersionForTest;
+};
+
+type WorkflowTemplateVersionListEnvelope = {
+  readonly versions: readonly WorkflowTemplateVersionForTest[];
+  readonly count: number;
+};
+
 type OpaqueRefForTest = {
   readonly ref_id: string;
   readonly ref_type: string;
   readonly scope_ref: string;
+};
+
+type ArtifactSignedAccessEligibilityForTest = {
+  readonly eligible: boolean;
+  readonly requires_approval: boolean;
+  readonly max_signed_duration_seconds: number | null;
+};
+
+type ArtifactLifecycleEventForTest = {
+  readonly lifecycle_event_id: string;
+  readonly artifact_id: string;
+  readonly action: string;
+  readonly state: string;
+  readonly legal_hold: boolean;
+  readonly redacted: boolean;
+  readonly deletion_scheduled_at: string | null;
+  readonly signed_access_eligibility: ArtifactSignedAccessEligibilityForTest;
+};
+
+type ArtifactLifecycleListEnvelope = {
+  readonly events: readonly ArtifactLifecycleEventForTest[];
+  readonly count: number;
+};
+
+type ArtifactLifecycleStatusEnvelope = {
+  readonly status: {
+    readonly artifact_id: string;
+    readonly latest_state: string | null;
+    readonly latest_action: string | null;
+    readonly legal_hold: boolean;
+    readonly redacted: boolean;
+    readonly deletion_scheduled_at: string | null;
+    readonly event_count: number;
+    readonly signed_access_eligibility: ArtifactSignedAccessEligibilityForTest;
+  };
+};
+
+type ArtifactSignedAccessDecisionEnvelope = {
+  readonly decision: {
+    readonly artifact_id: string;
+    readonly decision: string;
+    readonly decision_reason: string;
+    readonly eligible: boolean;
+    readonly requires_approval: boolean;
+    readonly max_signed_duration_seconds: number | null;
+  };
 };
 
 type TaskEnvelope = {
@@ -1074,7 +2376,8 @@ type ArtifactListEnvelope = {
     readonly artifact_id: string;
     readonly signed_download_eligible: boolean;
     readonly storage_ref: {
-      readonly object_path_ref: string;
+      readonly ref_id: string;
+      readonly ref_type: string;
     };
   }[];
   readonly count: number;
@@ -1114,6 +2417,61 @@ type SkillListEnvelope = {
     readonly instruction_template_refs: readonly OpaqueRefForTest[];
   }[];
   readonly count: number;
+};
+
+type ApprovalDecisionRefForTest = {
+  readonly decision_id: string;
+  readonly decision: string;
+  readonly approver_principal_id: string;
+} | null;
+
+type ApprovalEnvelope = {
+  readonly approval: {
+    readonly approval_request_id: string;
+    readonly workflow_id: string;
+    readonly task_id: string;
+    readonly state: string;
+    readonly risk_tier: string;
+    readonly principal_id: string;
+    readonly project_id: string;
+    readonly policy_version: string;
+    readonly registry_version: string;
+    readonly approver_principal_id: string | null;
+    readonly decision_ref: ApprovalDecisionRefForTest;
+  };
+};
+
+type ApprovalListEnvelope = {
+  readonly approvals: readonly ApprovalEnvelope['approval'][];
+  readonly count: number;
+};
+
+type OutboxRecordForTest = {
+  readonly outbox_id: string;
+  readonly workflow_id: string;
+  readonly delivery_state: string;
+  readonly destination_kind: string;
+  readonly principal_id: string;
+  readonly project_id: string;
+};
+
+type OutboxEnvelope = {
+  readonly outbox: OutboxRecordForTest;
+};
+
+type OutboxListEnvelope = {
+  readonly outboxes: readonly OutboxRecordForTest[];
+  readonly count: number;
+};
+
+type OutboxStatusEnvelope = {
+  readonly status: {
+    readonly counts_by_state: Readonly<Record<string, number>>;
+    readonly counts_by_destination: Readonly<Record<string, number>>;
+    readonly failed_count: number;
+    readonly dead_lettered_count: number;
+    readonly total: number;
+  };
 };
 
 type BudgetScopeEnvelope = {
@@ -1163,9 +2521,10 @@ function route(registrar: CapturingRegistrar, method: 'GET' | 'POST', url: strin
   return match;
 }
 
-function authHeaders(principalId = 'principal_test', projectId?: string): Record<string, string> {
+function authHeaders(principalId = 'principal_test', projectId?: string, roles: readonly string[] = []): Record<string, string> {
   return {
     ...(projectId === undefined ? {} : { 'x-devgateway-project-id': projectId }),
+    ...(roles.length === 0 ? {} : { 'x-devgateway-roles': roles.join(',') }),
     'x-devgateway-principal-id': principalId,
     'x-devgateway-auth-subject': `subject_${principalId}`,
   };
@@ -1181,6 +2540,15 @@ function headerValueForTest(
       : headers?.[name] ?? headers?.[name.toLowerCase()] ?? headers?.[name.toUpperCase()];
   const first = Array.isArray(value) ? value[0] : value;
   return typeof first === 'string' && first.trim() !== '' ? first : undefined;
+}
+
+function rolesHeaderValueForTest(headers: ControlRouteRequest['headers'], name: string): readonly string[] | undefined {
+  const value = headerValueForTest(headers, name);
+  if (value === undefined) return undefined;
+  return value
+    .split(',')
+    .map((role) => role.trim())
+    .filter((role) => role !== '');
 }
 
 async function createBudgetScopeForTest(
@@ -1294,10 +2662,14 @@ function registerAgentWorkflowRoutesForTest(
       : {
           runtimeEnvironment,
           store,
-          authenticate: async (request: ControlRouteRequest) => ({
-            principalId: headerValueForTest(request.headers, 'x-devgateway-principal-id') ?? 'principal_test',
-            authSubjectRef: headerValueForTest(request.headers, 'x-devgateway-auth-subject') ?? 'subject_test',
-          }),
+          authenticate: async (request: ControlRouteRequest) => {
+            const roles = rolesHeaderValueForTest(request.headers, 'x-devgateway-roles');
+            return {
+              principalId: headerValueForTest(request.headers, 'x-devgateway-principal-id') ?? 'principal_test',
+              authSubjectRef: headerValueForTest(request.headers, 'x-devgateway-auth-subject') ?? 'subject_test',
+              ...(roles === undefined ? {} : { roles }),
+            };
+          },
         };
 
   registerTaskRoutes(registrar, routeOptions);
@@ -1305,6 +2677,9 @@ function registerAgentWorkflowRoutesForTest(
   registerWorkflowRoutes(registrar, routeOptions);
   registerAgentRunRoutes(registrar, routeOptions);
   registerSkillRoutes(registrar, routeOptions);
+  registerApprovalRoutes(registrar, routeOptions);
+  registerOutboxRoutes(registrar, routeOptions);
+  registerTemplateRoutes(registrar, routeOptions);
   return registrar;
 }
 
@@ -1475,6 +2850,33 @@ function sampleVirtualKeyRecord(): VirtualKeyRecord {
     },
     created_at: '2026-06-20T00:00:00.000Z',
     updated_at: '2026-06-20T00:00:00.000Z',
+  };
+}
+
+function validApproveBody(): Record<string, unknown> {
+  return {
+    request_id: 'request_approval_approve',
+    trace_id: 'trace_approval_approve',
+    policy_version: 'policy-demo-v1',
+    registry_version: 'registry-demo-v1',
+  };
+}
+
+function validDenyBody(): Record<string, unknown> {
+  return {
+    request_id: 'request_approval_deny',
+    trace_id: 'trace_approval_deny',
+    policy_version: 'policy-demo-v1',
+    registry_version: 'registry-demo-v1',
+  };
+}
+
+function validArtifactSignedAccessBody(): Record<string, unknown> {
+  return {
+    request_id: 'request_artifact_signed_access',
+    trace_id: 'trace_artifact_signed_access',
+    policy_version: 'policy-demo-v1',
+    registry_version: 'registry-demo-v1',
   };
 }
 

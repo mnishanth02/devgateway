@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from .contracts import (
     TERMINAL_WORKFLOW_STATES,
+    PAUSED_WORKFLOW_STATES,
     TraceContext,
     Workflow,
     WorkflowEvent,
@@ -129,6 +130,7 @@ class InMemoryRuntimeRepository:
         *,
         trace_context: TraceContext,
         refs: Mapping[str, str] | None = None,
+        lease: Lease | None = None,
         now: datetime | None = None,
     ) -> WorkflowStep:
         with self._lock:
@@ -154,6 +156,7 @@ class InMemoryRuntimeRepository:
         output_ref: str,
         trace_context: TraceContext,
         refs: Mapping[str, str] | None = None,
+        lease: Lease | None = None,
         now: datetime | None = None,
     ) -> WorkflowStep:
         with self._lock:
@@ -197,7 +200,7 @@ class InMemoryRuntimeRepository:
                 if step.state != StepState.PENDING:
                     continue
                 workflow = self._require_workflow_locked(step.workflow_id)
-                if workflow.state in TERMINAL_WORKFLOW_STATES:
+                if workflow.state in TERMINAL_WORKFLOW_STATES or workflow.state in PAUSED_WORKFLOW_STATES:
                     continue
                 resource_id = self._step_resource_id(step.step_id)
                 lease = self._acquire_lease_locked(resource_id, owner_id=owner_id, policy=lease_policy, now=timestamp)
@@ -369,7 +372,8 @@ class InMemoryRuntimeRepository:
                 step_id = lease.resource_id.removeprefix("step:")
                 step = self._steps.get(step_id)
                 if step and step.state in {StepState.CLAIMED, StepState.RUNNING}:
-                    recovered = replace(step, state=StepState.PENDING, updated_at=timestamp)
+                    target_state = StepState.PENDING if step.state == StepState.CLAIMED else StepState.MANUAL_REVIEW
+                    recovered = replace(step, state=target_state, updated_at=timestamp)
                     self._steps[step_id] = recovered
                     workflow = self._workflows.get(step.workflow_id)
                     self._append_event_locked(
@@ -378,7 +382,15 @@ class InMemoryRuntimeRepository:
                         (workflow.trace_context.child() if workflow else TraceContext.new()),
                         state=workflow.state if workflow else None,
                         step_id=step_id,
-                        refs={"lease_ref": f"fixture-ref:lease:{lease.lease_id}"},
+                        refs={
+                            "lease_ref": f"fixture-ref:lease:{lease.lease_id}",
+                            "recovery_action_ref": f"fixture-ref:lease-recovery:{target_state.value}",
+                            **(
+                                {"manual_review_reason_ref": "fixture-ref:failure-class:worker_crash_active_lease"}
+                                if target_state == StepState.MANUAL_REVIEW
+                                else {}
+                            ),
+                        },
                         now=timestamp,
                     )
         return len(expired)

@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://devgateway.local/schemas/agent/artifact-lifecycle.v0.1.schema.json",
+  "title": "DevGateway Artifact Lifecycle Contract v0.1",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "lifecycle_event_id",
+    "artifact_id",
+    "workflow_run_id",
+    "task_id",
+    "action",
+    "storage_ref",
+    "checksum_sha256",
+    "data_class",
+    "retention_policy",
+    "signed_access_eligibility",
+    "legal_hold",
+    "redacted",
+    "deletion_scheduled_at",
+    "state",
+    "audit_refs",
+    "principal_id",
+    "project_id",
+    "budget_scope_id",
+    "policy_version",
+    "registry_version",
+    "trace_id",
+    "trace_context_ref",
+    "idempotency",
+    "occurred_at"
+  ],
+  "properties": {
+    "contract_version": { "const": "0.1.0" },
+    "lifecycle_event_id": { "$ref": "#/$defs/nonEmptyString" },
+    "artifact_id": { "$ref": "#/$defs/nonEmptyString" },
+    "workflow_run_id": { "$ref": "#/$defs/nonEmptyString" },
+    "task_id": { "$ref": "#/$defs/nonEmptyString" },
+    "action": { "$ref": "#/$defs/lifecycleAction" },
+    "storage_ref": { "$ref": "#/$defs/storageRef" },
+    "checksum_sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "data_class": { "$ref": "#/$defs/dataClass" },
+    "retention_policy": { "$ref": "#/$defs/lifecycleRetentionPolicy" },
+    "signed_access_eligibility": { "$ref": "#/$defs/signedAccessEligibility" },
+    "legal_hold": { "type": "boolean" },
+    "redacted": { "type": "boolean" },
+    "deletion_scheduled_at": { "$ref": "#/$defs/nullableDateTime" },
+    "state": { "$ref": "#/$defs/lifecycleState" },
+    "audit_refs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/auditRef" },
+      "uniqueItems": true
+    },
+    "principal_id": { "$ref": "#/$defs/nonEmptyString" },
+    "project_id": { "$ref": "#/$defs/nonEmptyString" },
+    "budget_scope_id": { "$ref": "#/$defs/nonEmptyString" },
+    "policy_version": { "$ref": "#/$defs/nonEmptyString" },
+    "registry_version": { "$ref": "#/$defs/nonEmptyString" },
+    "trace_id": { "$ref": "#/$defs/nonEmptyString" },
+    "trace_context_ref": { "$ref": "#/$defs/traceContextRef" },
+    "idempotency": { "$ref": "#/$defs/idempotencyRef" },
+    "occurred_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "nullableNonEmptyString": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+    "nullableDateTime": { "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }] },
+    "dataClass": { "type": "string", "enum": ["public", "internal", "confidential", "restricted"] },
+    "storageRef": {
+      "type": "object",
+      "required": ["storage_system", "container_ref", "object_path_ref", "version_ref"],
+      "properties": {
+        "storage_system": { "type": "string", "enum": ["s3", "azure_blob", "gcs", "filesystem", "artifact_service"] },
+        "container_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "object_path_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "version_ref": { "$ref": "#/$defs/nullableNonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "lifecycleAction": {
+      "type": "string",
+      "enum": ["created", "verified", "expiry_set", "retained", "legal_hold_applied", "legal_hold_released", "redacted", "deletion_scheduled", "deleted", "signed_access_granted", "signed_access_revoked"]
+    },
+    "lifecycleState": {
+      "type": "string",
+      "enum": ["pending", "active", "expiring", "redacted", "expired", "deletion_pending", "deleted", "legal_hold_active"]
+    },
+    "lifecycleRetentionPolicy": {
+      "type": "object",
+      "required": ["retained_until", "delete_after_seconds", "legal_hold"],
+      "properties": {
+        "retained_until": { "$ref": "#/$defs/nullableDateTime" },
+        "delete_after_seconds": { "type": ["integer", "null"], "minimum": 0 },
+        "legal_hold": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "signedAccessEligibility": {
+      "type": "object",
+      "required": ["eligible", "requires_approval", "max_signed_duration_seconds"],
+      "properties": {
+        "eligible": { "type": "boolean" },
+        "requires_approval": { "type": "boolean" },
+        "max_signed_duration_seconds": { "type": ["integer", "null"], "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "traceContextRef": {
+      "type": "object",
+      "required": ["trace_context_id", "span_id", "propagation_ref"],
+      "properties": {
+        "trace_context_id": { "$ref": "#/$defs/nonEmptyString" },
+        "span_id": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+        "propagation_ref": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "additionalProperties": false
+    },
+    "auditRef": {
+      "type": "object",
+      "required": ["audit_event_id", "audit_stream", "recorded_at"],
+      "properties": {
+        "audit_event_id": { "$ref": "#/$defs/nonEmptyString" },
+        "audit_stream": { "$ref": "#/$defs/nonEmptyString" },
+        "recorded_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "idempotencyRef": {
+      "type": "object",
+      "required": ["idempotency_key", "scope", "dedupe_ref", "expires_at"],
+      "properties": {
+        "idempotency_key": { "$ref": "#/$defs/nonEmptyString" },
+        "scope": { "type": "string", "enum": ["workflow", "step", "delegation", "agent_run", "tool_call", "artifact_write", "artifact_lifecycle"] },
+        "dedupe_ref": { "$ref": "#/$defs/nonEmptyString" },
+        "expires_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  }
+}
