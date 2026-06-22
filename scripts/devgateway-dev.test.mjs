@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import {
+  DURABLE_WORKER_PROFILES,
+  DURABLE_WORKER_REQUIRED_ENV,
   LOCAL_BIFROST_CONFIG_PATH,
   LOCAL_BIFROST_RUNTIME_CONFIG_PATH,
   LOCAL_BIFROST_IMAGE,
@@ -37,8 +39,26 @@ describe('devgateway local launcher CLI parsing', () => {
   it('rejects unknown profiles with a helpful message', () => {
     assert.throws(
       () => parseCli(['dev', 'mobile']),
-      /Unknown profile "mobile". Expected one of: all, backend, deps, frontend/u,
+      /Unknown profile "mobile". Expected one of: all, backend, deps, frontend, workers/u,
     );
+  });
+
+  it('parses the explicit workers profile without enabling it by default', () => {
+    assert.deepEqual(parseCli(['dev', 'workers']), {
+      command: 'dev',
+      profile: 'workers',
+      yes: false,
+      extraArgs: [],
+    });
+  });
+
+  it('accepts common help aliases', () => {
+    assert.deepEqual(parseCli(['--help']), {
+      command: 'help',
+      profile: 'all',
+      yes: false,
+      extraArgs: [],
+    });
   });
 
   it('requires --yes for reset confirmation parsing', () => {
@@ -77,6 +97,10 @@ describe('devgateway local env rendering', () => {
     assert.match(env, /BIFROST_HEALTH_PATH=\/health/u);
     assert.match(env, /DEVGATEWAY_OPENAI_API_KEY_PLACEHOLDER=local-provider-key-placeholder/u);
     assert.match(env, /DEVGATEWAY_ANTHROPIC_API_KEY_PLACEHOLDER=local-provider-key-placeholder/u);
+    assert.match(env, /DURABLE_WORKERS_ENABLED=false/u);
+    assert.match(env, /WORKFLOW_WORKER_OWNER_ID=local-runtime-worker/u);
+    assert.match(env, /OUTBOX_WORKER_OWNER_ID=local-outbox-worker/u);
+    assert.match(env, /BUDGET_REAPER_ABANDONED_WORKFLOW_SECONDS=86400/u);
   });
 
   it('exports the documented local port map', () => {
@@ -89,6 +113,34 @@ describe('devgateway local env rendering', () => {
     assert.equal(LOCAL_PORTS.redis, 46379);
     assert.equal(LOCAL_PORTS.neo4jHttp, 47474);
     assert.equal(LOCAL_PORTS.neo4jBolt, 47687);
+  });
+});
+
+describe('devgateway durable worker profile metadata', () => {
+  it('documents the fail-closed local worker config contract', () => {
+    assert.deepEqual(DURABLE_WORKER_REQUIRED_ENV, [
+      'OPERATIONAL_DATABASE_URL',
+      'REDIS_URL',
+      'S3_ENDPOINT',
+      'S3_BUCKET',
+      'S3_REGION',
+      'S3_ACCESS_KEY_ID',
+      'S3_SECRET_ACCESS_KEY',
+      'S3_FORCE_PATH_STYLE',
+      'BIFROST_BASE_URL',
+    ]);
+    assert.deepEqual(
+      DURABLE_WORKER_PROFILES.map((profile) => profile.name),
+      [
+        'runtime-service',
+        'lease-retry-sweeper',
+        'cancellation-worker',
+        'approval-expiry-worker',
+        'outbox-worker',
+        'budget-reaper',
+        'artifact-lifecycle-worker',
+      ],
+    );
   });
 });
 

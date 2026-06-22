@@ -13,6 +13,18 @@ from . import RUNNER_VERSION
 GATE_CONTRACT_VERSION = "0.1.0"
 DEFAULT_DATASET = "evals/datasets/acl-safety.v0.1.json"
 DEFAULT_SUITE = "acl_safety"
+FIXTURE_SUITE_DATASETS = {
+    "acl_safety": "evals/datasets/acl-safety.v0.1.json",
+    "gateway_model_smoke": "evals/datasets/gateway-model-smoke.v0.1.json",
+    "cost_latency": "evals/datasets/cost-latency.v0.1.json",
+    "degraded_mode": "evals/datasets/degraded-mode.v0.1.json",
+    "agent_workflow": "evals/datasets/agent-workflow.v0.1.json",
+    "durable_workflow": "evals/datasets/durable-workflow.v0.1.json",
+    "approval_gates": "evals/datasets/approval-gates.v0.1.json",
+    "workflow_outbox": "evals/datasets/workflow-outbox.v0.1.json",
+    "tool_safety": "evals/datasets/tool-safety.v0.1.json",
+    "prompt_injection_tainted_context": "evals/datasets/prompt-injection-tainted-context.v0.1.json",
+}
 SEVERITY_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 EXPECTED_OUTCOMES = {"pass", "deny"}
 ARTIFACT_REF_KEYS = ("expected_gate_result", "expected_trace_bundle", "expected_audit_event")
@@ -28,7 +40,11 @@ def main(argv: list[str] | None = None) -> int:
         description="Fixture-mode eval runner skeleton. It never calls live model providers.",
     )
     parser.add_argument("--repo-root", default=None, help="Repository root. Defaults to auto-detection.")
-    parser.add_argument("--dataset", default=DEFAULT_DATASET, help="Dataset JSON path relative to repo root.")
+    parser.add_argument(
+        "--dataset",
+        default=None,
+        help="Dataset JSON path relative to repo root. Defaults from the registered fixture suite.",
+    )
     parser.add_argument("--suite", default=DEFAULT_SUITE, help="Expected eval suite id.")
     parser.add_argument("--provider-mode", default="fixture", choices=["fixture"], help="Only fixture mode is supported.")
     parser.add_argument("--change-id", default="phase-0.7-fixture-smoke", help="Change id to embed in gate result.")
@@ -40,9 +56,12 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         repo_root = Path(args.repo_root).resolve() if args.repo_root else find_repo_root()
+        dataset_ref = args.dataset or FIXTURE_SUITE_DATASETS.get(args.suite)
+        if dataset_ref is None:
+            raise EvalRunnerError(f"unregistered suite requires --dataset: {args.suite}")
         result = run_fixture_suite(
             repo_root=repo_root,
-            dataset_ref=args.dataset,
+            dataset_ref=dataset_ref,
             expected_suite=args.suite,
             change_id=args.change_id,
             suite_version=args.suite_version,

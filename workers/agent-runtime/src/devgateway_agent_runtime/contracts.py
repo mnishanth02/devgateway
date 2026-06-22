@@ -147,8 +147,8 @@ STEP_TRANSITIONS: Mapping[StepState, frozenset[StepState]] = {
             StepState.CANCELLED,
         }
     ),
-    # AWAITING_APPROVAL: approved → running (resume); rejected → failed; cancelled → cancelled.
-    StepState.PENDING_APPROVAL: frozenset({StepState.RUNNING, StepState.FAILED, StepState.CANCELLED}),
+    # AWAITING_APPROVAL: approved → pending/running (resume); rejected → failed; cancelled → cancelled.
+    StepState.PENDING_APPROVAL: frozenset({StepState.PENDING, StepState.RUNNING, StepState.FAILED, StepState.CANCELLED}),
     StepState.MANUAL_REVIEW: frozenset({StepState.RUNNING, StepState.FAILED, StepState.CANCELLED}),
     StepState.COMPLETED: frozenset(),
     StepState.FAILED: frozenset({StepState.PENDING}),

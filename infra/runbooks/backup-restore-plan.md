@@ -27,7 +27,7 @@ Restore validation is mandatory before the first production release. Production 
 
 ## Operational Postgres checklist
 
-Operational Postgres stores Better Auth, tenant policy, workflow state, audit events, budgets, cost events, eval gate records, and release-blocking decisions.
+Operational Postgres stores Better Auth, tenant policy, workflow state, worker leases/heartbeats, approvals, outbox state, cancellations, budgets, cost events, artifact metadata/object refs, eval gate records, audit events, and release-blocking decisions. Artifact bodies are not in Postgres; restore validation must pair metadata rows with object storage by object ref and SHA-256.
 
 ### Backup design checklist
 
@@ -43,6 +43,10 @@ Operational Postgres stores Better Auth, tenant policy, workflow state, audit ev
 - [ ] Restore the latest non-production backup into an isolated validation database.
 - [ ] Run migration/schema compatibility checks such as `pnpm db:check` when available.
 - [ ] Verify Better Auth tables, policy tables, workflow tables, eval gate tables, cost tables, and audit tables are present.
+- [ ] Verify durable workflow tables include step state, leases, worker heartbeats, approval requests, cancellation requests, outbox events, retry/dead-letter state, budget reservations, and artifact lifecycle metadata.
+- [ ] Run a non-production durable worker resume/reconciliation check: expired pre-side-effect leases recover or escalate, due approvals expire fail-closed, outbox rows replay idempotently, and orphaned budget reservations release exactly once.
+- [ ] Verify `task_artifact` and `artifact_lifecycle_event` rows contain only metadata, hashes, object refs, retention, sensitivity, ACL scopes, and lifecycle state; no artifact bodies or signed URLs are present.
+- [ ] Cross-check a sample of artifact metadata object refs against the restored object bucket and verify SHA-256 before declaring artifacts recoverable.
 - [ ] Verify sample immutable audit rows retain `trace_id` / `request_id` correlation and cannot be updated or deleted by runtime roles.
 - [ ] Verify gate-result records still block production enablement when missing or failed.
 - [ ] Record restore start/end time, backup identifier, validation database, commands used, owner, outcome, and evidence link in immutable audit.
@@ -71,7 +75,7 @@ Knowledge Postgres stores sources, documents, chunks, vector/full-text metadata,
 
 ## Object storage checklist
 
-Object storage contains artifacts, source snapshots, generated docs, trace bundles, eval artifacts, and backup exports when approved.
+Object storage contains artifact bodies, source snapshots, generated docs, trace bundles, eval artifacts, and backup exports when approved. Postgres remains the source of truth for artifact metadata, retention, sensitivity, ACL scopes, and lifecycle state.
 
 ### Backup design checklist
 
@@ -86,6 +90,8 @@ Object storage contains artifacts, source snapshots, generated docs, trace bundl
 
 - [ ] Copy or restore a representative non-production artifact set into an isolated validation bucket/prefix.
 - [ ] Verify checksums, content type, object metadata, and access policy.
+- [ ] Reconcile restored objects against `task_artifact.storage_uri` / lifecycle `storage_ref` metadata: quarantine or delete object-write-succeeded/DB-commit-failed orphans, and mark DB-metadata/object-missing cases for rehydrate or user-visible recovery failure.
+- [ ] Verify signed access is issued only through the Control API after ACL and SHA-256 checks, with short TTLs and no signed URLs in list/status/lifecycle responses.
 - [ ] Verify eval artifact links and trace bundle links resolve after restore.
 - [ ] Verify unauthorized credentials cannot read restored objects.
 - [ ] Record validation bucket/prefix, object count, checksum sample, owner, and outcome in immutable audit.

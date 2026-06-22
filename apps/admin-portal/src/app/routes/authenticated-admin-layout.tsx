@@ -116,6 +116,12 @@ function NavigationRail() {
         <a aria-current={pathname === '/trace' ? 'page' : undefined} href="/trace">
           Trace
         </a>
+        <a aria-current={pathname === '/approvals' ? 'page' : undefined} href="/approvals">
+          Approvals
+        </a>
+        <a aria-current={pathname === '/durable-operations' ? 'page' : undefined} href="/durable-operations">
+          Durable
+        </a>
         <span>Routes</span>
         <span>Keys</span>
         <span>Budgets</span>

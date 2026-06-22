@@ -49,6 +49,9 @@ Fixtures must be safe to run before any gateway, provider, retrieval, tool, or w
 | Persona answers | `evals\datasets\persona-answers.v0.1.json` | `evals\fixtures\persona-answers` | Product, business, architecture, support, and executive answer contracts |
 | Cost/latency | `evals\datasets\cost-latency.v0.1.json` | `evals\fixtures\cost-latency` | Cost attribution and gateway overhead measurement shape |
 | Degraded mode | `evals\datasets\degraded-mode.v0.1.json` | `evals\fixtures\degraded-mode` | Break-glass degraded-mode fail-closed behavior, cache/tool restrictions, audit, rotation, and recovery disablement |
+| Durable workflow | `evals\datasets\durable-workflow.v0.1.json` | `evals\fixtures\durable-workflow` | Track 3 restart/resume, stuck-lease recovery, fencing, and retry/idempotency fixtures |
+| Approval gates | `evals\datasets\approval-gates.v0.1.json` | `evals\fixtures\approval-gates` | Track 3 approval pause/release, authorized resume, authorization denial, expiry, and terminal denial fixtures |
+| Workflow outbox | `evals\datasets\workflow-outbox.v0.1.json` | `evals\fixtures\workflow-outbox` | Track 3 atomic enqueue, crash-before-delivery recovery, idempotent delivery, dead-letter, and backlog fixtures |
 
 ## Validation expectations
 
@@ -58,5 +61,6 @@ Until a generalized non-ACL eval schema exists, validation is layout-based:
 - Confirm every dataset category has at least one case.
 - Confirm every case has a fixture path under its declared fixture root, expected assertions, and artifact references.
 - Run `pnpm workspace:validate` to preserve existing schema/catalog health.
+- Run `pnpm eval:smoke` to include the registered fixture-only Track 3 suites without live provider calls.
 
 Future work should add a generalized eval dataset JSON Schema and runner smoke command without changing the inert/no-production posture.

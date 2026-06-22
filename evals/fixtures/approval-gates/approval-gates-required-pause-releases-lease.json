@@ -1,0 +1,37 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 3 fixture; not real customer, repository, provider, production telemetry, prompt, artifact body, or secret data.",
+  "case_id": "approval-gates-required-pause-releases-lease",
+  "category": "pause_release",
+  "track": "track-3-durable-execution",
+  "chaos_scenario": {
+    "postgres_required": true,
+    "approval_state": "pending"
+  },
+  "workflow_fixture": {
+    "workflow_id_ref": "fixture-ref:workflow:approval-gates-required-pause-releases-lease",
+    "postgres_required": true,
+    "provider_mode": "fixture",
+    "live_provider_calls": false,
+    "production_enablement": false,
+    "inputs": {
+      "risk_tier": "high",
+      "policy_required": true,
+      "step_kind": "approval_gate"
+    }
+  },
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "Required approval moves the workflow and step to pending_approval durably.",
+    "The worker lease is released while the workflow waits for an authorized decision.",
+    "The resume token is stored as an opaque metadata reference only."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/approval-gates/approval-gates-required-pause-releases-lease/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/approval-gates/approval-gates-required-pause-releases-lease/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/approval-gates/approval-gates-required-pause-releases-lease/audit-event.json"
+  }
+}

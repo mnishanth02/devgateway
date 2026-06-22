@@ -10,6 +10,7 @@ Phase 0.2 defines command expectations only; it does not provision production.
 | `pnpm local:dev deps` | Start local dependency containers under the `devgateway-local` Compose project. | App hot reload. |
 | `pnpm local:dev backend` | Start dependency containers and backend host hot reload for Control API and Tool Broker. | Backend development. |
 | `pnpm local:dev frontend` | Start dependency containers and Admin Portal host hot reload. | Frontend development. |
+| `pnpm local:dev workers` | Start dependency containers, validate durable worker infrastructure variables, and print explicit opt-in commands for durable worker profiles. It does not auto-start durable workers. | Durable workflow development only after local Postgres/Redis/object storage config exists. |
 | `pnpm local:dev all` | Start dependency containers plus backend and frontend hot reload profiles. | Full local development. |
 | `pnpm local:stop [profile]` | Stop tracked DevGateway local processes and, for `deps`/`all`, dependency containers. | Switching profiles or cleanup. |
 | `pnpm local:status` | Print tracked ports, host process state, and Docker Compose status. | Local troubleshooting. |
@@ -51,6 +52,7 @@ The launcher owns only DevGateway local state:
 - The Docker Compose project name is `devgateway-local`.
 - A repeated run may stop a port owner only when that process matches previously recorded DevGateway runtime metadata.
 - Unknown port owners are never killed automatically; the launcher fails closed with a conflict message.
+- The `workers` profile is explicit and fail-closed: it requires local Operational Postgres, Redis, object storage, and Bifrost config variables, keeps production provisioning disabled, and only prints worker opt-in commands.
 
 ### Local port block
 
@@ -72,6 +74,10 @@ The launcher owns only DevGateway local state:
 | OTel health | 43133 |
 | Prometheus | 49090 |
 | Grafana | 43030 |
+
+### Durable worker local opt-in
+
+`pnpm local:dev workers` validates the shared dependency stack and durable-worker variable contract, then prints the available profiles: `runtime-service`, `lease-retry-sweeper`, `cancellation-worker`, `approval-expiry-worker`, `outbox-worker`, `budget-reaper`, and `artifact-lifecycle-worker`. The launcher deliberately does not auto-start these workers, because durable execution can mutate local workflow state. Production launch remains separately gated and must not be inferred from local instructions.
 
 ## CI environment conventions
 

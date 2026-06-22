@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
+import { approvalExpiresAtForRiskTier } from '../../../../packages/policy/src/index.ts';
 import {
   dataClasses,
   gatewayControlContractVersion,
@@ -82,6 +83,7 @@ export type TaskStatus =
 
 export type TaskType = 'analysis' | 'workflow' | 'code_review' | 'tool_execution' | 'synthesis' | 'custom';
 export type TaskPriority = 'low' | 'normal' | 'high';
+export type TaskCancellationExecutionStatus = 'queued' | 'running' | 'waiting_for_approval' | 'terminal';
 
 export interface CreateTaskRequest {
   readonly task_type: TaskType;
@@ -117,6 +119,7 @@ export interface TaskCancellationRequestRecord {
   readonly policy_version: string;
   readonly registry_version: string;
   readonly cancellation_reason: string | null;
+  readonly execution_status: TaskCancellationExecutionStatus;
 }
 
 export interface TaskRecord {
@@ -191,6 +194,7 @@ export interface ArtifactSignedAccessRequest {
   readonly trace_id: string;
   readonly policy_version: string;
   readonly registry_version: string;
+  readonly requested_duration_seconds?: number | undefined;
 }
 
 export interface ArtifactLifecycleStatusResult {
@@ -213,6 +217,15 @@ export interface ArtifactSignedAccessDecisionResult {
   readonly eligible: boolean;
   readonly requires_approval: boolean;
   readonly max_signed_duration_seconds: number | null;
+  readonly sha256: string;
+  readonly signed_access?: ArtifactSignedAccessGrant | undefined;
+}
+
+export interface ArtifactSignedAccessGrant {
+  readonly signed_url: string;
+  readonly expires_at: string;
+  readonly ttl_seconds: number;
+  readonly sha256: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -247,9 +260,89 @@ export interface OutboxListFilter {
 export interface OutboxStatusResult {
   readonly counts_by_state: Partial<Record<OutboxDeliveryState, number>>;
   readonly counts_by_destination: Partial<Record<OutboxDestinationKind, number>>;
+  readonly backlog_count: number;
   readonly failed_count: number;
   readonly dead_lettered_count: number;
   readonly total: number;
+}
+
+export interface RetryWorkflowRequest {
+  readonly request_id: string;
+  readonly trace_id: string;
+  readonly policy_version: string;
+  readonly registry_version: string;
+  readonly idempotency_key: string;
+  readonly retry_reason_ref?: OpaqueRef | undefined;
+}
+
+export interface WorkflowRetryControlRecord {
+  readonly workflow_id: string;
+  readonly request_id: string;
+  readonly trace_id: string;
+  readonly policy_version: string;
+  readonly registry_version: string;
+  readonly idempotency: IdempotencyRef;
+  readonly requested_by_principal_id: string;
+  readonly retry_state: 'scheduled';
+  readonly retry_reason_ref: OpaqueRef | null;
+  readonly audit_ref: AuditRef;
+  readonly created_at: string;
+}
+
+export type ManualReviewState = 'open' | 'in_progress' | 'resolved' | 'closed';
+export type ManualReviewBlockingState = 'blocking_workflow' | 'blocking_step' | 'informational';
+
+export interface ManualReviewControlRecord {
+  readonly contract_version: typeof gatewayControlContractVersion;
+  readonly manual_review_item_id: string;
+  readonly workflow_id: string;
+  readonly workflow_run_id: string;
+  readonly task_id: string | null;
+  readonly request_id: string;
+  readonly reason: string;
+  readonly owner_principal_id: string;
+  readonly owner_role: string | null;
+  readonly blocking_state: ManualReviewBlockingState;
+  readonly review_state: ManualReviewState;
+  readonly safe_actions: readonly OpaqueRef[];
+  readonly side_effect_refs: readonly OpaqueRef[];
+  readonly resolution_ref: OpaqueRef | null;
+  readonly resolution_audit_ref: AuditRef | null;
+  readonly idempotency: IdempotencyRef;
+  readonly principal_id: string;
+  readonly project_id: string;
+  readonly data_class: DataClass;
+  readonly budget_scope_id: string;
+  readonly policy_version: string;
+  readonly registry_version: string;
+  readonly trace_id: string;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+export interface ResolveManualReviewRequest {
+  readonly request_id: string;
+  readonly trace_id: string;
+  readonly policy_version: string;
+  readonly registry_version: string;
+  readonly idempotency_key: string;
+  readonly resolution_ref: OpaqueRef;
+}
+
+export interface WorkflowLeaseStatusResult {
+  readonly workflow_id: string;
+  readonly workflow_run_id: string;
+  readonly workflow_status: WorkflowControlRecord['status'];
+  readonly workflow_lease: WorkflowControlRecord['lease_state'];
+  readonly agent_run_leases: readonly {
+    readonly agent_run_id: string;
+    readonly lease_ref: AgentRunControlRecord['lease_ref'];
+    readonly status: AgentRunControlRecord['status'];
+  }[];
+  readonly active_count: number;
+  readonly expired_count: number;
+  readonly stuck_count: number;
+  readonly checked_at: string;
 }
 
 export interface ApprovalListFilter {
@@ -272,6 +365,14 @@ export interface DenyApprovalRequest {
   readonly policy_version: string;
   readonly registry_version: string;
   readonly denial_reason_ref?: OpaqueRef | undefined;
+}
+
+export interface ExpireApprovalRequest {
+  readonly request_id: string;
+  readonly trace_id: string;
+  readonly policy_version: string;
+  readonly registry_version: string;
+  readonly expiry_reason_ref?: OpaqueRef | undefined;
 }
 
 export interface WorkflowEventPage {
@@ -305,11 +406,26 @@ export interface AgentWorkflowStore {
     reader: AgentWorkflowReadContext,
   ): Promise<readonly TaskArtifactControlRecord[] | null>;
   getWorkflow(workflowId: string, reader: AgentWorkflowReadContext): Promise<WorkflowControlRecord | null>;
+  retryWorkflow(
+    workflowId: string,
+    input: RetryWorkflowRequest,
+    actor: ControlRouteAuthContext,
+    reader: AgentWorkflowReadContext,
+  ): Promise<WorkflowRetryControlRecord>;
   listWorkflowEvents(
     workflowId: string,
     page: WorkflowEventPageRequest,
     reader: AgentWorkflowReadContext,
   ): Promise<WorkflowEventPage | null>;
+  listManualReviews(workflowId: string, reader: AgentWorkflowReadContext): Promise<readonly ManualReviewControlRecord[] | null>;
+  resolveManualReview(
+    workflowId: string,
+    manualReviewItemId: string,
+    input: ResolveManualReviewRequest,
+    actor: ControlRouteAuthContext,
+    reader: AgentWorkflowReadContext,
+  ): Promise<ManualReviewControlRecord>;
+  getWorkflowLeaseStatus(workflowId: string, reader: AgentWorkflowReadContext): Promise<WorkflowLeaseStatusResult | null>;
   getAgentRun(agentRunId: string, reader: AgentWorkflowReadContext): Promise<AgentRunControlRecord | null>;
   listSkills(filter: SkillListFilter): Promise<readonly SkillDefinitionControlRecord[]>;
   listApprovals(filter: ApprovalListFilter, reader: AgentWorkflowReadContext): Promise<readonly ApprovalControlRecord[]>;
@@ -323,6 +439,12 @@ export interface AgentWorkflowStore {
   denyApproval(
     approvalRequestId: string,
     input: DenyApprovalRequest,
+    actor: ControlRouteAuthContext,
+    reader: AgentWorkflowReadContext,
+  ): Promise<ApprovalControlRecord>;
+  expireApproval(
+    approvalRequestId: string,
+    input: ExpireApprovalRequest,
     actor: ControlRouteAuthContext,
     reader: AgentWorkflowReadContext,
   ): Promise<ApprovalControlRecord>;
@@ -351,6 +473,7 @@ export interface InMemoryAgentWorkflowStoreState {
   readonly artifacts: readonly TaskArtifactControlRecord[];
   readonly skills: readonly SkillDefinitionControlRecord[];
   readonly approvals: readonly ApprovalControlRecord[];
+  readonly manualReviews: readonly ManualReviewControlRecord[];
   readonly outboxes: readonly OutboxControlRecord[];
   readonly artifactLifecycles: readonly ArtifactLifecycleControlRecord[];
   readonly templates: readonly TemplateControlRecord[];
@@ -390,6 +513,9 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
   readonly #artifacts = new Map<string, TaskArtifactControlRecord[]>();
   readonly #skills = new Map<string, SkillDefinitionControlRecord>();
   readonly #approvals = new Map<string, ApprovalControlRecord>();
+  readonly #manualReviews = new Map<string, ManualReviewControlRecord>();
+  readonly #workflowRetryRequests = new Map<string, WorkflowRetryControlRecord>();
+  readonly #manualReviewResolutionRequests = new Map<string, ResolveManualReviewRequest>();
   readonly #outboxes = new Map<string, OutboxControlRecord>();
   readonly #lifecycles = new Map<string, ArtifactLifecycleControlRecord[]>();
   readonly #templates = new Map<string, TemplateControlRecord>();
@@ -405,6 +531,7 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
       artifacts: options.initialState?.artifacts ?? baseState.artifacts,
       skills: options.initialState?.skills ?? baseState.skills,
       approvals: options.initialState?.approvals ?? baseState.approvals,
+      manualReviews: options.initialState?.manualReviews ?? baseState.manualReviews,
       outboxes: options.initialState?.outboxes ?? baseState.outboxes,
       artifactLifecycles: options.initialState?.artifactLifecycles ?? baseState.artifactLifecycles,
       templates: options.initialState?.templates ?? baseState.templates,
@@ -418,6 +545,7 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
     state.artifacts.forEach((artifact) => this.#appendArtifact(artifact));
     state.skills.forEach((skill) => this.#skills.set(skill.skill_definition_id, skill));
     state.approvals.forEach((approval) => this.#approvals.set(approval.approval_request_id, approval));
+    state.manualReviews.forEach((manualReview) => this.#manualReviews.set(manualReview.manual_review_item_id, manualReview));
     state.outboxes.forEach((outbox) => this.#outboxes.set(outbox.outbox_id, outbox));
     state.artifactLifecycles.forEach((event) => this.#appendLifecycleEvent(event));
     state.templates.forEach((template) => this.#templates.set(template.template_id, template));
@@ -521,6 +649,8 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
     assertPolicyMatches(existing, input.policy_version, input.registry_version);
 
     const now = new Date().toISOString();
+    const workflow = this.#workflows.get(existing.workflow_run_id);
+    const executionStatus = cancellationExecutionStatusFromWorkflow(workflow?.status ?? existing.status);
     const updated: TaskRecord = {
       ...existing,
       cancellation_request: {
@@ -532,6 +662,7 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
         policy_version: input.policy_version,
         registry_version: input.registry_version,
         cancellation_reason: input.cancellation_reason ?? null,
+        execution_status: executionStatus,
       },
       updated_at: now,
     };
@@ -561,13 +692,103 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
   ): Promise<readonly TaskArtifactControlRecord[] | null> {
     const task = this.#tasks.get(taskId);
     if (task === undefined || !isRecordVisibleToReader(task, reader)) return null;
-    return (this.#artifacts.get(taskId) ?? []).filter((artifact) => isRecordVisibleToReader(artifact, reader));
+    return (this.#artifacts.get(taskId) ?? [])
+      .filter((artifact) => isArtifactVisibleToReader(artifact, reader))
+      .filter((artifact) => this.#isArtifactDisplayable(artifact.artifact_id));
   }
 
   async getWorkflow(workflowId: string, reader: AgentWorkflowReadContext): Promise<WorkflowControlRecord | null> {
     const workflow = this.#workflows.get(workflowId);
     if (workflow === undefined || !isRecordVisibleToReader(workflow, reader)) return null;
     return workflow;
+  }
+
+  async retryWorkflow(
+    workflowId: string,
+    input: RetryWorkflowRequest,
+    actor: ControlRouteAuthContext,
+    reader: AgentWorkflowReadContext,
+  ): Promise<WorkflowRetryControlRecord> {
+    assertNoForbiddenAgentWorkflowFields(input);
+    assertRetryWorkflowCriticalFields(input);
+    assertWorkflowMutationRole(actor, 'retry');
+    const workflow = this.#workflows.get(workflowId);
+    if (workflow === undefined || !isWorkflowMutationVisible(workflow, reader)) {
+      throw notFoundRouteError('Unknown workflow_id.');
+    }
+    assertWorkflowPolicyMatches(workflow, input.policy_version, input.registry_version);
+
+    const retryKey = `${workflowId}:${input.idempotency_key}`;
+    const existingRetry = this.#workflowRetryRequests.get(retryKey);
+    if (existingRetry !== undefined) {
+      assertRetryWorkflowReplayMatches(input, existingRetry);
+      return existingRetry;
+    }
+    const conflictingRetry = [...this.#workflowRetryRequests.values()].find(
+      (retry) => retry.idempotency.idempotency_key === input.idempotency_key && retry.workflow_id !== workflowId,
+    );
+    if (conflictingRetry !== undefined) {
+      throw new AgentWorkflowRouteValidationError('retry idempotency_key is already bound to a different workflow_id.', {
+        statusCode: 409,
+        code: 'invalid_state',
+      });
+    }
+    assertWorkflowRetryable(workflow);
+
+    const now = new Date().toISOString();
+    const idempotency = createIdempotencyRef(input.idempotency_key, 'retry', workflowId, now);
+    const auditRef = createAuditRef(`audit_retry_${randomUUID()}`, now);
+    const retry: WorkflowRetryControlRecord = {
+      workflow_id: workflowId,
+      request_id: input.request_id,
+      trace_id: input.trace_id,
+      policy_version: input.policy_version,
+      registry_version: input.registry_version,
+      idempotency,
+      requested_by_principal_id: actor.principalId,
+      retry_state: 'scheduled',
+      retry_reason_ref: input.retry_reason_ref ?? null,
+      audit_ref: auditRef,
+      created_at: now,
+    };
+
+    const updatedWorkflow: WorkflowControlRecord = {
+      ...workflow,
+      status: 'queued',
+      current_step_ref: {
+        ...workflow.current_step_ref,
+        step_status: 'queued',
+      },
+      allowed_transitions: workflowAllowedTransitions.queued,
+      idempotency_refs: [...workflow.idempotency_refs, idempotency],
+      resume_ref: createOpaqueRef(`retry_resume_${workflowId}`, 'workflow_retry_resume_ref', workflowId),
+      audit_refs: [...workflow.audit_refs, auditRef],
+      updated_at: now,
+    };
+    this.#workflows.set(workflowId, updatedWorkflow);
+    const task = this.#tasks.get(workflow.task_id);
+    if (task !== undefined) {
+      const updatedTask: TaskRecord = { ...task, status: 'queued', updated_at: now };
+      this.#tasks.set(task.task_id, updatedTask);
+      this.#appendWorkflowEvent(
+        createWorkflowEventRecord({
+          task: updatedTask,
+          workflowId,
+          sequenceNumber: this.#nextWorkflowSequence(workflowId),
+          eventType: 'retry_scheduled',
+          fromStatus: workflow.status,
+          toStatus: 'queued',
+          actorRef: {
+            actor_type: 'principal',
+            actor_ref: actor.authSubjectRef,
+            principal_id: actor.principalId,
+          },
+          now,
+        }),
+      );
+    }
+    this.#workflowRetryRequests.set(retryKey, retry);
+    return retry;
   }
 
   async listWorkflowEvents(
@@ -588,6 +809,139 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
     return {
       events: visible,
       next_cursor: window.length > limit && last !== undefined ? String(last.sequence_number) : null,
+    };
+  }
+
+  async listManualReviews(workflowId: string, reader: AgentWorkflowReadContext): Promise<readonly ManualReviewControlRecord[] | null> {
+    const workflow = this.#workflows.get(workflowId);
+    if (workflow === undefined || !isRecordVisibleToReader(workflow, reader)) return null;
+    return [...this.#manualReviews.values()]
+      .filter((item) => item.workflow_id === workflowId)
+      .filter((item) => isManualReviewVisibleToReader(item, reader))
+      .sort((left, right) => left.created_at.localeCompare(right.created_at));
+  }
+
+  async resolveManualReview(
+    workflowId: string,
+    manualReviewItemId: string,
+    input: ResolveManualReviewRequest,
+    actor: ControlRouteAuthContext,
+    reader: AgentWorkflowReadContext,
+  ): Promise<ManualReviewControlRecord> {
+    assertNoForbiddenAgentWorkflowFields(input);
+    assertResolveManualReviewCriticalFields(input);
+    const existing = this.#manualReviews.get(manualReviewItemId);
+    if (
+      existing === undefined ||
+      existing.workflow_id !== workflowId ||
+      !isManualReviewMutationVisible(existing, reader)
+    ) {
+      throw notFoundRouteError('Unknown manual_review_item_id.');
+    }
+    assertManualReviewPolicyMatches(existing, input.policy_version, input.registry_version);
+    assertManualReviewActorAuthorized(existing, actor);
+
+    const resolutionKey = `${manualReviewItemId}:${input.idempotency_key}`;
+    const replay = this.#manualReviewResolutionRequests.get(resolutionKey);
+    if (replay !== undefined) {
+      assertResolveManualReviewReplayMatches(input, replay);
+      return this.#manualReviews.get(manualReviewItemId) ?? existing;
+    }
+    const conflictingResolution = [...this.#manualReviewResolutionRequests.entries()].find(
+      ([key]) => key.endsWith(`:${input.idempotency_key}`) && key !== resolutionKey,
+    );
+    if (conflictingResolution !== undefined) {
+      throw new AgentWorkflowRouteValidationError('manual_review idempotency_key is already bound to a different review item.', {
+        statusCode: 409,
+        code: 'invalid_state',
+      });
+    }
+    if (existing.review_state === 'resolved' || existing.review_state === 'closed') {
+      throw new AgentWorkflowRouteValidationError(
+        `Manual review ${manualReviewItemId} is in terminal state ${existing.review_state} and cannot be modified.`,
+        { statusCode: 409, code: 'invalid_state' },
+      );
+    }
+
+    const now = new Date().toISOString();
+    const auditRef = createAuditRef(`audit_manual_review_resolved_${randomUUID()}`, now);
+    const updated: ManualReviewControlRecord = {
+      ...existing,
+      review_state: 'resolved',
+      resolution_ref: input.resolution_ref,
+      resolution_audit_ref: auditRef,
+      updated_at: now,
+    };
+    this.#manualReviews.set(manualReviewItemId, updated);
+    this.#manualReviewResolutionRequests.set(resolutionKey, input);
+
+    const workflow = this.#workflows.get(workflowId);
+    const task = workflow === undefined ? undefined : this.#tasks.get(workflow.task_id);
+    if (workflow !== undefined) {
+      this.#workflows.set(workflowId, {
+        ...workflow,
+        status: workflow.status === 'manual_review' ? 'running' : workflow.status,
+        current_step_ref: {
+          ...workflow.current_step_ref,
+          step_status: workflow.status === 'manual_review' ? 'running' : workflow.current_step_ref.step_status,
+        },
+        allowed_transitions: workflow.status === 'manual_review' ? workflowAllowedTransitions.running : workflow.allowed_transitions,
+        audit_refs: [...workflow.audit_refs, auditRef],
+        updated_at: now,
+      });
+    }
+    if (task !== undefined) {
+      this.#appendWorkflowEvent(
+        createWorkflowEventRecord({
+          task,
+          workflowId,
+          sequenceNumber: this.#nextWorkflowSequence(workflowId),
+          eventType: 'manual_review_resolved',
+          fromStatus: workflow?.status === 'manual_review' ? 'manual_review' : null,
+          toStatus: workflow?.status === 'manual_review' ? 'running' : null,
+          actorRef: {
+            actor_type: 'principal',
+            actor_ref: actor.authSubjectRef,
+            principal_id: actor.principalId,
+          },
+          now,
+        }),
+      );
+    }
+    return updated;
+  }
+
+  async getWorkflowLeaseStatus(workflowId: string, reader: AgentWorkflowReadContext): Promise<WorkflowLeaseStatusResult | null> {
+    const workflow = this.#workflows.get(workflowId);
+    if (workflow === undefined || !isRecordVisibleToReader(workflow, reader)) return null;
+    const checkedAt = new Date().toISOString();
+    const agentRunLeases = [...this.#agentRuns.values()]
+      .filter((agentRun) => agentRun.workflow_run_id === workflowId)
+      .filter((agentRun) => isRecordVisibleToReader(agentRun, reader))
+      .map((agentRun) => ({
+        agent_run_id: agentRun.agent_run_id,
+        lease_ref: agentRun.lease_ref,
+        status: agentRun.status,
+      }));
+    const leaseStates = [
+      workflow.lease_state,
+      ...agentRunLeases.map((agentRun) => ({
+        ...agentRun.lease_ref,
+        lease_status: leaseStatusFromRef(agentRun.lease_ref, checkedAt),
+      })),
+    ];
+    const activeCount = leaseStates.filter((lease) => lease.lease_status === 'active').length;
+    const expiredCount = leaseStates.filter((lease) => lease.lease_status === 'expired').length;
+    return {
+      workflow_id: workflowId,
+      workflow_run_id: workflow.workflow_run_id,
+      workflow_status: workflow.status,
+      workflow_lease: workflow.lease_state,
+      agent_run_leases: agentRunLeases,
+      active_count: activeCount,
+      expired_count: expiredCount,
+      stuck_count: expiredCount,
+      checked_at: checkedAt,
     };
   }
 
@@ -705,6 +1059,48 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
     return updated;
   }
 
+  async expireApproval(
+    approvalRequestId: string,
+    input: ExpireApprovalRequest,
+    actor: ControlRouteAuthContext,
+    reader: AgentWorkflowReadContext,
+  ): Promise<ApprovalControlRecord> {
+    assertNoForbiddenAgentWorkflowFields(input);
+    assertApprovalDecisionCriticalFields(input);
+    assertSystemApprovalActor(actor);
+    const existing = this.#approvals.get(approvalRequestId);
+    if (existing === undefined) {
+      throw notFoundRouteError(`Unknown approval_request_id: ${approvalRequestId}`);
+    }
+    if (!isApprovalMutationProjectVisible(existing, reader)) {
+      throw notFoundRouteError('Unknown approval_request_id.');
+    }
+    const now = new Date().toISOString();
+    const current = this.#materializeExpiredApproval(existing, now);
+    assertApprovalPolicyMatches(current, input.policy_version, input.registry_version);
+    if (current.state === 'expired') return current;
+    assertApprovalNotTerminal(current);
+
+    const decisionId = `decision_expire_${randomUUID()}`;
+    const updated: ApprovalControlRecord = {
+      ...current,
+      state: 'expired',
+      approver_principal_id: null,
+      decision_ref: {
+        decision_id: decisionId,
+        decision: 'expired',
+        approver_principal_id: actor.principalId,
+        policy_version_at_decision: input.policy_version,
+        decision_audit_ref: createAuditRef(decisionId, now),
+        decided_at: now,
+      },
+      audit_refs: [...existing.audit_refs, createAuditRef(decisionId, now)],
+      updated_at: now,
+    };
+    this.#approvals.set(approvalRequestId, updated);
+    return updated;
+  }
+
   async listOutbox(filter: OutboxListFilter, reader: AgentWorkflowReadContext): Promise<readonly OutboxControlRecord[]> {
     return [...this.#outboxes.values()]
       .filter((outbox) => isRecordVisibleToReader(outbox, reader))
@@ -727,9 +1123,11 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
       counts_by_state[record.delivery_state] = (counts_by_state[record.delivery_state] ?? 0) + 1;
       counts_by_destination[record.destination_kind] = (counts_by_destination[record.destination_kind] ?? 0) + 1;
     }
+    const backlogCount = (counts_by_state.pending ?? 0) + (counts_by_state.delivering ?? 0) + (counts_by_state.failed ?? 0);
     return {
       counts_by_state,
       counts_by_destination,
+      backlog_count: backlogCount,
       failed_count: counts_by_state.failed ?? 0,
       dead_lettered_count: counts_by_state.dead_lettered ?? 0,
       total: records.length,
@@ -741,7 +1139,7 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
     reader: AgentWorkflowReadContext,
   ): Promise<readonly ArtifactLifecycleControlRecord[] | null> {
     const artifact = this.#findArtifactById(artifactId);
-    if (artifact === undefined || !isRecordVisibleToReader(artifact, reader)) return null;
+    if (artifact === undefined || !isArtifactVisibleToReader(artifact, reader)) return null;
     return (this.#lifecycles.get(artifactId) ?? []).filter((event) => isRecordVisibleToReader(event, reader));
   }
 
@@ -780,7 +1178,7 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
     if (
       artifact === undefined ||
       actor.principalId !== reader.principalId ||
-      !isRecordVisibleToReader(artifact, reader)
+      !isArtifactVisibleToReader(artifact, reader)
     ) {
       throw notFoundRouteError('Unknown artifact_id.');
     }
@@ -798,7 +1196,13 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
 
     let decision: ArtifactSignedAccessDecision;
     let decision_reason: string;
-    if (isTerminalArtifactLifecycle(latest) || isExpiredAt(latest?.deletion_scheduled_at ?? null, new Date().toISOString())) {
+    const hashVerified =
+      latest === undefined ||
+      latest.checksum_sha256.trim().toLowerCase() === artifact.sha256.trim().toLowerCase();
+    if (!hashVerified) {
+      decision = 'ineligible';
+      decision_reason = 'Artifact hash verification failed before signed access.';
+    } else if (isTerminalArtifactLifecycle(latest) || isExpiredAt(latest?.deletion_scheduled_at ?? null, new Date().toISOString())) {
       decision = 'ineligible';
       decision_reason = 'Artifact is terminal, redacted, deleted, or past its deletion schedule.';
     } else if (eligibility.requires_approval) {
@@ -819,6 +1223,7 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
       eligible: eligibility.eligible,
       requires_approval: eligibility.requires_approval,
       max_signed_duration_seconds: eligibility.max_signed_duration_seconds,
+      sha256: artifact.sha256,
     };
   }
 
@@ -926,6 +1331,12 @@ export class InMemoryAgentWorkflowStore implements AgentWorkflowStore {
     const events = this.#workflowEvents.get(workflowId) ?? [];
     return events.reduce((max, event) => Math.max(max, event.sequence_number), 0) + 1;
   }
+
+  #isArtifactDisplayable(artifactId: string): boolean {
+    const lifecycleEvents = this.#lifecycles.get(artifactId) ?? [];
+    const latest = lifecycleEvents[lifecycleEvents.length - 1];
+    return !isTerminalArtifactLifecycle(latest) && !isExpiredAt(latest?.deletion_scheduled_at ?? null, new Date().toISOString());
+  }
 }
 
 export function createInMemoryAgentWorkflowStore(
@@ -982,6 +1393,18 @@ export function asCreateTaskRequest(body: unknown): CreateTaskRequest {
 
 export function asCancelTaskRequest(body: unknown): CancelTaskRequest {
   const input = cancelTaskRequestSchema.parse(body);
+  assertNoForbiddenAgentWorkflowFields(input);
+  return input;
+}
+
+export function asRetryWorkflowRequest(body: unknown): RetryWorkflowRequest {
+  const input = retryWorkflowRequestSchema.parse(body);
+  assertNoForbiddenAgentWorkflowFields(input);
+  return input;
+}
+
+export function asResolveManualReviewRequest(body: unknown): ResolveManualReviewRequest {
+  const input = resolveManualReviewRequestSchema.parse(body);
   assertNoForbiddenAgentWorkflowFields(input);
   return input;
 }
@@ -1094,6 +1517,66 @@ export function toWorkflowResponse(record: WorkflowControlRecord) {
     cost_refs: record.cost_refs,
     created_at: record.created_at,
     updated_at: record.updated_at,
+  };
+}
+
+export function toWorkflowRetryResponse(record: WorkflowRetryControlRecord) {
+  return {
+    workflow_id: record.workflow_id,
+    request_id: record.request_id,
+    trace_id: record.trace_id,
+    policy_version: record.policy_version,
+    registry_version: record.registry_version,
+    idempotency: record.idempotency,
+    requested_by_principal_id: record.requested_by_principal_id,
+    retry_state: record.retry_state,
+    retry_reason_ref: record.retry_reason_ref,
+    audit_ref: record.audit_ref,
+    created_at: record.created_at,
+  };
+}
+
+export function toManualReviewResponse(record: ManualReviewControlRecord) {
+  return {
+    contract_version: record.contract_version,
+    manual_review_item_id: record.manual_review_item_id,
+    workflow_id: record.workflow_id,
+    workflow_run_id: record.workflow_run_id,
+    task_id: record.task_id,
+    request_id: record.request_id,
+    reason_ref: createOpaqueRef(`manual_review_reason_${sha256Hex(record.reason).slice(0, 16)}`, 'manual_review_reason_ref', record.workflow_id),
+    owner_principal_id: record.owner_principal_id,
+    owner_role: record.owner_role,
+    blocking_state: record.blocking_state,
+    review_state: record.review_state,
+    safe_actions: record.safe_actions,
+    side_effect_refs: record.side_effect_refs,
+    resolution_ref: record.resolution_ref,
+    resolution_audit_ref: record.resolution_audit_ref,
+    idempotency: record.idempotency,
+    principal_id: record.principal_id,
+    project_id: record.project_id,
+    data_class: record.data_class,
+    budget_scope_id: record.budget_scope_id,
+    policy_version: record.policy_version,
+    registry_version: record.registry_version,
+    trace_id: record.trace_id,
+    created_at: record.created_at,
+    updated_at: record.updated_at,
+  };
+}
+
+export function toWorkflowLeaseStatusResponse(record: WorkflowLeaseStatusResult) {
+  return {
+    workflow_id: record.workflow_id,
+    workflow_run_id: record.workflow_run_id,
+    workflow_status: record.workflow_status,
+    workflow_lease: record.workflow_lease,
+    agent_run_leases: record.agent_run_leases,
+    active_count: record.active_count,
+    expired_count: record.expired_count,
+    stuck_count: record.stuck_count,
+    checked_at: record.checked_at,
   };
 }
 
@@ -1324,6 +1807,7 @@ function createSafeAgentWorkflowFixtureState(): InMemoryAgentWorkflowStoreState 
   const artifact = createArtifactRecord({ task, workflowId: task.workflow_run_id, agentRunId: 'agent_run_demo_001', now });
   const skill = createSkillRecord({ task, now });
   const approval = createApprovalRecord({ task, workflowId: task.workflow_run_id, approvalRequestId: 'approval_request_demo_001', now });
+  const manualReview = createManualReviewRecord({ task, workflowId: task.workflow_run_id, manualReviewItemId: 'manual_review_item_demo_001', now });
   const outbox = createOutboxRecord({ task, workflowId: task.workflow_run_id, now });
   const artifactLifecycle = createArtifactLifecycleRecord({ task, artifact, now });
   const { template, templateVersions } = createTemplateFixtures({ task, now });
@@ -1335,6 +1819,7 @@ function createSafeAgentWorkflowFixtureState(): InMemoryAgentWorkflowStoreState 
     artifacts: [artifact],
     skills: [skill],
     approvals: [approval],
+    manualReviews: [manualReview],
     outboxes: [outbox],
     artifactLifecycles: [artifactLifecycle],
     templates: [template],
@@ -1351,6 +1836,7 @@ function createEmptyAgentWorkflowState(): InMemoryAgentWorkflowStoreState {
     artifacts: [],
     skills: [],
     approvals: [],
+    manualReviews: [],
     outboxes: [],
     artifactLifecycles: [],
     templates: [],
@@ -1407,6 +1893,13 @@ function createWorkflowRecord(input: {
     created_at: now,
     updated_at: now,
   };
+}
+
+function cancellationExecutionStatusFromWorkflow(status: WorkflowControlRecord['status'] | TaskStatus): TaskCancellationExecutionStatus {
+  if (status === 'queued' || status === 'created') return 'queued';
+  if (status === 'pending_approval') return 'waiting_for_approval';
+  if (['succeeded', 'completed', 'failed', 'cancelled', 'timed_out', 'denied'].includes(status)) return 'terminal';
+  return 'running';
 }
 
 function createWorkflowEventRecord(input: {
@@ -1546,7 +2039,7 @@ function createArtifactRecord(input: {
     media_type: 'application/json',
     size_bytes: 128,
     sha256: sha256Hex('safe-artifact-demo-001'),
-    sensitivity_label: 'internal',
+    sensitivity_label: 'confidential',
     source_ref: {
       source_type: 'workflow',
       source_id: workflowId,
@@ -1672,7 +2165,7 @@ function createApprovalRecord(input: {
     },
     state: 'pending',
     decision_ref: null,
-    expires_at: '2099-01-01T00:00:00.000Z',
+    expires_at: approvalExpiresAtForRiskTier('medium'),
     policy_ref: {
       policy_version: task.policy_version,
       policy_decision_ref: `policy_decision_${task.trace_id}`,
@@ -1688,6 +2181,42 @@ function createApprovalRecord(input: {
     registry_version: task.registry_version,
     trace_id: task.trace_id,
     trace_context_ref: createTraceContextRef(task.trace_id),
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+function createManualReviewRecord(input: {
+  readonly task: TaskRecord;
+  readonly workflowId: string;
+  readonly manualReviewItemId: string;
+  readonly now: string;
+}): ManualReviewControlRecord {
+  const { task, workflowId, manualReviewItemId, now } = input;
+  return {
+    contract_version: gatewayControlContractVersion,
+    manual_review_item_id: manualReviewItemId,
+    workflow_id: workflowId,
+    workflow_run_id: workflowId,
+    task_id: task.task_id,
+    request_id: task.request_id,
+    reason: 'policy_manual_review_required',
+    owner_principal_id: 'principal_reviewer',
+    owner_role: 'reviewer',
+    blocking_state: 'blocking_workflow',
+    review_state: 'open',
+    safe_actions: [createOpaqueRef('safe_action_review_only', 'manual_review_safe_action_ref', workflowId)],
+    side_effect_refs: [],
+    resolution_ref: null,
+    resolution_audit_ref: null,
+    idempotency: createIdempotencyRef(`${task.request_id}:manual_review`, 'manual_review', manualReviewItemId, now),
+    principal_id: task.principal_id,
+    project_id: task.project_id,
+    data_class: task.data_class,
+    budget_scope_id: task.budget_scope_id,
+    policy_version: task.policy_version,
+    registry_version: task.registry_version,
+    trace_id: task.trace_id,
     created_at: now,
     updated_at: now,
   };
@@ -1934,7 +2463,22 @@ function assertCancelTaskCriticalFields(input: CancelTaskRequest): void {
   assertPolicyPins(input.policy_version, input.registry_version);
 }
 
-function assertApprovalDecisionCriticalFields(input: ApproveApprovalRequest | DenyApprovalRequest): void {
+function assertRetryWorkflowCriticalFields(input: RetryWorkflowRequest): void {
+  assertNonEmptyString(input.request_id, 'request_id');
+  assertNonEmptyString(input.trace_id, 'trace_id');
+  assertPolicyPins(input.policy_version, input.registry_version);
+  assertNonEmptyString(input.idempotency_key, 'idempotency_key');
+}
+
+function assertResolveManualReviewCriticalFields(input: ResolveManualReviewRequest): void {
+  assertNonEmptyString(input.request_id, 'request_id');
+  assertNonEmptyString(input.trace_id, 'trace_id');
+  assertPolicyPins(input.policy_version, input.registry_version);
+  assertNonEmptyString(input.idempotency_key, 'idempotency_key');
+  assertObject(input.resolution_ref, 'resolution_ref');
+}
+
+function assertApprovalDecisionCriticalFields(input: ApproveApprovalRequest | DenyApprovalRequest | ExpireApprovalRequest): void {
   assertNonEmptyString(input.request_id, 'request_id');
   assertNonEmptyString(input.trace_id, 'trace_id');
   assertPolicyPins(input.policy_version, input.registry_version);
@@ -1988,6 +2532,16 @@ function assertApprovalActorAuthorized(approval: ApprovalControlRecord, actor: C
   }
 }
 
+function assertSystemApprovalActor(actor: ControlRouteAuthContext): void {
+  const roles = new Set(actor.roles ?? []);
+  if (!roles.has('system') && !roles.has('approval_expiry_worker')) {
+    throw new AgentWorkflowRouteValidationError('approval expiry requires an internal system actor.', {
+      statusCode: 403,
+      code: 'invalid_state',
+    });
+  }
+}
+
 function assertPolicyPins(policyVersion: string, registryVersion: string): void {
   if (policyVersion.trim() === '') {
     throw stalePolicyControlError({ field: 'policy_version' });
@@ -2006,6 +2560,94 @@ function assertPolicyMatches(record: TaskRecord, policyVersion: string, registry
       expected_registry_version: record.registry_version,
       actual_registry_version: registryVersion,
     });
+  }
+}
+
+function assertWorkflowPolicyMatches(record: WorkflowControlRecord, policyVersion: string, registryVersion: string): void {
+  if (record.policy_version !== policyVersion || record.registry_version !== registryVersion) {
+    throw stalePolicyControlError({
+      workflow_id: record.workflow_id,
+      expected_policy_version: record.policy_version,
+      actual_policy_version: policyVersion,
+      expected_registry_version: record.registry_version,
+      actual_registry_version: registryVersion,
+    });
+  }
+}
+
+function assertManualReviewPolicyMatches(record: ManualReviewControlRecord, policyVersion: string, registryVersion: string): void {
+  if (record.policy_version !== policyVersion || record.registry_version !== registryVersion) {
+    throw stalePolicyControlError({
+      manual_review_item_id: record.manual_review_item_id,
+      expected_policy_version: record.policy_version,
+      actual_policy_version: policyVersion,
+      expected_registry_version: record.registry_version,
+      actual_registry_version: registryVersion,
+    });
+  }
+}
+
+function assertWorkflowMutationRole(actor: ControlRouteAuthContext, operation: string): void {
+  const roles = new Set(actor.roles ?? []);
+  if (!roles.has('workflow_operator') && !roles.has('operator') && !roles.has('system')) {
+    throw new AgentWorkflowRouteValidationError(`${operation} requires workflow_operator role.`, {
+      statusCode: 403,
+      code: 'invalid_state',
+    });
+  }
+}
+
+function assertWorkflowRetryable(workflow: WorkflowControlRecord): void {
+  if (!['failed', 'timed_out', 'cancelled', 'denied', 'manual_review'].includes(workflow.status)) {
+    throw new AgentWorkflowRouteValidationError(`Workflow ${workflow.workflow_id} is not in a retryable state.`, {
+      statusCode: 409,
+      code: 'invalid_state',
+    });
+  }
+}
+
+function assertRetryWorkflowReplayMatches(input: RetryWorkflowRequest, existing: WorkflowRetryControlRecord): void {
+  const comparisons: readonly [string, unknown, unknown][] = [
+    ['request_id', input.request_id, existing.request_id],
+    ['trace_id', input.trace_id, existing.trace_id],
+    ['policy_version', input.policy_version, existing.policy_version],
+    ['registry_version', input.registry_version, existing.registry_version],
+    ['retry_reason_ref', input.retry_reason_ref ?? null, existing.retry_reason_ref],
+  ];
+  const mismatch = comparisons.find(([, requested, persisted]) => !agentWorkflowValuesEqual(requested, persisted));
+  if (mismatch !== undefined) {
+    throw new AgentWorkflowRouteValidationError(
+      `retry idempotency_key replay does not match original request ${mismatch[0]}.`,
+      { statusCode: 409, code: 'invalid_state' },
+    );
+  }
+}
+
+function assertManualReviewActorAuthorized(record: ManualReviewControlRecord, actor: ControlRouteAuthContext): void {
+  const roles = new Set(actor.roles ?? []);
+  const hasRole = record.owner_role !== null && roles.has(record.owner_role);
+  if (actor.principalId !== record.owner_principal_id && !hasRole && !roles.has('workflow_operator') && !roles.has('system')) {
+    throw new AgentWorkflowRouteValidationError('manual review resolution requires the assigned reviewer role.', {
+      statusCode: 403,
+      code: 'invalid_state',
+    });
+  }
+}
+
+function assertResolveManualReviewReplayMatches(input: ResolveManualReviewRequest, existing: ResolveManualReviewRequest): void {
+  const comparisons: readonly [string, unknown, unknown][] = [
+    ['request_id', input.request_id, existing.request_id],
+    ['trace_id', input.trace_id, existing.trace_id],
+    ['policy_version', input.policy_version, existing.policy_version],
+    ['registry_version', input.registry_version, existing.registry_version],
+    ['resolution_ref', input.resolution_ref, existing.resolution_ref],
+  ];
+  const mismatch = comparisons.find(([, requested, persisted]) => !agentWorkflowValuesEqual(requested, persisted));
+  if (mismatch !== undefined) {
+    throw new AgentWorkflowRouteValidationError(
+      `manual_review idempotency_key replay does not match original request ${mismatch[0]}.`,
+      { statusCode: 409, code: 'invalid_state' },
+    );
   }
 }
 
@@ -2067,6 +2709,20 @@ function isRecordVisibleToReader(
   return reader.projectId === undefined || record.project_id === reader.projectId;
 }
 
+function isWorkflowMutationVisible(record: WorkflowControlRecord, reader: AgentWorkflowReadContext): boolean {
+  return reader.projectId !== undefined && isRecordVisibleToReader(record, reader);
+}
+
+function isArtifactVisibleToReader(record: TaskArtifactControlRecord, reader: AgentWorkflowReadContext): boolean {
+  if (!isRecordVisibleToReader(record, reader)) return false;
+  const projectAllowed = record.acl_scope.allowed_project_refs.includes(record.project_id);
+  const principalAllowed = record.acl_scope.allowed_principal_refs.includes(reader.principalId);
+  if (record.sensitivity_label === 'confidential' || record.sensitivity_label === 'restricted') {
+    return projectAllowed && principalAllowed;
+  }
+  return projectAllowed && principalAllowed;
+}
+
 function isApprovalVisibleToReader(record: ApprovalControlRecord, reader: AgentWorkflowReadContext): boolean {
   const requiredPrincipal = record.approver_policy.required_principal_ref;
   const principalVisible =
@@ -2078,6 +2734,23 @@ function isApprovalVisibleToReader(record: ApprovalControlRecord, reader: AgentW
 
 function isApprovalMutationProjectVisible(record: ApprovalControlRecord, reader: AgentWorkflowReadContext): boolean {
   return reader.projectId !== undefined && record.project_id === reader.projectId;
+}
+
+function isManualReviewVisibleToReader(record: ManualReviewControlRecord, reader: AgentWorkflowReadContext): boolean {
+  const principalVisible =
+    record.principal_id === reader.principalId ||
+    record.owner_principal_id === reader.principalId;
+  return principalVisible && (reader.projectId === undefined || record.project_id === reader.projectId);
+}
+
+function isManualReviewMutationVisible(record: ManualReviewControlRecord, reader: AgentWorkflowReadContext): boolean {
+  return reader.projectId !== undefined && record.project_id === reader.projectId;
+}
+
+function leaseStatusFromRef(lease: AgentRunControlRecord['lease_ref'], now: string): WorkflowControlRecord['lease_state']['lease_status'] {
+  if (lease.lease_id === null) return 'none';
+  if (lease.expires_at !== null && isExpiredAt(lease.expires_at, now)) return 'expired';
+  return 'active';
 }
 
 function getOptionalHeaderValue(
@@ -2159,7 +2832,13 @@ function isExpiredAt(expiresAt: string | null, now: string): boolean {
 }
 
 function isTerminalArtifactLifecycle(event: ArtifactLifecycleControlRecord | undefined): boolean {
-  return event?.state === 'deleted' || event?.state === 'redacted' || event?.action === 'deleted' || event?.action === 'redacted';
+  return (
+    event?.state === 'deleted' ||
+    event?.state === 'redacted' ||
+    event?.state === 'expired' ||
+    event?.action === 'deleted' ||
+    event?.action === 'redacted'
+  );
 }
 
 const nonEmptyStringSchema = z.string().min(1);
@@ -2298,6 +2977,7 @@ const taskCancellationRequestSchema = z
     policy_version: nonEmptyStringSchema,
     registry_version: nonEmptyStringSchema,
     cancellation_reason: nonEmptyStringSchema.nullable(),
+    execution_status: z.enum(['queued', 'running', 'waiting_for_approval', 'terminal']),
   })
   .strict();
 
@@ -2334,6 +3014,28 @@ export const cancelTaskRequestSchema = z
     policy_version: nonEmptyStringSchema,
     registry_version: nonEmptyStringSchema,
     cancellation_reason: nonEmptyStringSchema.optional(),
+  })
+  .strict();
+
+export const retryWorkflowRequestSchema = z
+  .object({
+    request_id: nonEmptyStringSchema,
+    trace_id: nonEmptyStringSchema,
+    policy_version: nonEmptyStringSchema,
+    registry_version: nonEmptyStringSchema,
+    idempotency_key: nonEmptyStringSchema,
+    retry_reason_ref: opaqueRefSchema.optional(),
+  })
+  .strict();
+
+export const resolveManualReviewRequestSchema = z
+  .object({
+    request_id: nonEmptyStringSchema,
+    trace_id: nonEmptyStringSchema,
+    policy_version: nonEmptyStringSchema,
+    registry_version: nonEmptyStringSchema,
+    idempotency_key: nonEmptyStringSchema,
+    resolution_ref: opaqueRefSchema,
   })
   .strict();
 
@@ -2420,6 +3122,81 @@ export const workflowResponseSchema = z
     cost_refs: z.array(costRefSchema),
     created_at: nonEmptyStringSchema,
     updated_at: nonEmptyStringSchema,
+  })
+  .strict();
+
+export const workflowRetryResponseSchema = z
+  .object({
+    workflow_id: nonEmptyStringSchema,
+    request_id: nonEmptyStringSchema,
+    trace_id: nonEmptyStringSchema,
+    policy_version: nonEmptyStringSchema,
+    registry_version: nonEmptyStringSchema,
+    idempotency: idempotencyRefSchema,
+    requested_by_principal_id: nonEmptyStringSchema,
+    retry_state: z.literal('scheduled'),
+    retry_reason_ref: opaqueRefSchema.nullable(),
+    audit_ref: auditRefSchema,
+    created_at: nonEmptyStringSchema,
+  })
+  .strict();
+
+export const manualReviewResponseSchema = z
+  .object({
+    contract_version: z.literal(gatewayControlContractVersion),
+    manual_review_item_id: nonEmptyStringSchema,
+    workflow_id: nonEmptyStringSchema,
+    workflow_run_id: nonEmptyStringSchema,
+    task_id: nonEmptyStringSchema.nullable(),
+    request_id: nonEmptyStringSchema,
+    reason_ref: opaqueRefSchema,
+    owner_principal_id: nonEmptyStringSchema,
+    owner_role: nonEmptyStringSchema.nullable(),
+    blocking_state: z.enum(['blocking_workflow', 'blocking_step', 'informational']),
+    review_state: z.enum(['open', 'in_progress', 'resolved', 'closed']),
+    safe_actions: z.array(opaqueRefSchema),
+    side_effect_refs: z.array(opaqueRefSchema),
+    resolution_ref: opaqueRefSchema.nullable(),
+    resolution_audit_ref: auditRefSchema.nullable(),
+    idempotency: idempotencyRefSchema,
+    principal_id: nonEmptyStringSchema,
+    project_id: nonEmptyStringSchema,
+    data_class: dataClassSchema,
+    budget_scope_id: nonEmptyStringSchema,
+    policy_version: nonEmptyStringSchema,
+    registry_version: nonEmptyStringSchema,
+    trace_id: nonEmptyStringSchema,
+    created_at: nonEmptyStringSchema,
+    updated_at: nonEmptyStringSchema,
+  })
+  .strict();
+
+export const workflowLeaseStatusResponseSchema = z
+  .object({
+    workflow_id: nonEmptyStringSchema,
+    workflow_run_id: nonEmptyStringSchema,
+    workflow_status: workflowStateSchema,
+    workflow_lease: leaseStateSchema,
+    agent_run_leases: z.array(
+      z
+        .object({
+          agent_run_id: nonEmptyStringSchema,
+          lease_ref: z
+            .object({
+              lease_id: nonEmptyStringSchema.nullable(),
+              lease_owner_ref: nonEmptyStringSchema.nullable(),
+              heartbeat_at: nonEmptyStringSchema.nullable(),
+              expires_at: nonEmptyStringSchema.nullable(),
+            })
+            .strict(),
+          status: agentRunStatusSchema,
+        })
+        .strict(),
+    ),
+    active_count: z.number().int().nonnegative(),
+    expired_count: z.number().int().nonnegative(),
+    stuck_count: z.number().int().nonnegative(),
+    checked_at: nonEmptyStringSchema,
   })
   .strict();
 
@@ -2655,6 +3432,16 @@ export const denyApprovalRequestSchema = z
   })
   .strict();
 
+export const expireApprovalRequestSchema = z
+  .object({
+    request_id: nonEmptyStringSchema,
+    trace_id: nonEmptyStringSchema,
+    policy_version: nonEmptyStringSchema,
+    registry_version: nonEmptyStringSchema,
+    expiry_reason_ref: opaqueRefSchema.optional(),
+  })
+  .strict();
+
 export const approvalListQuerySchema = z
   .object({
     state: approvalStatusSchema.optional(),
@@ -2751,6 +3538,12 @@ export function asDenyApprovalRequest(body: unknown): DenyApprovalRequest {
   return input;
 }
 
+export function asExpireApprovalRequest(body: unknown): ExpireApprovalRequest {
+  const input = expireApprovalRequestSchema.parse(body);
+  assertNoForbiddenAgentWorkflowFields(input);
+  return input;
+}
+
 export function asApprovalListFilter(query: unknown): ApprovalListFilter {
   if (query === undefined) return {};
   return approvalListQuerySchema.parse(query);
@@ -2799,6 +3592,7 @@ export const outboxStatusResponseSchema = z
   .object({
     counts_by_state: z.record(outboxDeliveryStateSchema, z.number().int().nonnegative()),
     counts_by_destination: z.record(outboxDestinationKindSchema, z.number().int().nonnegative()),
+    backlog_count: z.number().int().nonnegative(),
     failed_count: z.number().int().nonnegative(),
     dead_lettered_count: z.number().int().nonnegative(),
     total: z.number().int().nonnegative(),
@@ -2866,6 +3660,7 @@ export const artifactSignedAccessRequestSchema = z
     trace_id: nonEmptyStringSchema,
     policy_version: nonEmptyStringSchema,
     registry_version: nonEmptyStringSchema,
+    requested_duration_seconds: z.number().int().positive().max(900).optional(),
   })
   .strict();
 
@@ -2923,6 +3718,16 @@ export const artifactSignedAccessDecisionResponseSchema = z
     eligible: z.boolean(),
     requires_approval: z.boolean(),
     max_signed_duration_seconds: z.number().int().nonnegative().nullable(),
+    sha256: z.string().regex(/^[a-fA-F0-9]{64}$/u),
+    signed_access: z
+      .object({
+        signed_url: z.string().url(),
+        expires_at: nonEmptyStringSchema,
+        ttl_seconds: z.number().int().positive().max(900),
+        sha256: z.string().regex(/^[a-fA-F0-9]{64}$/u),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

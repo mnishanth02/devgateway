@@ -5,7 +5,9 @@ import {
   type RouterHistory,
 } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
+import { ApprovalQueueView } from './routes/approval-queue-view.js';
 import { AuthenticatedAdminLayout } from './routes/authenticated-admin-layout.js';
+import { DurableOperationsView } from './routes/durable-operations-view.js';
 import { OperationsHome } from './routes/operations-home.js';
 import { TaskTraceView } from './routes/task-trace-view.js';
 
@@ -40,7 +42,19 @@ const traceRoute = createRoute({
   component: TaskTraceView,
 });
 
-export const routeTree = rootRoute.addChildren([indexRoute, traceRoute]);
+const approvalsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/approvals',
+  component: ApprovalQueueView,
+});
+
+const durableOperationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/durable-operations',
+  component: DurableOperationsView,
+});
+
+export const routeTree = rootRoute.addChildren([indexRoute, traceRoute, approvalsRoute, durableOperationsRoute]);
 
 export function createAdminRouter(options: CreateAdminRouterOptions) {
   const routerOptions = {

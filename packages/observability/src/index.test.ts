@@ -7,6 +7,7 @@ import {
   createGatewayRequestMetric,
   createOtlpHttpExporterConfig,
   createInMemoryAuditEventSink,
+  createDefaultInMemoryWorkflowOutboxConsumers,
   createInMemoryCostEventSink,
   attachRequestTraceContext,
   createRequestTraceContext,
@@ -14,6 +15,8 @@ import {
   createResourceAttributes,
   createStructuredLogger,
   emitAuditEvent,
+  consumeWorkflowOutboxEvent,
+  destinationScopedIdempotencyKey,
   emitCostEvent,
   ForbiddenTelemetryFieldError,
   formatAuditEvent,
@@ -31,6 +34,7 @@ import {
   type AuditEventInput,
   type CostEventInput,
   type OpenTelemetryRuntime,
+  type WorkflowOutboxConsumerEvent,
 } from './index.ts';
 
 describe('observability trace and log helpers', () => {
@@ -40,6 +44,7 @@ describe('observability trace and log helpers', () => {
       'x-devgateway-request-id': 'req_123',
       'x-devgateway-sampling-decision': 'drop',
     });
+
 
     assert.equal(context.traceId, '0123456789abcdef0123456789abcdef');
     assert.equal(context.parentSpanId, '0123456789abcdef');
@@ -329,6 +334,57 @@ describe('observability trace and log helpers', () => {
   });
 });
 
+describe('workflow outbox consumers', () => {
+  const baseEvent: WorkflowOutboxConsumerEvent = {
+    outboxId: 'outbox_001',
+    workflowId: 'wf_001',
+    sourceEventRef: 'workflow_event_001',
+    destinationKind: 'trace',
+    idempotencyKey: 'outbox:trace-source-001',
+    traceId: '0123456789abcdef0123456789abcdef',
+    requestId: 'req_001',
+  };
+
+  it('deduplicates duplicate trace deliveries by destination and source event', async () => {
+    const { consumers, sinks } = createDefaultInMemoryWorkflowOutboxConsumers();
+
+    const first = await consumeWorkflowOutboxEvent(baseEvent, consumers);
+    const duplicate = await consumeWorkflowOutboxEvent({ ...baseEvent, outboxId: 'outbox_retry_001' }, consumers);
+
+    assert.equal(first.status, 'delivered');
+    assert.equal(duplicate.status, 'duplicate');
+    assert.equal(sinks.trace.deliveredEvents.length, 1);
+  });
+
+  it('routes audit, portal-notification, and eval-evidence deliveries to idempotent sinks', async () => {
+    const { consumers, sinks } = createDefaultInMemoryWorkflowOutboxConsumers();
+
+    await consumeWorkflowOutboxEvent({ ...baseEvent, destinationKind: 'audit', idempotencyKey: 'outbox:audit' }, consumers);
+    await consumeWorkflowOutboxEvent({ ...baseEvent, destinationKind: 'notification', idempotencyKey: 'outbox:notification' }, consumers);
+    await consumeWorkflowOutboxEvent({ ...baseEvent, destinationKind: 'portal_update', idempotencyKey: 'outbox:portal' }, consumers);
+    await consumeWorkflowOutboxEvent({ ...baseEvent, destinationKind: 'eval_evidence', idempotencyKey: 'outbox:eval' }, consumers);
+
+    assert.equal(sinks.audit.deliveredEvents.length, 1);
+    assert.equal(sinks.portalNotification.deliveredEvents.length, 2);
+    assert.equal(sinks.evalEvidence.deliveredEvents.length, 1);
+  });
+
+  it('keeps destination-scoped idempotency keys collision-free when components contain delimiters', () => {
+    const first = destinationScopedIdempotencyKey({
+      destinationKind: 'trace',
+      sourceEventRef: 'workflow:event',
+      idempotencyKey: 'outbox',
+    });
+    const second = destinationScopedIdempotencyKey({
+      destinationKind: 'trace',
+      sourceEventRef: 'workflow',
+      idempotencyKey: 'event:outbox',
+    });
+
+    assert.notEqual(first, second);
+  });
+});
+
 describe('audit telemetry helpers', () => {
   it('formats gateway-contract audit fields and contract rows', () => {
     const event = formatAuditEvent(baseAuditInput());
@@ -496,6 +552,7 @@ describe('cost telemetry helpers', () => {
     const release = formatBudgetLifecycleCostEvent({
       ...baseCostInput({ actual: noActualUsage, usageSource: 'not_available' }),
       phase: 'release',
+      reservationState: 'reconciled',
     });
 
     assert.equal(reservation.eventName, 'cost.budget.reservation');
@@ -503,19 +560,24 @@ describe('cost telemetry helpers', () => {
     assert.equal(reservation.event.attempt_status, 'started');
     assert.equal(reservation.event.actual.source, 'not_available');
     assert.equal(reservation.metadata.budget_lifecycle_phase, 'reservation');
+    assert.equal(reservation.reservationState, 'held');
+    assert.equal(reservation.metadata.budget_reservation_state, 'held');
     assert.equal(reservation.metadata.represented_event_type, 'estimate');
 
     assert.equal(settlement.eventName, 'cost.budget.settlement');
     assert.equal(settlement.event.event_type, 'actual');
     assert.equal(settlement.event.attempt_status, 'succeeded');
+    assert.equal(settlement.reservationState, 'settled');
     assert.equal(settlement.metadata.budget_lifecycle_phase, 'settlement');
 
     assert.equal(release.eventName, 'cost.budget.release');
+    assert.equal(release.reservationState, 'reconciled');
     assert.equal(release.event.event_type, 'reconciliation');
     assert.equal(release.event.attempt_status, 'cancelled');
     assert.equal(release.event.actual.source, 'not_available');
     assert.equal(release.event.usage_source, 'not_available');
     assert.equal(release.metadata.budget_lifecycle_phase, 'release');
+    assert.equal(release.metadata.budget_reservation_state, 'reconciled');
   });
 
   it('rejects forbidden budget lifecycle aggregation target fields', () => {

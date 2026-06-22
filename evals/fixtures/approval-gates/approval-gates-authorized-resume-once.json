@@ -1,0 +1,36 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 3 fixture; not real customer, repository, provider, production telemetry, prompt, artifact body, or secret data.",
+  "case_id": "approval-gates-authorized-resume-once",
+  "category": "resume",
+  "track": "track-3-durable-execution",
+  "chaos_scenario": {
+    "postgres_required": true,
+    "approval_state": "approved"
+  },
+  "workflow_fixture": {
+    "workflow_id_ref": "fixture-ref:workflow:approval-gates-authorized-resume-once",
+    "postgres_required": true,
+    "provider_mode": "fixture",
+    "live_provider_calls": false,
+    "production_enablement": false,
+    "inputs": {
+      "decision": "approved",
+      "approver_role": "authorized_project_approver"
+    }
+  },
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "An authorized unexpired approval resumes the paused step exactly once.",
+    "A replayed approval decision is idempotently ignored without a second resume.",
+    "The resumed workflow uses trusted Control API decision records, not model-supplied approval claims."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/approval-gates/approval-gates-authorized-resume-once/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/approval-gates/approval-gates-authorized-resume-once/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/approval-gates/approval-gates-authorized-resume-once/audit-event.json"
+  }
+}

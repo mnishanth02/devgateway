@@ -1,0 +1,334 @@
+{
+  "contract_version": "0.1.0",
+  "dataset_id": "workflow-outbox.v0.1",
+  "dataset_version": "0.1.0",
+  "suite": "workflow_outbox",
+  "schema_status": "layout_stub_until_shared_eval_schema_generalizes_beyond_acl_safety",
+  "description": "Synthetic Track 3 workflow-outbox fixtures for atomic enqueue, crash recovery, idempotent at-least-once delivery, and backlog visibility.",
+  "fixture_root": "evals/fixtures/workflow-outbox",
+  "inert_fixture_mode": true,
+  "no_live_external_calls": true,
+  "production_enablement": false,
+  "source_data_policy": {
+    "synthetic_only": true,
+    "no_real_customer_data": true,
+    "no_real_repo_data": true,
+    "no_live_external_calls": true,
+    "fixture_review_required": true
+  },
+  "categories": [
+    "atomic_enqueue",
+    "crash_recovery",
+    "idempotent_delivery",
+    "dead_letter",
+    "observability"
+  ],
+  "artifact_ref_policy": {
+    "required": true,
+    "description": "Each Track 3 fixture case declares expected gate-result, trace, and audit artifacts that a future runner or chaos gate must write."
+  },
+  "cases": [
+    {
+      "case_id": "workflow-outbox-state-change-atomic-enqueue",
+      "category": "atomic_enqueue",
+      "title": "Workflow state change and outbox enqueue are atomic",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/workflow-outbox/workflow-outbox-state-change-atomic-enqueue.json",
+          "sha256_required": true,
+          "description": "Inert Track 3 fixture for workflow-outbox-state-change-atomic-enqueue."
+        }
+      ],
+      "inputs": {
+        "state_transition": "created_to_queued",
+        "destinations": [
+          "trace",
+          "portal_update"
+        ]
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Outbox events are enqueued in the same transaction as the workflow state transition.",
+          "Rolling back the transaction removes both the state change and its outbox rows.",
+          "Outbox payloads contain only metadata refs and no raw prompts, artifacts, tokens, or provider payloads."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/workflow-outbox/workflow-outbox-state-change-atomic-enqueue/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/workflow-outbox/workflow-outbox-state-change-atomic-enqueue/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/workflow-outbox/workflow-outbox-state-change-atomic-enqueue/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "workflow_event_ref",
+        "outbox_id",
+        "destination_kind"
+      ],
+      "tags": [
+        "track-3",
+        "outbox",
+        "postgres"
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      },
+      "chaos_scenario": {
+        "postgres_required": true,
+        "transaction_boundary": "state_and_outbox"
+      }
+    },
+    {
+      "case_id": "workflow-outbox-crash-before-delivery",
+      "category": "crash_recovery",
+      "title": "Outbox claim survives crash before delivery",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/workflow-outbox/workflow-outbox-crash-before-delivery.json",
+          "sha256_required": true,
+          "description": "Inert Track 3 fixture for workflow-outbox-crash-before-delivery."
+        }
+      ],
+      "inputs": {
+        "failure_point": "after_outbox_claim_before_delivery",
+        "lease_ttl_seconds": 1
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "An outbox event claimed before a worker crash is reclaimed after its delivery lease expires.",
+          "The reclaimed event retains its original source event and idempotency key.",
+          "No delivery is marked successful until the destination consumer acknowledges the event."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/workflow-outbox/workflow-outbox-crash-before-delivery/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/workflow-outbox/workflow-outbox-crash-before-delivery/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/workflow-outbox/workflow-outbox-crash-before-delivery/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "outbox_id",
+        "source_event_ref",
+        "delivery_lease_ref"
+      ],
+      "tags": [
+        "track-3",
+        "outbox",
+        "chaos-gate",
+        "postgres"
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      },
+      "chaos_scenario": {
+        "postgres_required": true,
+        "fault": "crash_before_delivery_ack"
+      }
+    },
+    {
+      "case_id": "workflow-outbox-duplicate-delivery-idempotent",
+      "category": "idempotent_delivery",
+      "title": "Duplicate at-least-once delivery is idempotent",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/workflow-outbox/workflow-outbox-duplicate-delivery-idempotent.json",
+          "sha256_required": true,
+          "description": "Inert Track 3 fixture for workflow-outbox-duplicate-delivery-idempotent."
+        }
+      ],
+      "inputs": {
+        "destination_kind": "audit",
+        "delivery_semantics": "at_least_once"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Duplicate outbox appends for the same destination and source event collapse to one delivery record.",
+          "Destination consumers treat repeated delivery attempts as idempotent replays.",
+          "Replay evidence records the idempotency key without duplicating audit, portal, trace, or eval effects."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/workflow-outbox/workflow-outbox-duplicate-delivery-idempotent/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/workflow-outbox/workflow-outbox-duplicate-delivery-idempotent/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/workflow-outbox/workflow-outbox-duplicate-delivery-idempotent/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "outbox_id",
+        "destination_kind",
+        "idempotency_key"
+      ],
+      "tags": [
+        "track-3",
+        "outbox",
+        "idempotency",
+        "postgres"
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      },
+      "chaos_scenario": {
+        "postgres_required": true,
+        "fault": "duplicate_delivery"
+      }
+    },
+    {
+      "case_id": "workflow-outbox-dead-letter-after-retries",
+      "category": "dead_letter",
+      "title": "Outbox dead-letters after repeated destination failures",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/workflow-outbox/workflow-outbox-dead-letter-after-retries.json",
+          "sha256_required": true,
+          "description": "Inert Track 3 fixture for workflow-outbox-dead-letter-after-retries."
+        }
+      ],
+      "inputs": {
+        "destination_failure": "persistent",
+        "max_attempts_exhausted": true
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Repeated destination failures stop retrying after the configured exhaustion threshold.",
+          "The event is marked dead_lettered or manual_review with sanitized destination failure evidence.",
+          "Production delivery remains fail-closed until the dead-letter or manual-review item is resolved."
+        ],
+        "no_production_enablement": true,
+        "required_denial_reason": "outbox_delivery_exhausted"
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/workflow-outbox/workflow-outbox-dead-letter-after-retries/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/workflow-outbox/workflow-outbox-dead-letter-after-retries/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/workflow-outbox/workflow-outbox-dead-letter-after-retries/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "outbox_id",
+        "destination_kind",
+        "dead_letter_reason"
+      ],
+      "tags": [
+        "track-3",
+        "outbox",
+        "dead-letter",
+        "postgres"
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      },
+      "chaos_scenario": {
+        "postgres_required": true,
+        "fault": "persistent_destination_failure"
+      }
+    },
+    {
+      "case_id": "workflow-outbox-backlog-observable",
+      "category": "observability",
+      "title": "Outbox backlog is observable without exposing payload bodies",
+      "severity": "medium",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/workflow-outbox/workflow-outbox-backlog-observable.json",
+          "sha256_required": true,
+          "description": "Inert Track 3 fixture for workflow-outbox-backlog-observable."
+        }
+      ],
+      "inputs": {
+        "summary_fields": [
+          "total",
+          "due",
+          "by_state",
+          "by_destination",
+          "oldest_enqueued_at"
+        ]
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Backlog summaries report counts, due work, oldest age, state buckets, and destination buckets.",
+          "Backlog summaries omit raw outbox payload bodies, prompts, artifact bodies, tokens, and provider responses.",
+          "Operators can distinguish pending, delivering, delivered, retrying, and dead-lettered metadata states."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/workflow-outbox/workflow-outbox-backlog-observable/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/workflow-outbox/workflow-outbox-backlog-observable/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/workflow-outbox/workflow-outbox-backlog-observable/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "outbox_backlog_ref",
+        "summary_generated_at"
+      ],
+      "tags": [
+        "track-3",
+        "outbox",
+        "observability",
+        "postgres"
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      },
+      "chaos_scenario": {
+        "postgres_required": true,
+        "fault": "backlog_observation"
+      }
+    }
+  ]
+}

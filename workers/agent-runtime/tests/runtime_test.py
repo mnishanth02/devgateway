@@ -25,6 +25,7 @@ from devgateway_agent_runtime import (  # noqa: E402
     GovernedFixtureModelAdapter,
     FixtureWorkflowRunner,
     InMemoryRuntimeRepository,
+    Lease,
     LeasePolicy,
     ModelPolicyError,
     ModelRequest,
@@ -77,6 +78,7 @@ from devgateway_agent_runtime.idempotency import (  # noqa: E402
     IdempotencyStatus,
     stable_idempotency_key,
 )
+from devgateway_agent_runtime.executor import CancellationObserved  # noqa: E402
 
 
 class StaticFixtureModelAdapter:
@@ -125,6 +127,37 @@ class StaticFixtureModelAdapter:
             elif field_type == PrimitiveSchemaType.BOOLEAN.value:
                 output[field_name] = True
         return output
+
+
+class CancellationAwareMemoryRepository(InMemoryRuntimeRepository):
+    def __init__(self) -> None:
+        super().__init__()
+        self.active_cancellations: set[str] = set()
+
+    def has_active_cancellation(self, workflow_id: str, step_id: str | None = None) -> bool:
+        del step_id
+        return workflow_id in self.active_cancellations
+
+    def cancel_step(
+        self,
+        step_id: str,
+        *,
+        lease: Lease,
+        safe_interruptible: bool = False,
+        trace_context: TraceContext,
+    ):
+        del safe_interruptible
+        return self.update_step_state(step_id, StepState.CANCELLED, trace_context=trace_context, lease=lease)
+
+
+class AbortRecordingModelAdapter(StaticFixtureModelAdapter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.abort_requests: list[str] = []
+
+    def abort(self, request_ref: str, *, reason_ref: str | None = None):
+        self.abort_requests.append(request_ref)
+        return f"aborted:{reason_ref or 'cancellation'}"
 
 
 class RuntimeContractsTest(unittest.TestCase):
@@ -586,6 +619,142 @@ class RuntimeContractsTest(unittest.TestCase):
         self.assertEqual(stats["idle_polls"], 0)
         self.assertEqual([step.state for step in repository.list_steps(workflow.workflow_id)].count(StepState.COMPLETED), 2)
         self.assertEqual([step.state for step in repository.list_steps(workflow.workflow_id)].count(StepState.PENDING), 1)
+
+    def test_runtime_service_routes_retryable_handler_failures_through_retry_policy(self) -> None:
+        from devgateway_agent_runtime.service import RuntimeServicePolicy, RuntimeWorkerService
+
+        repository = InMemoryRuntimeRepository()
+        workflow = self._create_workflow(repository, workflow_id="wf_service_retry", state=WorkflowState.RUNNING)
+        self._add_step(repository, workflow, step_id="step_service_retry", kind=StepKind.PLANNING)
+
+        def handler(_step: WorkflowStep, _trace_context: TraceContext) -> StepExecutionResult:
+            raise OSError("transient adapter failure")
+
+        service = RuntimeWorkerService(
+            repository,
+            handler,
+            policy=RuntimeServicePolicy(
+                retry=RetryPolicy(max_attempts=3, base_delay_seconds=0.0, max_delay_seconds=0.0, jitter=False),
+            ),
+        )
+
+        self.assertTrue(service.run_once(workflow_id=workflow.workflow_id, kinds=(StepKind.PLANNING,)))
+        self.assertEqual(repository.get_step("step_service_retry").state, StepState.PENDING)  # type: ignore[union-attr]
+        self.assertEqual(service.stats.failed_steps, 1)
+
+    def test_runtime_service_opens_manual_review_for_ambiguous_handler_failures(self) -> None:
+        from devgateway_agent_runtime.service import RuntimeWorkerService
+
+        repository = InMemoryRuntimeRepository()
+        workflow = self._create_workflow(repository, workflow_id="wf_service_review", state=WorkflowState.RUNNING)
+        self._add_step(repository, workflow, step_id="step_service_review", kind=StepKind.PLANNING)
+
+        def handler(_step: WorkflowStep, _trace_context: TraceContext) -> StepExecutionResult:
+            raise RuntimeError("unknown side effect status")
+
+        service = RuntimeWorkerService(repository, handler)
+
+        self.assertTrue(service.run_once(workflow_id=workflow.workflow_id, kinds=(StepKind.PLANNING,)))
+        self.assertEqual(repository.get_step("step_service_review").state, StepState.MANUAL_REVIEW)  # type: ignore[union-attr]
+        self.assertEqual(service.stats.failed_steps, 1)
+
+    def test_runtime_service_marks_abrupt_base_exception_for_review_and_reraises(self) -> None:
+        from devgateway_agent_runtime.service import RuntimeWorkerService
+
+        class AbruptStop(BaseException):
+            pass
+
+        repository = InMemoryRuntimeRepository()
+        workflow = self._create_workflow(repository, workflow_id="wf_service_abrupt", state=WorkflowState.RUNNING)
+        self._add_step(repository, workflow, step_id="step_service_abrupt", kind=StepKind.PLANNING)
+
+        def handler(_step: WorkflowStep, _trace_context: TraceContext) -> StepExecutionResult:
+            raise AbruptStop()
+
+        service = RuntimeWorkerService(repository, handler)
+
+        with self.assertRaises(AbruptStop):
+            service.run_once(workflow_id=workflow.workflow_id, kinds=(StepKind.PLANNING,))
+        self.assertEqual(repository.get_step("step_service_abrupt").state, StepState.MANUAL_REVIEW)  # type: ignore[union-attr]
+        self.assertEqual(service.stats.failed_steps, 1)
+
+    def test_background_workers_rollback_and_reraise_base_exceptions(self) -> None:
+        from devgateway_agent_runtime.approval_expiry_worker import ApprovalExpiryWorker
+        from devgateway_agent_runtime.budget_reaper import BudgetReaper
+        from devgateway_agent_runtime.cancellation_worker import CancellationWorker
+
+        class AbruptStop(BaseException):
+            pass
+
+        class CancellationRepo:
+            def propagate_cancellations(self, **_kwargs: object) -> dict[str, int]:
+                raise AbruptStop()
+
+        class BudgetRepo:
+            def reap_orphaned_budget_reservations(self, **_kwargs: object) -> dict[str, int]:
+                raise AbruptStop()
+
+        class ApprovalRepo:
+            def expire_due_approvals(self, **_kwargs: object) -> int:
+                raise AbruptStop()
+
+        for worker in (
+            CancellationWorker(CancellationRepo(), commit=lambda: commits.append("commit"), rollback=lambda: rollbacks.append("rollback")),
+            BudgetReaper(BudgetRepo(), commit=lambda: commits.append("commit"), rollback=lambda: rollbacks.append("rollback")),
+            ApprovalExpiryWorker(ApprovalRepo(), commit=lambda: commits.append("commit"), rollback=lambda: rollbacks.append("rollback")),
+        ):
+            commits: list[str] = []
+            rollbacks: list[str] = []
+            with self.subTest(worker=type(worker).__name__):
+                with self.assertRaises(AbruptStop):
+                    worker.run_once()
+                self.assertEqual(commits, [])
+                self.assertEqual(rollbacks, ["rollback"])
+
+    def test_dispatcher_checks_cancellation_before_claim(self) -> None:
+        repository = CancellationAwareMemoryRepository()
+        workflow = self._create_workflow(repository, workflow_id="wf_dispatch_cancel")
+        repository.transition_workflow(workflow.workflow_id, WorkflowState.QUEUED, trace_context=workflow.trace_context.child())
+        self._add_step(repository, workflow, step_id="step_dispatch_cancel", kind=StepKind.PLANNING)
+        repository.active_cancellations.add(workflow.workflow_id)
+        handler_calls: list[str] = []
+
+        dispatcher = BoundedDispatcher(
+            repository,
+            lambda step, _trace_context: handler_calls.append(step.step_id) or StepExecutionResult(
+                output_ref=f"fixture-ref:step-output:{step.step_id}",
+                event_refs={},
+            ),
+            policy=DispatcherPolicy(max_steps_per_run=1, polling=PollingBackoffPolicy(max_idle_polls=1)),
+        )
+
+        self.assertTrue(dispatcher.dispatch_one(workflow_id=workflow.workflow_id, kinds=(StepKind.PLANNING,)))
+        self.assertEqual(handler_calls, [])
+        self.assertEqual(repository.get_step("step_dispatch_cancel").state, StepState.CANCELLED)  # type: ignore[union-attr]
+
+    def test_executor_observes_cancellation_and_attempts_abort_before_side_effects(self) -> None:
+        repository = CancellationAwareMemoryRepository()
+        workflow = self._create_workflow(repository, workflow_id="wf_executor_cancel")
+        schema = self._execution_schema()
+        parent_scope = self._execution_parent_scope(schema, workflow.workflow_id)
+        delegation = self._execution_delegation(workflow, schema, parent_scope)
+        adapter = AbortRecordingModelAdapter()
+
+        def activate_after_model(request: ModelRequest) -> ModelResult:
+            result = StaticFixtureModelAdapter.invoke(adapter, request)
+            repository.active_cancellations.add(request.workflow_id)
+            return result
+
+        adapter.invoke = activate_after_model  # type: ignore[method-assign]
+
+        with self.assertRaises(CancellationObserved):
+            FixtureSubAgentExecutor(repository, adapter).execute(delegation, parent_scope=parent_scope)  # type: ignore[arg-type]
+
+        self.assertEqual(adapter.abort_requests, [delegation.to_model_request().request_ref])
+        self.assertEqual(
+            [record.scope for record in repository.list_idempotency_records()],
+            [],
+        )
 
     def test_fixture_runner_completes_and_records_all_idempotency_scopes(self) -> None:
         payload = FixtureWorkflowRunner.default().run()
@@ -1917,6 +2086,27 @@ class PostgresRepositoryTest(unittest.TestCase):
             self.assertEqual(record.scope, IdempotencyScope.WORKFLOW_CREATION)
             self.assertEqual(record.key, "test-key-map")
 
+    def test_event_type_to_db_maps_approval_resume_events(self) -> None:
+        from devgateway_agent_runtime.postgres_repository import event_type_to_db
+
+        self.assertEqual(event_type_to_db("approval.approved.resumed"), "approval_approved")
+        self.assertEqual(event_type_to_db("approval.denied.resumed"), "approval_denied")
+        self.assertEqual(event_type_to_db("approval.expired.resumed"), "approval_expired")
+
+    def test_step_attempt_replay_decisions_include_runtime_recovery_values(self) -> None:
+        from devgateway_agent_runtime.postgres_repository import STEP_ATTEMPT_REPLAY_DECISIONS
+
+        self.assertTrue(
+            {
+                "pre_side_effect",
+                "idempotent_pre_side_effect",
+                "ambiguous_post_side_effect",
+                "retry_scheduled",
+                "terminal_failure",
+                "manual_review",
+            }.issubset(STEP_ATTEMPT_REPLAY_DECISIONS)
+        )
+
     # ------------------------------------------------------------------
     # 4. SQL generation – FOR UPDATE SKIP LOCKED
     # ------------------------------------------------------------------
@@ -1926,20 +2116,23 @@ class PostgresRepositoryTest(unittest.TestCase):
         from devgateway_agent_runtime.contracts import TERMINAL_WORKFLOW_STATES
 
         terminal = [s.value for s in TERMINAL_WORKFLOW_STATES]
+        now = utc_now()
         sql, params = build_claim_step_query(
             workflow_id="wf_claim_sql",
             kinds=[StepKind.PLANNING, StepKind.RUNNING],
             project_id=1,
-            now=utc_now(),
+            now=now,
             terminal_states=terminal,
         )
 
         sql_upper = sql.upper()
         self.assertIn("FOR UPDATE", sql_upper)
         self.assertIn("SKIP LOCKED", sql_upper)
+        self.assertIn("(WS.NEXT_ATTEMPT_AT IS NULL OR WS.NEXT_ATTEMPT_AT <= %S)", sql_upper)
         self.assertIn("wf_claim_sql", params)
         self.assertIn("created", params)
         self.assertIn("planning", params)
+        self.assertEqual(params.count(now), 2)
         for t in terminal:
             self.assertIn(t, params)
 
@@ -2464,6 +2657,44 @@ class RetryHelpersTest(unittest.TestCase):
         self.assertAlmostEqual(calculate_backoff(policy, 1), 2.0)
         self.assertAlmostEqual(calculate_backoff(policy, 2), 6.0)
         self.assertAlmostEqual(calculate_backoff(policy, 3), 18.0)
+
+    def test_exponential_backoff_overflow_clamps_to_safe_max_delay(self) -> None:
+        from devgateway_agent_runtime.retry import MAX_SAFE_RETRY_DELAY_SECONDS, calculate_backoff
+
+        policy = RetryPolicy(
+            max_attempts=3,
+            backoff_policy=RetryBackoffPolicy(
+                backoff_type=RetryBackoffType.EXPONENTIAL,
+                initial_delay_seconds=1.0,
+                max_delay_seconds=float("inf"),
+                multiplier=1e308,
+            ),
+        )
+
+        self.assertAlmostEqual(calculate_backoff(policy, 1000), MAX_SAFE_RETRY_DELAY_SECONDS)
+
+    def test_backoff_rejects_nan_and_negative_bounds_to_zero(self) -> None:
+        from devgateway_agent_runtime.retry import calculate_backoff
+
+        nan_policy = RetryPolicy(
+            max_attempts=3,
+            backoff_policy=RetryBackoffPolicy(
+                backoff_type=RetryBackoffType.FIXED,
+                initial_delay_seconds=float("nan"),
+                max_delay_seconds=60.0,
+            ),
+        )
+        negative_bound_policy = RetryPolicy(
+            max_attempts=3,
+            backoff_policy=RetryBackoffPolicy(
+                backoff_type=RetryBackoffType.FIXED,
+                initial_delay_seconds=5.0,
+                max_delay_seconds=-1.0,
+            ),
+        )
+
+        self.assertEqual(calculate_backoff(nan_policy, 1), 0.0)
+        self.assertEqual(calculate_backoff(negative_bound_policy, 1), 0.0)
 
     # ------------------------------------------------------------------
     # Retry decision eligibility
@@ -3714,6 +3945,21 @@ class ApprovalRuntimeTest(unittest.TestCase):
         )
         self.assertEqual(req.risk_tier, ApprovalRiskTier.HIGH)
 
+    def test_default_approval_ttl_by_risk_tier(self) -> None:
+        from devgateway_agent_runtime.approvals import default_approval_ttl_seconds
+
+        self.assertEqual(default_approval_ttl_seconds(ApprovalRiskTier.LOW), 72 * 60 * 60)
+        self.assertEqual(default_approval_ttl_seconds(ApprovalRiskTier.MEDIUM), 24 * 60 * 60)
+        self.assertEqual(default_approval_ttl_seconds(ApprovalRiskTier.HIGH), 4 * 60 * 60)
+        self.assertEqual(default_approval_ttl_seconds("internal-default"), 24 * 60 * 60)
+
+    def test_approved_decision_requeues_paused_step_for_durable_resume(self) -> None:
+        from devgateway_agent_runtime.approvals import approval_decision_to_step_state
+
+        self.assertEqual(approval_decision_to_step_state(ApprovalStatus.APPROVED), StepState.PENDING)
+        self.assertEqual(approval_decision_to_step_state(ApprovalStatus.DENIED), StepState.CANCELLED)
+        self.assertEqual(approval_decision_to_step_state(ApprovalStatus.EXPIRED), StepState.FAILED)
+
     def test_approval_request_to_dict_includes_risk_tier(self) -> None:
         req = ApprovalRequest(
             approval_id="appr-dict-001",
@@ -4152,10 +4398,15 @@ class ApprovalRuntimeTest(unittest.TestCase):
         for name in (
             "APPROVAL_ACTIVE_STATES",
             "APPROVAL_TERMINAL_STATES",
+            "DEFAULT_APPROVAL_TTL_SECONDS_BY_RISK_TIER",
+            "approval_decision_to_step_state",
             "approval_decision_to_workflow_state",
+            "approval_expires_at",
+            "default_approval_ttl_seconds",
             "is_approval_active",
             "is_approval_terminal",
             "should_pause_for_approval",
+            "stable_approval_resume_token",
         ):
             with self.subTest(name=name):
                 self.assertTrue(hasattr(rt, name), f"Missing export: {name}")
@@ -4174,6 +4425,17 @@ class ApprovalRuntimeTest(unittest.TestCase):
             import devgateway_agent_runtime.approvals as approvals_mod
 
             importlib.reload(approvals_mod)
+
+    def test_stable_approval_resume_token_avoids_delimiter_collisions(self) -> None:
+        from devgateway_agent_runtime.approvals import stable_approval_resume_token
+
+        first = stable_approval_resume_token(workflow_id="wf:step", step_id="approval", approval_id="id")
+        second = stable_approval_resume_token(workflow_id="wf", step_id="step:approval", approval_id="id")
+        none_step = stable_approval_resume_token(workflow_id="wf", step_id=None, approval_id="approval")
+        empty_step = stable_approval_resume_token(workflow_id="wf", step_id="", approval_id="approval")
+
+        self.assertNotEqual(first, second)
+        self.assertNotEqual(none_step, empty_step)
 
 
 # ---------------------------------------------------------------------------
@@ -4750,6 +5012,104 @@ class PostgresOutboxRepositoryTest(unittest.TestCase):
         self.assertFalse(result)
 
 
+class OutboxWorkerTest(unittest.TestCase):
+    def _make_event(self, *, attempt_count: int = 1, destination_kind: str = "trace") -> WorkflowOutboxEvent:
+        from devgateway_agent_runtime.outbox import outbox_idempotency_key
+
+        source = "fixture-ref:event:worker-001"
+        return WorkflowOutboxEvent(
+            outbox_id="outbox-worker-001",
+            workflow_id="wf_worker",
+            source_event_ref=source,
+            destination_kind=destination_kind,
+            idempotency_key=outbox_idempotency_key(destination_kind, source),
+            attempt_count=attempt_count,
+        )
+
+    def _make_lease(self, outbox_id: str = "outbox-worker-001") -> Lease:
+        from devgateway_agent_runtime.leases import Lease
+
+        return Lease(
+            lease_id=f"lease-{outbox_id}",
+            resource_id=f"outbox:{outbox_id}",
+            owner_id="worker",
+            fencing_token=1,
+            expires_at=utc_now() + timedelta(seconds=30),
+        )
+
+    def test_worker_acks_successful_delivery(self) -> None:
+        from devgateway_agent_runtime.outbox_worker import OutboxWorker, OutboxWorkerPolicy
+
+        repo = _FakeOutboxWorkerRepository([(self._make_event(), self._make_lease())])
+        delivered: list[str] = []
+        worker = OutboxWorker(
+            repo,
+            consumers={"trace": lambda event: delivered.append(event.outbox_id)},
+            policy=OutboxWorkerPolicy(owner_id="worker", batch_size=1),
+        )
+
+        stats = worker.run_once()
+
+        self.assertEqual(delivered, ["outbox-worker-001"])
+        self.assertEqual(repo.acked, ["outbox-worker-001"])
+        self.assertEqual(stats.delivered, 1)
+
+    def test_worker_nacks_failure_and_reports_dead_letter_exhaustion(self) -> None:
+        from devgateway_agent_runtime.outbox import DEFAULT_OUTBOX_RETRY_POLICY
+        from devgateway_agent_runtime.outbox_worker import OutboxWorker, OutboxWorkerPolicy
+
+        event = self._make_event(attempt_count=DEFAULT_OUTBOX_RETRY_POLICY.max_attempts)
+        repo = _FakeOutboxWorkerRepository([(event, self._make_lease())])
+
+        def fail(_event: WorkflowOutboxEvent) -> None:
+            raise RuntimeError("fixture-ref:failure")
+
+        worker = OutboxWorker(
+            repo,
+            consumers={"trace": fail},
+            policy=OutboxWorkerPolicy(owner_id="worker", batch_size=1),
+        )
+
+        stats = worker.run_once()
+
+        self.assertEqual(repo.nacked, ["outbox-worker-001"])
+        self.assertEqual(stats.dead_lettered, 1)
+
+    def test_worker_exposes_backlog_summary(self) -> None:
+        from devgateway_agent_runtime.outbox_worker import OutboxWorker, OutboxWorkerPolicy
+
+        repo = _FakeOutboxWorkerRepository([])
+        worker = OutboxWorker(repo, policy=OutboxWorkerPolicy(owner_id="worker"))
+
+        self.assertEqual(worker.backlog_summary()["total"], 0)
+
+
+class _FakeOutboxWorkerRepository:
+    def __init__(self, claimed: list[tuple[WorkflowOutboxEvent, Lease]]) -> None:
+        self.claimed = claimed
+        self.acked: list[str] = []
+        self.nacked: list[str] = []
+
+    def append_outbox_event(self, event: WorkflowOutboxEvent) -> WorkflowOutboxEvent:
+        return event
+
+    def claim_pending_outbox_events(self, **_kwargs: object) -> list[tuple[WorkflowOutboxEvent, Lease]]:
+        return self.claimed
+
+    def ack_outbox_event(self, outbox_id: str, *, lease: Lease) -> bool:
+        del lease
+        self.acked.append(outbox_id)
+        return True
+
+    def nack_outbox_event(self, outbox_id: str, *, lease: Lease) -> bool:
+        del lease
+        self.nacked.append(outbox_id)
+        return True
+
+    def outbox_backlog_summary(self, **_kwargs: object) -> dict[str, object]:
+        return {"total": 0, "due": 0, "by_state": {}, "by_destination": {}, "oldest_enqueued_at": None}
+
+
 # ---------------------------------------------------------------------------
 # Phase 3.8: Artifact lifecycle runtime primitives tests
 # ---------------------------------------------------------------------------
@@ -5018,6 +5378,121 @@ class ArtifactLifecyclePrimitivesTest(unittest.TestCase):
             import devgateway_agent_runtime.artifact_lifecycle as art_mod
 
             importlib.reload(art_mod)
+
+    def test_store_artifact_body_writes_object_storage_and_returns_metadata_only(self) -> None:
+        from devgateway_agent_runtime.artifacts import store_artifact_body
+        from devgateway_agent_runtime.object_storage import InMemoryObjectStorage
+
+        storage = InMemoryObjectStorage()
+        metadata = store_artifact_body(
+            storage,
+            project_id="project-1",
+            artifact_id="artifact-1",
+            body=b"x" * 2048,
+            media_type="application/octet-stream",
+            retention_policy_ref="retention:30d",
+            sensitivity_label="confidential",
+            acl_scopes=("project-1", "principal-1"),
+        )
+
+        self.assertEqual(metadata.size_bytes, 2048)
+        self.assertEqual(metadata.media_type, "application/octet-stream")
+        self.assertFalse(hasattr(metadata, "body"))
+        self.assertFalse(hasattr(metadata, "object_body"))
+        storage.head_object(metadata.object_ref)
+
+    def test_artifact_object_key_rejects_path_traversal_segments(self) -> None:
+        from devgateway_agent_runtime.artifacts import artifact_object_key
+
+        for unsafe in (".", "..", " . ", " .. "):
+            with self.subTest(unsafe=unsafe):
+                with self.assertRaises(ValueError):
+                    artifact_object_key("project-1", unsafe)
+                with self.assertRaises(ValueError):
+                    artifact_object_key(unsafe, "artifact-1")
+
+    def test_verify_object_checksum_sha256_uses_metadata_before_signed_access(self) -> None:
+        from devgateway_agent_runtime.artifact_lifecycle import verify_object_checksum_sha256
+        from devgateway_agent_runtime.artifacts import store_artifact_body
+        from devgateway_agent_runtime.object_storage import InMemoryObjectStorage
+
+        storage = InMemoryObjectStorage()
+        metadata = store_artifact_body(
+            storage,
+            project_id="project-1",
+            artifact_id="artifact-hash",
+            body=b"hash me",
+            media_type="text/plain",
+            retention_policy_ref="retention:30d",
+            sensitivity_label="internal",
+            acl_scopes=("project-1",),
+        )
+
+        verify_object_checksum_sha256(storage, metadata.object_ref, metadata.sha256_hex)
+        with self.assertRaises(Exception):
+            verify_object_checksum_sha256(storage, metadata.object_ref, "0" * 64)
+
+    def test_guard_artifact_displayable_blocks_expired_deleted_and_redacted(self) -> None:
+        from datetime import timedelta
+
+        from devgateway_agent_runtime.artifact_lifecycle import (
+            SignedAccessViolation,
+            guard_artifact_displayable,
+        )
+        from devgateway_agent_runtime.contracts import ArtifactLifecycleStage, utc_now
+
+        now = utc_now()
+        with self.assertRaises(SignedAccessViolation):
+            guard_artifact_displayable(stage=ArtifactLifecycleStage.DELETED, now=now)
+        with self.assertRaises(SignedAccessViolation):
+            guard_artifact_displayable(stage=ArtifactLifecycleStage.VERIFIED, redacted=True, now=now)
+        with self.assertRaises(SignedAccessViolation):
+            guard_artifact_displayable(
+                stage=ArtifactLifecycleStage.VERIFIED,
+                expires_at=now - timedelta(seconds=1),
+                now=now,
+            )
+
+    def test_reconcile_artifact_objects_detects_orphans_and_missing_objects(self) -> None:
+        from devgateway_agent_runtime.artifacts import (
+            PersistedArtifactMetadata,
+            artifact_object_key,
+            reconcile_artifact_objects,
+            store_artifact_body,
+        )
+        from devgateway_agent_runtime.object_storage import InMemoryObjectStorage, ObjectRef
+
+        storage = InMemoryObjectStorage()
+        stored = store_artifact_body(
+            storage,
+            project_id="project-1",
+            artifact_id="artifact-orphan",
+            body=b"orphan",
+            media_type="text/plain",
+            retention_policy_ref="retention:30d",
+            sensitivity_label="internal",
+            acl_scopes=("project-1",),
+        )
+        missing = PersistedArtifactMetadata(
+            artifact_id="artifact-missing",
+            object_ref=ObjectRef(
+                bucket=stored.object_ref.bucket,
+                key=artifact_object_key("project-1", "artifact-missing"),
+                provider=stored.object_ref.provider,
+            ),
+            sha256_hex="1" * 64,
+        )
+
+        actions = reconcile_artifact_objects(
+            storage,
+            (missing,),
+            object_prefix="projects/project-1/artifacts/",
+        )
+
+        self.assertEqual(
+            {action.kind for action in actions},
+            {"object_without_db_metadata", "db_metadata_without_object"},
+        )
 
 
 # ---------------------------------------------------------------------------

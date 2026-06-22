@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
 
 import {
@@ -13,6 +14,7 @@ import { getBundledSkillRegistrySnapshot, type SkillRegistrySnapshot } from '@de
 import {
   BUDGET_POLICIES_BASE_PATH,
   BUDGET_RESERVATIONS_BASE_PATH,
+  BUDGET_RESERVATION_GET_PATH,
   BUDGET_RESERVATION_RELEASE_PATH,
   BUDGET_RESERVATION_SETTLE_PATH,
   BUDGET_SCOPES_BASE_PATH,
@@ -27,7 +29,13 @@ import {
   registerCostEventRoutes,
 } from './cost-events.ts';
 import { AGENT_RUNS_BASE_PATH, registerAgentRunRoutes } from './agent-runs.ts';
-import { createInMemoryAgentWorkflowStore, type ApprovalControlRecord } from './agent-workflow-store.ts';
+import {
+  createInMemoryAgentWorkflowStore,
+  type ApprovalControlRecord,
+  type ArtifactLifecycleControlRecord,
+  type TaskRecord,
+  type WorkflowControlRecord,
+} from './agent-workflow-store.ts';
 import {
   ARTIFACT_LIFECYCLE_PATH,
   ARTIFACT_LIFECYCLE_STATUS_PATH,
@@ -344,6 +352,8 @@ describe('control API budget routes', () => {
     assert.equal(reserveReply.statusCode, 201);
     assert.match(reserved.reservation_id, /^br_/u);
     assert.equal(reserved.status, 'reserved');
+    assert.equal(reserved.lifecycle_state, 'held');
+    assert.equal(reserved.reconciliation_state, null);
     assert.equal(reserved.budget_scope_id, budgetScopeId);
     assert.equal(reserved.workflow_run_id, 'workflow_run_budget_test');
     assert.equal(reserved.delegation_id, 'delegation_budget_test');
@@ -393,6 +403,7 @@ describe('control API budget routes', () => {
 
     assert.equal(settleReply.statusCode, 200);
     assert.equal(settleResult.budget_reservation.status, 'settled');
+    assert.equal(settleResult.budget_reservation.lifecycle_state, 'settled');
     assert.equal(settleResult.budget_reservation.actual_amount, 10.25);
     assert.equal(settleResult.budget_reservation.actual_input_tokens, 900);
     assert.equal(settleResult.budget_reservation.actual_output_tokens, 1800);
@@ -415,6 +426,19 @@ describe('control API budget routes', () => {
     assert.equal(settleReplayReply.statusCode, 200);
     assert.equal(settleReplay.budget_reservation.reservation_id, reserved.reservation_id);
     assert.deepEqual((await inspectBudgetScopeSpendForTest(registrar, budgetScopeId)).spend_state, afterSettle.spend_state);
+
+    const conflictingSettleReplayReply = new CapturingReply();
+    const conflictingSettleReplay = (await route(registrar, 'POST', BUDGET_RESERVATION_SETTLE_PATH).handler(
+      {
+        headers: authHeaders(),
+        params: { reservation_id: reserved.reservation_id },
+        body: { ...settleBody, request_id: 'request_budget_settle_conflict' },
+      },
+      conflictingSettleReplayReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(conflictingSettleReplayReply.statusCode, 400);
+    assert.equal(conflictingSettleReplay.error.code, 'invalid_request');
 
     const releaseSettledReply = new CapturingReply();
     const releaseSettledResult = (await route(registrar, 'POST', BUDGET_RESERVATION_RELEASE_PATH).handler(
@@ -450,6 +474,7 @@ describe('control API budget routes', () => {
 
     const releaseBody = validBudgetReleaseBody(budgetScopeId, {
       release_reason: 'provider_failed_before_execution',
+      reconciliation_state: 'reconciled',
       idempotency_key: 'idempotency_budget_release_unused',
       request_id: 'request_budget_release_unused',
       trace_id: 'trace_budget_release_unused',
@@ -462,6 +487,8 @@ describe('control API budget routes', () => {
 
     assert.equal(releaseReply.statusCode, 200);
     assert.equal(releaseResult.budget_reservation.status, 'released');
+    assert.equal(releaseResult.budget_reservation.lifecycle_state, 'reconciled');
+    assert.equal(releaseResult.budget_reservation.reconciliation_state, 'reconciled');
     assert.equal(releaseResult.budget_reservation.release_reason, 'provider_failed_before_execution');
 
     const afterRelease = await inspectBudgetScopeSpendForTest(registrar, budgetScopeId);
@@ -477,6 +504,25 @@ describe('control API budget routes', () => {
     assert.equal(releaseReplayReply.statusCode, 200);
     assert.equal(releaseReplay.budget_reservation.reservation_id, releaseReserve.budget_reservation.reservation_id);
     assert.deepEqual(await inspectBudgetScopeSpendForTest(registrar, budgetScopeId), afterRelease);
+
+    const inspectReleased = (await route(registrar, 'GET', BUDGET_RESERVATION_GET_PATH).handler({
+      headers: authHeaders(),
+      params: { reservation_id: releaseReserve.budget_reservation.reservation_id },
+    })) as BudgetReservationEnvelope;
+    assert.equal(inspectReleased.budget_reservation.lifecycle_state, 'reconciled');
+
+    const conflictingReleaseReplayReply = new CapturingReply();
+    const conflictingReleaseReplay = (await route(registrar, 'POST', BUDGET_RESERVATION_RELEASE_PATH).handler(
+      {
+        headers: authHeaders(),
+        params: { reservation_id: releaseReserve.budget_reservation.reservation_id },
+        body: { ...releaseBody, trace_id: 'trace_budget_release_conflict' },
+      },
+      conflictingReleaseReplayReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(conflictingReleaseReplayReply.statusCode, 400);
+    assert.equal(conflictingReleaseReplay.error.code, 'invalid_request');
   });
 
   it('denies hard-cap exhaustion before creating a budget reservation', async () => {
@@ -727,6 +773,8 @@ describe('control API agent workflow routes', () => {
     assert.equal(cancelResult.cancellation_request.requested_by_principal_id, 'principal_test');
     assert.equal(cancelResult.cancellation_request.request_id, 'request_track2_cancel');
     assert.equal(cancelResult.cancellation_request.cancellation_reason, 'operator-requested-test-cancel');
+    assert.equal(cancelResult.cancellation_request.execution_status, 'queued');
+    assert.equal(cancelResult.execution_status, 'queued');
   });
 
   it('rejects idempotency-key task replays with different create inputs', async () => {
@@ -766,6 +814,7 @@ describe('control API agent workflow routes', () => {
     assert.equal(result.count, 1);
     assert.equal(result.artifacts[0]?.artifact_id, 'artifact_demo_001');
     assert.equal(result.artifacts[0]?.signed_download_eligible, false);
+    assert.equal(result.artifacts[0]?.sensitivity_label, 'confidential');
     assert.equal(result.artifacts[0]?.storage_ref.ref_id, 'storage_ref_artifact_demo_001');
     assert.equal(result.artifacts[0]?.storage_ref.ref_type, 'artifact_storage_ref');
     assertNoSensitiveControlPayload(result);
@@ -801,6 +850,172 @@ describe('control API agent workflow routes', () => {
     assert.equal(secondPage.events.length, 1);
     assert.equal(secondPage.events[0]?.sequence_number, 2);
     assert.equal(secondPage.next_cursor, null);
+  });
+
+  it('schedules workflow retries with role, policy pins, idempotency, and audit metadata', async () => {
+    const registrar = registerWorkflowRetryRoutesForTest();
+    const body = validRetryWorkflowBody();
+
+    const firstReply = new CapturingReply();
+    const first = (await route(registrar, 'POST', `${WORKFLOWS_BASE_PATH}/:workflow_id/retry`).handler(
+      {
+        headers: authHeaders('principal_test', 'project_123', ['workflow_operator']),
+        params: { workflow_id: 'workflow_retry_test' },
+        body,
+      },
+      firstReply,
+    )) as WorkflowRetryEnvelope;
+
+    assert.equal(firstReply.statusCode, 202);
+    assert.equal(first.retry.workflow_id, 'workflow_retry_test');
+    assert.equal(first.retry.retry_state, 'scheduled');
+    assert.equal(first.retry.idempotency.scope, 'retry');
+    assert.match(first.retry.audit_ref.audit_event_id, /^audit_retry_/u);
+    assertNoSensitiveControlPayload(first);
+
+    const replay = (await route(registrar, 'POST', `${WORKFLOWS_BASE_PATH}/:workflow_id/retry`).handler({
+      headers: authHeaders('principal_test', 'project_123', ['workflow_operator']),
+      params: { workflow_id: 'workflow_retry_test' },
+      body,
+    })) as WorkflowRetryEnvelope;
+    assert.deepEqual(replay.retry, first.retry);
+
+    const conflictReply = new CapturingReply();
+    const conflict = (await route(registrar, 'POST', `${WORKFLOWS_BASE_PATH}/:workflow_id/retry`).handler(
+      {
+        headers: authHeaders('principal_test', 'project_123', ['workflow_operator']),
+        params: { workflow_id: 'workflow_retry_test' },
+        body: { ...body, request_id: 'request_retry_conflict' },
+      },
+      conflictReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(conflictReply.statusCode, 409);
+    assert.equal(conflict.error.code, 'invalid_state');
+    assert.match(conflict.error.message, /idempotency_key replay/u);
+  });
+
+  it('rejects workflow retry without auth, required role, matching pins, or sanitized refs', async () => {
+    const noAuthRegistrar = new CapturingRegistrar();
+    registerWorkflowRoutes(noAuthRegistrar, {
+      runtimeEnvironment: 'development',
+      store: createWorkflowRetryStoreForTest(),
+    });
+
+    const noAuthReply = new CapturingReply();
+    const noAuth = (await route(noAuthRegistrar, 'POST', `${WORKFLOWS_BASE_PATH}/:workflow_id/retry`).handler(
+      {
+        headers: authHeaders('principal_test', 'project_123', ['workflow_operator']),
+        params: { workflow_id: 'workflow_retry_test' },
+        body: validRetryWorkflowBody(),
+      },
+      noAuthReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(noAuthReply.statusCode, 401);
+
+    const registrar = registerWorkflowRetryRoutesForTest();
+    const noRoleReply = new CapturingReply();
+    const noRole = (await route(registrar, 'POST', `${WORKFLOWS_BASE_PATH}/:workflow_id/retry`).handler(
+      {
+        headers: authHeaders('principal_test', 'project_123'),
+        params: { workflow_id: 'workflow_retry_test' },
+        body: validRetryWorkflowBody(),
+      },
+      noRoleReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(noRoleReply.statusCode, 403);
+    assert.match(noRole.error.message, /workflow_operator role/u);
+
+    const stalePinReply = new CapturingReply();
+    const stalePin = (await route(registrar, 'POST', `${WORKFLOWS_BASE_PATH}/:workflow_id/retry`).handler(
+      {
+        headers: authHeaders('principal_test', 'project_123', ['workflow_operator']),
+        params: { workflow_id: 'workflow_retry_test' },
+        body: { ...validRetryWorkflowBody(), policy_version: 'policy-stale' },
+      },
+      stalePinReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(stalePinReply.statusCode, 409);
+    assert.equal(stalePin.error.code, 'stale_policy');
+
+    const unsafeReply = new CapturingReply();
+    const unsafe = (await route(registrar, 'POST', `${WORKFLOWS_BASE_PATH}/:workflow_id/retry`).handler(
+      {
+        headers: authHeaders('principal_test', 'project_123', ['workflow_operator']),
+        params: { workflow_id: 'workflow_retry_test' },
+        body: {
+          ...validRetryWorkflowBody({ idempotency_key: 'idempotency_retry_unsafe' }),
+          retry_reason_ref: { ref_id: 'raw_prompt_secret', ref_type: 'raw_prompt', scope_ref: 'project_123' },
+        },
+      },
+      unsafeReply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(unsafeReply.statusCode, 400);
+    assert.match(unsafe.error.message, /Forbidden/u);
+  });
+
+  it('returns and resolves workflow manual-review metadata without raw detail bodies', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const listReply = new CapturingReply();
+    const list = (await route(registrar, 'GET', `${WORKFLOWS_BASE_PATH}/:workflow_id/manual-review`).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { workflow_id: 'workflow_demo_001' },
+      },
+      listReply,
+    )) as ManualReviewListEnvelope;
+
+    assert.equal(listReply.statusCode, 200);
+    assert.equal(list.count, 1);
+    assert.equal(list.manual_reviews[0]?.manual_review_item_id, 'manual_review_item_demo_001');
+    assert.equal(list.manual_reviews[0]?.review_state, 'open');
+    assert.equal(list.manual_reviews[0]?.reason_ref.ref_type, 'manual_review_reason_ref');
+    assertNoSensitiveControlPayload(list);
+
+    const resolveReply = new CapturingReply();
+    const resolved = (await route(registrar, 'POST', `${WORKFLOWS_BASE_PATH}/:workflow_id/manual-review/:manual_review_item_id/resolve`).handler(
+      {
+        headers: authHeaders('principal_reviewer', 'project_demo', ['reviewer']),
+        params: { workflow_id: 'workflow_demo_001', manual_review_item_id: 'manual_review_item_demo_001' },
+        body: validResolveManualReviewBody(),
+      },
+      resolveReply,
+    )) as ManualReviewEnvelope;
+
+    assert.equal(resolveReply.statusCode, 200);
+    assert.equal(resolved.manual_review.review_state, 'resolved');
+    assert.equal(resolved.manual_review.resolution_ref?.ref_type, 'manual_review_resolution_ref');
+    assert.match(resolved.manual_review.resolution_audit_ref?.audit_event_id ?? '', /^audit_manual_review_resolved_/u);
+    assertNoSensitiveControlPayload(resolved);
+  });
+
+  it('returns workflow lease and workflow-scoped outbox backlog status metadata only', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const leases = (await route(registrar, 'GET', `${WORKFLOWS_BASE_PATH}/:workflow_id/leases`).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      params: { workflow_id: 'workflow_demo_001' },
+    })) as WorkflowLeasesEnvelope;
+
+    assert.equal(leases.leases.workflow_id, 'workflow_demo_001');
+    assert.equal(leases.leases.active_count, 0);
+    assert.equal(leases.leases.stuck_count, 0);
+    assertNoSensitiveControlPayload(leases);
+
+    const outboxStatus = (await route(registrar, 'GET', `${WORKFLOWS_BASE_PATH}/:workflow_id/outbox/status`).handler({
+      headers: authHeaders('principal_demo', 'project_demo'),
+      params: { workflow_id: 'workflow_demo_001' },
+    })) as OutboxStatusEnvelope;
+
+    assert.equal(outboxStatus.status.total, 1);
+    assert.equal(outboxStatus.status.backlog_count, 1);
+    assert.equal(outboxStatus.status.dead_lettered_count, 0);
+    assertNoSensitiveControlPayload(outboxStatus);
   });
 
   it('returns sanitized agent-run metadata', async () => {
@@ -1156,6 +1371,43 @@ describe('control API approval routes', () => {
     assertNoSensitiveControlPayload(result);
   });
 
+  it('expires a pending approval from an internal system actor', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'POST', `${APPROVALS_BASE_PATH}/:approval_request_id/expire`).handler(
+      {
+        headers: authHeaders('principal_system', 'project_demo', ['system']),
+        params: { approval_request_id: 'approval_request_demo_001' },
+        body: validApproveBody(),
+      },
+      reply,
+    )) as ApprovalEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.approval.state, 'expired');
+    assert.ok(result.approval.decision_ref !== null);
+    assert.equal(result.approval.decision_ref.decision, 'expired');
+    assert.equal(result.approval.decision_ref.approver_principal_id, 'principal_system');
+  });
+
+  it('rejects approval expiry from a non-system actor', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'POST', `${APPROVALS_BASE_PATH}/:approval_request_id/expire`).handler(
+      {
+        headers: authHeaders('principal_approver', 'project_demo', ['approver']),
+        params: { approval_request_id: 'approval_request_demo_001' },
+        body: validApproveBody(),
+      },
+      reply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(reply.statusCode, 403);
+    assert.equal(result.error.code, 'invalid_state');
+  });
+
   it('rejects approval decisions when the actor lacks the required approver role', async () => {
     const registrar = registerAgentWorkflowRoutesForTest();
 
@@ -1423,6 +1675,23 @@ describe('control API approval routes', () => {
 
     assert.equal(missingPolicyReply.statusCode, 400);
     assert.equal(missingPolicy.error.code, 'invalid_request');
+  });
+
+  it('rejects model-claimed approval fields instead of trusting them', async () => {
+    const registrar = registerAgentWorkflowRoutesForTest();
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'POST', `${APPROVALS_BASE_PATH}/:approval_request_id/approve`).handler(
+      {
+        headers: authHeaders('principal_approver', 'project_demo', ['approver']),
+        params: { approval_request_id: 'approval_request_demo_001' },
+        body: { ...validApproveBody(), model_claimed_approval: true },
+      },
+      reply,
+    )) as ControlErrorEnvelope;
+
+    assert.equal(reply.statusCode, 400);
+    assert.equal(result.error.code, 'invalid_request');
   });
 
   it('response contains no raw, signed, or secret fields', async () => {
@@ -1779,6 +2048,86 @@ describe('control API artifact lifecycle routes', () => {
     const serialized = JSON.stringify(result);
     assert.doesNotMatch(serialized, /signed_url|object_body|provider_key|provider_token|api_key/i);
     assertNoSensitiveControlPayload(result);
+  });
+
+  it('issues short-lived signed access only when ACL, lifecycle, and hash checks pass', async () => {
+    const registrar = new CapturingRegistrar();
+    const store = createInMemoryAgentWorkflowStore({
+      initialState: {
+        artifactLifecycles: [
+          artifactLifecycleForTest({
+            signed_access_eligibility: {
+              eligible: true,
+              requires_approval: false,
+              max_signed_duration_seconds: 120,
+            },
+          }),
+        ],
+      },
+    });
+    registerArtifactRoutes(registrar, {
+      runtimeEnvironment: 'development',
+      store,
+      signedAccessTtlSeconds: 300,
+      authenticate: async (request) => ({
+        principalId: headerValueForTest(request.headers, 'x-devgateway-principal-id') ?? 'principal_demo',
+        authSubjectRef: 'subject_demo',
+      }),
+    });
+
+    const reply = new CapturingReply();
+    const result = (await route(registrar, 'POST', ARTIFACT_SIGNED_ACCESS_PATH).handler(
+      {
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { artifact_id: 'artifact_demo_001' },
+        body: { ...validArtifactSignedAccessBody(), requested_duration_seconds: 600 },
+      },
+      reply,
+    )) as ArtifactSignedAccessDecisionEnvelope;
+
+    assert.equal(reply.statusCode, 200);
+    assert.equal(result.decision.decision, 'eligible');
+    assert.equal(result.decision.signed_access?.ttl_seconds, 120);
+    assert.match(result.decision.signed_access?.signed_url ?? '', /^https:\/\/control-api\.local\/artifacts\/artifact_demo_001\/object/u);
+    assert.equal(result.decision.signed_access?.sha256, sha256HexForTest('safe-artifact-demo-001'));
+    const signedUrl = new URL(result.decision.signed_access?.signed_url ?? '');
+    assert.equal(signedUrl.searchParams.get('signature')?.length, 43);
+    assert.notEqual(signedUrl.searchParams.get('signature'), 'deterministic-control-api-signed-access');
+    assert.equal(signedUrl.searchParams.get('policy_version'), validArtifactSignedAccessBody().policy_version);
+    assert.equal(signedUrl.searchParams.get('registry_version'), validArtifactSignedAccessBody().registry_version);
+  });
+
+  it('does not display or sign expired, deleted, or redacted artifacts', async () => {
+    for (const lifecycle of [
+      artifactLifecycleForTest({ state: 'expired', deletion_scheduled_at: '2020-01-01T00:00:00.000Z' }),
+      artifactLifecycleForTest({ action: 'deleted', state: 'deleted' }),
+      artifactLifecycleForTest({ action: 'redacted', state: 'redacted', redacted: true }),
+    ] as const) {
+      const registrar = new CapturingRegistrar();
+      const store = createInMemoryAgentWorkflowStore({ initialState: { artifactLifecycles: [lifecycle] } });
+      registerArtifactRoutes(registrar, {
+        runtimeEnvironment: 'development',
+        store,
+        authenticate: async (request) => ({
+          principalId: headerValueForTest(request.headers, 'x-devgateway-principal-id') ?? 'principal_demo',
+          authSubjectRef: 'subject_demo',
+        }),
+      });
+
+      const list = (await route(registrar, 'GET', TASK_ARTIFACTS_PATH).handler({
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { task_id: 'task_demo_001' },
+      })) as ArtifactListEnvelope;
+      assert.equal(list.count, 0, lifecycle.state);
+
+      const sign = (await route(registrar, 'POST', ARTIFACT_SIGNED_ACCESS_PATH).handler({
+        headers: authHeaders('principal_demo', 'project_demo'),
+        params: { artifact_id: 'artifact_demo_001' },
+        body: validArtifactSignedAccessBody(),
+      })) as ArtifactSignedAccessDecisionEnvelope;
+      assert.equal(sign.decision.decision, 'ineligible', lifecycle.state);
+      assert.equal(sign.decision.signed_access, undefined, lifecycle.state);
+    }
   });
 
   it('fails closed for signed-access policy or registry pin mismatch', async () => {
@@ -2341,6 +2690,13 @@ type ArtifactSignedAccessDecisionEnvelope = {
     readonly eligible: boolean;
     readonly requires_approval: boolean;
     readonly max_signed_duration_seconds: number | null;
+    readonly sha256: string;
+    readonly signed_access?: {
+      readonly signed_url: string;
+      readonly expires_at: string;
+      readonly ttl_seconds: number;
+      readonly sha256: string;
+    };
   };
 };
 
@@ -2368,12 +2724,15 @@ type TaskCancelEnvelope = {
     readonly requested_by_principal_id: string;
     readonly request_id: string;
     readonly cancellation_reason: string | null;
+    readonly execution_status: string;
   };
+  readonly execution_status: string;
 };
 
 type ArtifactListEnvelope = {
   readonly artifacts: readonly {
     readonly artifact_id: string;
+    readonly sensitivity_label: string;
     readonly signed_download_eligible: boolean;
     readonly storage_ref: {
       readonly ref_id: string;
@@ -2394,6 +2753,45 @@ type WorkflowEnvelope = {
   readonly workflow: {
     readonly workflow_id: string;
     readonly principal_id: string;
+  };
+};
+
+type WorkflowRetryEnvelope = {
+  readonly retry: {
+    readonly workflow_id: string;
+    readonly retry_state: string;
+    readonly idempotency: {
+      readonly idempotency_key: string;
+      readonly scope: string;
+    };
+    readonly audit_ref: {
+      readonly audit_event_id: string;
+    };
+  };
+};
+
+type ManualReviewEnvelope = {
+  readonly manual_review: {
+    readonly manual_review_item_id: string;
+    readonly review_state: string;
+    readonly reason_ref: OpaqueRefForTest;
+    readonly resolution_ref: OpaqueRefForTest | null;
+    readonly resolution_audit_ref: {
+      readonly audit_event_id: string;
+    } | null;
+  };
+};
+
+type ManualReviewListEnvelope = {
+  readonly manual_reviews: readonly ManualReviewEnvelope['manual_review'][];
+  readonly count: number;
+};
+
+type WorkflowLeasesEnvelope = {
+  readonly leases: {
+    readonly workflow_id: string;
+    readonly active_count: number;
+    readonly stuck_count: number;
   };
 };
 
@@ -2468,6 +2866,7 @@ type OutboxStatusEnvelope = {
   readonly status: {
     readonly counts_by_state: Readonly<Record<string, number>>;
     readonly counts_by_destination: Readonly<Record<string, number>>;
+    readonly backlog_count: number;
     readonly failed_count: number;
     readonly dead_lettered_count: number;
     readonly total: number;
@@ -2683,6 +3082,123 @@ function registerAgentWorkflowRoutesForTest(
   return registrar;
 }
 
+function registerWorkflowRetryRoutesForTest(): CapturingRegistrar {
+  const registrar = new CapturingRegistrar();
+  registerWorkflowRoutes(registrar, {
+    runtimeEnvironment: 'development',
+    store: createWorkflowRetryStoreForTest(),
+    authenticate: async (request: ControlRouteRequest) => {
+      const roles = rolesHeaderValueForTest(request.headers, 'x-devgateway-roles');
+      return {
+        principalId: headerValueForTest(request.headers, 'x-devgateway-principal-id') ?? 'principal_test',
+        authSubjectRef: headerValueForTest(request.headers, 'x-devgateway-auth-subject') ?? 'subject_test',
+        ...(roles === undefined ? {} : { roles }),
+      };
+    },
+  });
+  return registrar;
+}
+
+function createWorkflowRetryStoreForTest() {
+  const { task, workflow } = failedWorkflowStateForTest();
+  return createInMemoryAgentWorkflowStore({
+    includeFixtures: false,
+    initialState: {
+      tasks: [task],
+      workflows: [workflow],
+    },
+  });
+}
+
+function failedWorkflowStateForTest(): { readonly task: TaskRecord; readonly workflow: WorkflowControlRecord } {
+  const now = '2026-01-01T00:00:00.000Z';
+  const task: TaskRecord = {
+    contract_version: gatewayControlContractVersion,
+    task_id: 'task_retry_test',
+    workflow_run_id: 'workflow_retry_test',
+    status: 'failed',
+    task_type: 'analysis',
+    priority: 'normal',
+    principal_id: 'principal_test',
+    project_id: 'project_123',
+    data_class: 'internal',
+    budget_scope_id: 'budget_scope_track2',
+    policy_version: 'policy-track2-v1',
+    registry_version: 'registry-track2-v1',
+    trace_id: 'trace_retry_original',
+    request_id: 'request_retry_original',
+    objective_ref: { ref_id: 'objective_retry_test', ref_type: 'objective_ref', scope_ref: 'project_123' },
+    input_context_refs: [],
+    artifact_refs: [],
+    agent_run_refs: [],
+    idempotency: {
+      idempotency_key: 'idempotency_retry_original',
+      scope: 'workflow',
+      dedupe_ref: 'task_retry_test',
+      expires_at: '2026-01-02T00:00:00.000Z',
+    },
+    cancellation_request: null,
+    created_at: now,
+    updated_at: now,
+  };
+  const workflow: WorkflowControlRecord = {
+    contract_version: gatewayControlContractVersion,
+    workflow_id: 'workflow_retry_test',
+    workflow_run_id: 'workflow_retry_test',
+    task_id: 'task_retry_test',
+    workflow_version: 'workflow.retry.test.v1',
+    status: 'failed',
+    principal_id: 'principal_test',
+    project_id: 'project_123',
+    data_class: 'internal',
+    budget_scope_id: 'budget_scope_track2',
+    policy_version: 'policy-track2-v1',
+    registry_version: 'registry-track2-v1',
+    trace_id: 'trace_retry_original',
+    request_id: 'request_retry_original',
+    trace_context_ref: {
+      trace_context_id: 'trace_context_retry',
+      span_id: '0000000000000001',
+      propagation_ref: 'traceparent:trace_retry_original',
+    },
+    current_step_ref: {
+      step_id: 'step_retry_test',
+      step_type: 'plan',
+      step_status: 'failed',
+      agent_run_id: null,
+      delegation_id: null,
+    },
+    allowed_transitions: [],
+    idempotency_refs: [task.idempotency],
+    lease_state: {
+      lease_id: null,
+      lease_owner_ref: null,
+      heartbeat_at: null,
+      expires_at: null,
+      lease_status: 'none',
+    },
+    resume_ref: null,
+    terminal_failure_ref: {
+      failure_type: 'runtime_error',
+      failure_code: 'retry_test_failure',
+      failure_ref: 'failure_retry_test',
+      retryable: true,
+    },
+    artifact_refs: [],
+    audit_refs: [
+      {
+        audit_event_id: 'audit_retry_original',
+        audit_stream: 'control-api-test',
+        recorded_at: now,
+      },
+    ],
+    cost_refs: [],
+    created_at: now,
+    updated_at: now,
+  };
+  return { task, workflow };
+}
+
 function registerBundledSkillRoutesForTest(
   options: {
     readonly runtimeEnvironment?: 'development' | 'production';
@@ -2728,6 +3244,38 @@ function validTaskBody(): Record<string, unknown> {
     priority: 'high',
     workflow_version: 'workflow.track2.test.v1',
     idempotency_key: 'idempotency_track2_test',
+  };
+}
+
+function validRetryWorkflowBody(overrides: Readonly<Record<string, unknown>> = {}): Record<string, unknown> {
+  return {
+    request_id: 'request_retry_test',
+    trace_id: 'trace_retry_test',
+    policy_version: 'policy-track2-v1',
+    registry_version: 'registry-track2-v1',
+    idempotency_key: 'idempotency_retry_test',
+    retry_reason_ref: {
+      ref_id: 'retry_reason_test',
+      ref_type: 'workflow_retry_reason_ref',
+      scope_ref: 'workflow_retry_test',
+    },
+    ...overrides,
+  };
+}
+
+function validResolveManualReviewBody(overrides: Readonly<Record<string, unknown>> = {}): Record<string, unknown> {
+  return {
+    request_id: 'request_manual_review_resolve_test',
+    trace_id: 'trace_manual_review_resolve_test',
+    policy_version: 'policy-demo-v1',
+    registry_version: 'registry-demo-v1',
+    idempotency_key: 'idempotency_manual_review_resolve_test',
+    resolution_ref: {
+      ref_id: 'manual_review_resolution_test',
+      ref_type: 'manual_review_resolution_ref',
+      scope_ref: 'workflow_demo_001',
+    },
+    ...overrides,
   };
 }
 
@@ -2878,6 +3426,57 @@ function validArtifactSignedAccessBody(): Record<string, unknown> {
     policy_version: 'policy-demo-v1',
     registry_version: 'registry-demo-v1',
   };
+}
+
+function artifactLifecycleForTest(
+  overrides: Partial<ArtifactLifecycleControlRecord> = {},
+): ArtifactLifecycleControlRecord {
+  const now = '2026-01-01T00:00:00.000Z';
+  return {
+    contract_version: gatewayControlContractVersion,
+    lifecycle_event_id: 'lifecycle_event_artifact_demo_001_test',
+    artifact_id: 'artifact_demo_001',
+    workflow_run_id: 'workflow_demo_001',
+    task_id: 'task_demo_001',
+    request_id: 'request_demo_001',
+    action: 'created',
+    state: 'active',
+    storage_ref: { storage_system: 's3', container_ref: 'devgateway-artifacts', object_path_ref: 'projects/project_demo/artifacts/artifact_demo_001/body', version_ref: null },
+    checksum_sha256: sha256HexForTest('safe-artifact-demo-001'),
+    retention_policy: {
+      retained_until: '2026-02-01T00:00:00.000Z',
+      delete_after_seconds: 2_592_000,
+      legal_hold: false,
+    },
+    signed_access_eligibility: {
+      eligible: false,
+      requires_approval: true,
+      max_signed_duration_seconds: 900,
+    },
+    legal_hold: false,
+    redacted: false,
+    deletion_scheduled_at: null,
+    audit_refs: [{ audit_event_id: 'audit_lifecycle_created', audit_stream: 'test', recorded_at: now }],
+    idempotency: { idempotency_key: 'idem_lifecycle_test', scope: 'artifact_lifecycle', dedupe_ref: 'artifact_demo_001', expires_at: '2026-01-02T00:00:00.000Z' },
+    principal_id: 'principal_demo',
+    project_id: 'project_demo',
+    data_class: 'internal',
+    budget_scope_id: 'budget_scope_demo',
+    policy_version: 'policy-demo-v1',
+    registry_version: 'registry-demo-v1',
+    trace_id: 'trace_demo_001',
+    trace_context_ref: {
+      trace_context_id: 'trace_context_trace_demo_001',
+      span_id: 'span_demo_001',
+      propagation_ref: 'traceparent:trace_demo_001',
+    },
+    occurred_at: now,
+    ...overrides,
+  };
+}
+
+function sha256HexForTest(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
 }
 
 function sampleCostEvent(): CostEventRecord {

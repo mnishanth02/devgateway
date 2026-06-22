@@ -1,0 +1,39 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 3 fixture; not real customer, repository, provider, production telemetry, prompt, artifact body, or secret data.",
+  "case_id": "workflow-outbox-state-change-atomic-enqueue",
+  "category": "atomic_enqueue",
+  "track": "track-3-durable-execution",
+  "chaos_scenario": {
+    "postgres_required": true,
+    "transaction_boundary": "state_and_outbox"
+  },
+  "workflow_fixture": {
+    "workflow_id_ref": "fixture-ref:workflow:workflow-outbox-state-change-atomic-enqueue",
+    "postgres_required": true,
+    "provider_mode": "fixture",
+    "live_provider_calls": false,
+    "production_enablement": false,
+    "inputs": {
+      "state_transition": "created_to_queued",
+      "destinations": [
+        "trace",
+        "portal_update"
+      ]
+    }
+  },
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "Outbox events are enqueued in the same transaction as the workflow state transition.",
+    "Rolling back the transaction removes both the state change and its outbox rows.",
+    "Outbox payloads contain only metadata refs and no raw prompts, artifacts, tokens, or provider payloads."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/workflow-outbox/workflow-outbox-state-change-atomic-enqueue/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/workflow-outbox/workflow-outbox-state-change-atomic-enqueue/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/workflow-outbox/workflow-outbox-state-change-atomic-enqueue/audit-event.json"
+  }
+}

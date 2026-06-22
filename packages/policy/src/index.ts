@@ -3,6 +3,13 @@ export const policyPackage = {
   status: 'phase-0-6-github-permission-baseline',
 } as const;
 
+export {
+  DEFAULT_APPROVAL_TTL_SECONDS_BY_RISK_TIER,
+  approvalExpiresAtForRiskTier,
+  approvalTtlRiskTiers,
+  defaultApprovalTtlSeconds,
+  type ApprovalTtlRiskTier,
+} from './approval-ttl-policy.ts';
 export * from './denial-reasons.ts';
 export {
   DATA_CLASSES,

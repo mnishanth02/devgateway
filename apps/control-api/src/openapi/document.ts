@@ -39,6 +39,11 @@ export function createOpenApiDocumentOptions(
       { name: 'artifacts', description: 'Track 2 task artifact metadata inspection without raw object bodies.' },
       { name: 'agent-runs', description: 'Track 2 agent-run and delegation trace inspection foundation.' },
       { name: 'skills', description: 'Track 2 governed skill registry listing foundation.' },
+      { name: 'approvals', description: 'Track 3 approval request metadata and trusted decision routes.' },
+      { name: 'manual-review', description: 'Track 3 manual-review metadata and trusted resolution routes.' },
+      { name: 'leases', description: 'Track 3 durable-runtime lease and stuck-work metadata status.' },
+      { name: 'outbox', description: 'Track 3 metadata-only outbox delivery and backlog status.' },
+      { name: 'templates', description: 'Track 3 workflow template and version metadata routes.' },
     ],
     components: {
       securitySchemes: {

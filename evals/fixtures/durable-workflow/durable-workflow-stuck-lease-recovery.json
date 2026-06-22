@@ -1,0 +1,37 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 3 fixture; not real customer, repository, provider, production telemetry, prompt, artifact body, or secret data.",
+  "case_id": "durable-workflow-stuck-lease-recovery",
+  "category": "lease_recovery",
+  "track": "track-3-durable-execution",
+  "chaos_scenario": {
+    "postgres_required": true,
+    "fault": "expired_step_lease"
+  },
+  "workflow_fixture": {
+    "workflow_id_ref": "fixture-ref:workflow:durable-workflow-stuck-lease-recovery",
+    "postgres_required": true,
+    "provider_mode": "fixture",
+    "live_provider_calls": false,
+    "production_enablement": false,
+    "inputs": {
+      "lease_ttl_seconds": 1,
+      "idempotent_step": "pre_side_effect",
+      "ambiguous_step": "running"
+    }
+  },
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "Expired idempotent pre-side-effect work is returned to pending within the stuck-lease recovery SLO.",
+    "Expired ambiguous running work is moved to manual review instead of being auto-replayed.",
+    "Recovery evidence includes owner, fencing token, expiry, last heartbeat, and decision reason refs only."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/durable-workflow/durable-workflow-stuck-lease-recovery/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/durable-workflow/durable-workflow-stuck-lease-recovery/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/durable-workflow/durable-workflow-stuck-lease-recovery/audit-event.json"
+  }
+}

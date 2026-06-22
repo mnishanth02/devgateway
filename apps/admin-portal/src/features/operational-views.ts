@@ -7,7 +7,12 @@ import type {
 import type { BudgetSpendInspection } from '../../../control-api/src/routes/budgets.ts';
 import type {
     AgentRunResponse,
+    ApprovalResponse,
+    ArtifactLifecycleEventResponse,
+    ArtifactLifecycleStatusResponse,
+    ArtifactSignedAccessDecisionResponse,
     ArtifactMetadataResponse,
+    OutboxStatusResponse,
     SkillResponse,
     TaskResponse,
     WorkflowEventResponse,
@@ -37,6 +42,13 @@ export interface OperationalControlApiSnapshot {
     readonly workflowEvents: ControlApiFetchResult<WorkflowEventsEnvelope>;
     readonly agentRun: ControlApiFetchResult<AgentRunEnvelope>;
     readonly skills: ControlApiFetchResult<SkillsEnvelope>;
+    readonly approvals?: ControlApiFetchResult<ApprovalsEnvelope>;
+    readonly manualReviews?: ControlApiFetchResult<ManualReviewsEnvelope>;
+    readonly workflowLeaseStatus?: ControlApiFetchResult<WorkflowLeaseStatusEnvelope>;
+    readonly workflowOutboxStatus?: ControlApiFetchResult<OutboxStatusEnvelope>;
+    readonly outboxStatus?: ControlApiFetchResult<OutboxStatusEnvelope>;
+    readonly artifactLifecycle?: ControlApiFetchResult<ArtifactLifecycleEnvelope>;
+    readonly artifactLifecycleStatus?: ControlApiFetchResult<ArtifactLifecycleStatusEnvelope>;
 }
 
 export interface OperationalViewModel {
@@ -49,6 +61,8 @@ export interface OperationalViewModel {
     readonly audit: AuditPanel;
     readonly breakGlass: BreakGlassPanel;
     readonly taskTrace: TaskTracePanel;
+    readonly approvalQueue: ApprovalQueuePanel;
+    readonly durableOperations: DurableOperationsPanel;
 }
 
 export interface HealthPanel {
@@ -432,6 +446,162 @@ export interface SkillTraceView {
     readonly request: string;
 }
 
+export interface ApprovalQueuePanel {
+    readonly actionPolicy: ActionPolicy;
+    readonly items: readonly ApprovalQueueItemView[];
+    readonly count: string;
+    readonly emptyState: string;
+}
+
+export interface ApprovalQueueItemView {
+    readonly id: string;
+    readonly state: string;
+    readonly requiredAction: string;
+    readonly requester: string;
+    readonly requiredRole: string;
+    readonly riskTier: string;
+    readonly expiry: string;
+    readonly workflowId: string;
+    readonly taskId: string;
+    readonly requestId: string;
+    readonly traceId: string;
+    readonly project: string;
+    readonly policyVersion: string;
+    readonly registryVersion: string;
+    readonly actionSummaryArtifact: ArtifactRefView;
+    readonly auditTrail: readonly AuditRefView[];
+    readonly createdAt: string;
+    readonly updatedAt: string;
+}
+
+export interface DurableOperationsPanel {
+    readonly actionPolicy: ActionPolicy;
+    readonly workflowId: string;
+    readonly taskId: string;
+    readonly retry: DurableControlView;
+    readonly cancel: DurableControlView;
+    readonly manualReview: ManualReviewPanel;
+    readonly leaseStatus: LeaseStatusPanel;
+    readonly outbox: OutboxBacklogPanel;
+    readonly artifactLifecycle: ArtifactLifecyclePanel;
+}
+
+export interface DurableControlView {
+    readonly label: string;
+    readonly targetId: string;
+    readonly endpoint: string;
+    readonly method: 'GET' | 'POST';
+    readonly available: boolean;
+    readonly reason: string;
+    readonly requestId: string;
+    readonly traceId: string;
+    readonly policyVersion: string;
+    readonly registryVersion: string;
+}
+
+export interface ManualReviewPanel {
+    readonly actionPolicy: ActionPolicy;
+    readonly items: readonly ManualReviewItemView[];
+    readonly count: string;
+    readonly emptyState: string;
+}
+
+export interface ManualReviewItemView {
+    readonly id: string;
+    readonly workflowId: string;
+    readonly taskId: string;
+    readonly requestId: string;
+    readonly traceId: string;
+    readonly state: string;
+    readonly blockingState: string;
+    readonly owner: string;
+    readonly ownerRole: string;
+    readonly reasonRef: RefSummaryView;
+    readonly safeActions: readonly RefSummaryView[];
+    readonly sideEffects: readonly RefSummaryView[];
+    readonly resolutionRef: RefSummaryView;
+    readonly resolutionAuditRef: AuditRefView;
+    readonly policyVersion: string;
+    readonly registryVersion: string;
+    readonly createdAt: string;
+    readonly updatedAt: string;
+}
+
+export interface LeaseStatusPanel {
+    readonly actionPolicy: ActionPolicy;
+    readonly workflowId: string;
+    readonly workflowStatus: string;
+    readonly workflowLease: LeaseView;
+    readonly agentLeases: readonly AgentLeaseStatusView[];
+    readonly activeCount: string;
+    readonly expiredCount: string;
+    readonly stuckCount: string;
+    readonly checkedAt: string;
+}
+
+export interface AgentLeaseStatusView {
+    readonly agentRunId: string;
+    readonly status: string;
+    readonly lease: LeaseView;
+}
+
+export interface OutboxBacklogPanel {
+    readonly actionPolicy: ActionPolicy;
+    readonly workflowStatus: OutboxStatusView;
+    readonly globalStatus: OutboxStatusView;
+}
+
+export interface OutboxStatusView {
+    readonly total: string;
+    readonly backlog: string;
+    readonly failed: string;
+    readonly deadLettered: string;
+    readonly byState: readonly KeyValue[];
+    readonly byDestination: readonly KeyValue[];
+}
+
+export interface ArtifactLifecyclePanel {
+    readonly actionPolicy: ActionPolicy;
+    readonly artifactId: string;
+    readonly status: ArtifactLifecycleStatusView;
+    readonly events: readonly ArtifactLifecycleEventView[];
+    readonly signedAccess: SignedAccessStatusView;
+    readonly emptyState: string;
+}
+
+export interface ArtifactLifecycleStatusView {
+    readonly latestState: string;
+    readonly latestAction: string;
+    readonly legalHold: string;
+    readonly redacted: string;
+    readonly deletionScheduledAt: string;
+    readonly eventCount: string;
+}
+
+export interface SignedAccessStatusView {
+    readonly eligible: string;
+    readonly requiresApproval: string;
+    readonly maxDurationSeconds: string;
+    readonly decision: string;
+    readonly decisionReason: string;
+    readonly sha256: string;
+}
+
+export interface ArtifactLifecycleEventView {
+    readonly id: string;
+    readonly action: string;
+    readonly state: string;
+    readonly storage: RefSummaryView;
+    readonly checksumSha256: string;
+    readonly retention: string;
+    readonly signedAccess: string;
+    readonly legalHold: string;
+    readonly redacted: string;
+    readonly deletionScheduledAt: string;
+    readonly auditTrail: readonly AuditRefView[];
+    readonly occurredAt: string;
+}
+
 export interface TraceRefView {
     readonly traceId: string;
     readonly requestId: string;
@@ -604,6 +774,98 @@ interface SkillsEnvelope {
     readonly count?: number;
 }
 
+interface ApprovalsEnvelope {
+    readonly approvals?: readonly ApprovalResponse[];
+    readonly count?: number;
+}
+
+interface ManualReviewsEnvelope {
+    readonly manual_reviews?: readonly ManualReviewResponse[];
+    readonly count?: number;
+}
+
+interface WorkflowLeaseStatusEnvelope {
+    readonly leases?: WorkflowLeaseStatusResponse;
+}
+
+interface OutboxStatusEnvelope {
+    readonly status?: OutboxStatusResponse;
+}
+
+interface ArtifactLifecycleEnvelope {
+    readonly events?: readonly ArtifactLifecycleEventResponse[];
+    readonly count?: number;
+}
+
+interface ArtifactLifecycleStatusEnvelope {
+    readonly status?: ArtifactLifecycleStatusResponse;
+}
+
+interface ArtifactSignedAccessDecisionEnvelope {
+    readonly decision?: ArtifactSignedAccessDecisionResponse;
+}
+
+interface ManualReviewResponse {
+    readonly manual_review_item_id: string;
+    readonly workflow_id: string;
+    readonly workflow_run_id: string;
+    readonly task_id: string | null;
+    readonly request_id: string;
+    readonly reason_ref: OpaqueRefShape;
+    readonly owner_principal_id: string;
+    readonly owner_role: string | null;
+    readonly blocking_state: string;
+    readonly review_state: string;
+    readonly safe_actions: readonly OpaqueRefShape[];
+    readonly side_effect_refs: readonly OpaqueRefShape[];
+    readonly resolution_ref: OpaqueRefShape | null;
+    readonly resolution_audit_ref: AuditRefShape | null;
+    readonly policy_version: string;
+    readonly registry_version: string;
+    readonly trace_id: string;
+    readonly created_at: string;
+    readonly updated_at: string;
+}
+
+interface WorkflowLeaseStatusResponse {
+    readonly workflow_id: string;
+    readonly workflow_status: string;
+    readonly workflow_lease: {
+        readonly lease_id: string | null;
+        readonly lease_owner_ref: string | null;
+        readonly heartbeat_at: string | null;
+        readonly expires_at: string | null;
+        readonly lease_status?: string;
+    };
+    readonly agent_run_leases: readonly {
+        readonly agent_run_id: string;
+        readonly lease_ref: {
+            readonly lease_id: string | null;
+            readonly lease_owner_ref: string | null;
+            readonly heartbeat_at: string | null;
+            readonly expires_at: string | null;
+            readonly lease_status?: string;
+        };
+        readonly status: string;
+    }[];
+    readonly active_count: number;
+    readonly expired_count: number;
+    readonly stuck_count: number;
+    readonly checked_at: string;
+}
+
+interface OpaqueRefShape {
+    readonly ref_id: string;
+    readonly ref_type: string;
+    readonly scope_ref: string;
+}
+
+interface AuditRefShape {
+    readonly audit_event_id: string;
+    readonly audit_stream: string;
+    readonly recorded_at: string;
+}
+
 const secretFieldPattern =
     /(?:one[_-]?time[_-]?secret|raw[_-]?(?:secret|prompt|context|artifact|input|output|completion)|provider[_-]?(?:key|secret|token)|api[_-]?key|key[_-]?hash[_-]?ref|key[_-]?fingerprint|virtual[_-]?key[_-]?(?:value|secret)|signed[_-]?(?:url|uri)|artifact[_-]?body|object[_-]?body|prompt|completion|authorization|password|private[_-]?key|credential|access[_-]?token|refresh[_-]?token|id[_-]?token|(?:^|[_-])secret(?:$|[_-])|(?:^|[_-])token(?:$|[_-])|(?:raw|db|database|unrestricted)[_-]?rows)/iu;
 
@@ -618,6 +880,7 @@ export function buildOperationalViewModel(
     const budgetSpend = asReadonlyArray(snapshot.budgetSpend.body?.spend);
     const virtualKeys = asReadonlyArray(snapshot.virtualKeys.body?.virtual_keys).map(toVirtualKeyView);
 
+    const taskTrace = toTaskTracePanel(snapshot, openApiPaths, costEvents, budgetSpend);
     return {
         generatedAt: options.generatedAt,
         controlApiBaseUrl: options.controlApiBaseUrl,
@@ -658,7 +921,9 @@ export function buildOperationalViewModel(
             denials: costEvents.filter((event) => event.decision === 'deny' || event.denial_reason).map(toAuditEventView),
         },
         breakGlass: toBreakGlassPanel(openApiPaths, routePolicy),
-        taskTrace: toTaskTracePanel(snapshot, openApiPaths, costEvents, budgetSpend),
+        taskTrace,
+        approvalQueue: toApprovalQueuePanel(snapshot),
+        durableOperations: toDurableOperationsPanel(snapshot, taskTrace),
     };
 }
 
@@ -799,6 +1064,297 @@ function toBreakGlassPanel(openApiPaths: readonly string[], routePolicy: ActionP
         reason: routePolicy.allowed ? 'Control API routes are enabled.' : routePolicy.reason,
         actionPolicy: routePolicy,
     };
+}
+
+function toApprovalQueuePanel(snapshot: OperationalControlApiSnapshot): ApprovalQueuePanel {
+    const approvals = asReadonlyArray(snapshot.approvals?.body?.approvals);
+    return {
+        actionPolicy: resultPolicy(snapshot.approvals, approvals.length > 0, 'Approval metadata loaded from Control API.'),
+        items: approvals.map(toApprovalQueueItem),
+        count: String(snapshot.approvals?.body?.count ?? approvals.length),
+        emptyState:
+            approvals.length === 0
+                ? 'No pending approval requests returned; decisions remain fail-closed until Control API exposes metadata.'
+                : 'Approval queue uses artifact refs and audit refs only; raw action prompts and bodies are not requested.',
+    };
+}
+
+function toApprovalQueueItem(approval: ApprovalResponse): ApprovalQueueItemView {
+    return {
+        id: approval.approval_request_id,
+        state: approval.state,
+        requiredAction: requiredApprovalAction(approval),
+        requester: approval.requester_principal_id,
+        requiredRole: approval.required_role,
+        riskTier: approval.risk_tier,
+        expiry: approval.expires_at,
+        workflowId: approval.workflow_id,
+        taskId: approval.task_id,
+        requestId: approval.request_id,
+        traceId: approval.trace_id,
+        project: approval.project_id,
+        policyVersion: approval.policy_version,
+        registryVersion: approval.registry_version,
+        actionSummaryArtifact: toArtifactRefView(approval.action_summary_artifact_ref),
+        auditTrail: approval.audit_refs.map(toAuditRefView),
+        createdAt: approval.created_at,
+        updatedAt: approval.updated_at,
+    };
+}
+
+function requiredApprovalAction(approval: ApprovalResponse): string {
+    if (approval.tool_call_id !== null) return `tool call ${approval.tool_call_id}`;
+    if (approval.delegation_id !== null) return `delegation ${approval.delegation_id}`;
+    if (approval.step_id !== null) return `workflow step ${approval.step_id}`;
+    return `artifact summary ${approval.action_summary_artifact_ref.artifact_id}`;
+}
+
+function toDurableOperationsPanel(snapshot: OperationalControlApiSnapshot, taskTrace: TaskTracePanel): DurableOperationsPanel {
+    const workflow = taskTrace.workflow;
+    const task = taskTrace.task;
+    const manualReviews = asReadonlyArray(snapshot.manualReviews?.body?.manual_reviews);
+    const lifecycleEvents = asReadonlyArray(snapshot.artifactLifecycle?.body?.events);
+    const artifactStatus = snapshot.artifactLifecycleStatus?.body?.status ?? null;
+    const artifactId =
+        artifactStatus?.artifact_id ??
+        lifecycleEvents[0]?.artifact_id ??
+        taskTrace.artifacts.metadata[0]?.id ??
+        'artifact unavailable';
+    const hasData =
+        manualReviews.length > 0 ||
+        snapshot.workflowLeaseStatus?.body?.leases !== undefined ||
+        snapshot.workflowOutboxStatus?.body?.status !== undefined ||
+        snapshot.outboxStatus?.body?.status !== undefined ||
+        lifecycleEvents.length > 0 ||
+        artifactStatus !== null;
+
+    return {
+        actionPolicy: combinedResultPolicy(
+            [
+                snapshot.workflow,
+                snapshot.manualReviews,
+                snapshot.workflowLeaseStatus,
+                snapshot.workflowOutboxStatus,
+                snapshot.outboxStatus,
+                snapshot.artifactLifecycle,
+                snapshot.artifactLifecycleStatus,
+            ],
+            hasData,
+            'Durable operation metadata loaded from Control API.',
+            'Durable operation endpoints are unavailable or empty; action controls are fail-closed.',
+        ),
+        workflowId: workflow.workflowId,
+        taskId: task.id,
+        retry: toDurableControl('Retry workflow', workflow.workflowId, 'POST', `/api/workflows/${workflow.workflowId}/retry`, {
+            available: workflow.workflowId !== 'workflow unavailable',
+            reason: 'Schedules a trusted workflow retry through the Control API.',
+            requestId: task.request,
+            traceId: task.trace,
+            policyVersion: workflow.policyVersion,
+            registryVersion: workflow.registryVersion,
+        }),
+        cancel: toDurableControl('Cancel task', task.id, 'POST', `/api/tasks/${task.id}/cancel`, {
+            available: task.id !== 'task unavailable',
+            reason: 'Records a durable cancellation request for workers to observe.',
+            requestId: task.request,
+            traceId: task.trace,
+            policyVersion: workflow.policyVersion,
+            registryVersion: workflow.registryVersion,
+        }),
+        manualReview: toManualReviewPanel(snapshot.manualReviews, manualReviews),
+        leaseStatus: toLeaseStatusPanel(snapshot.workflowLeaseStatus, snapshot.workflowLeaseStatus?.body?.leases ?? null),
+        outbox: toOutboxBacklogPanel(snapshot.workflowOutboxStatus, snapshot.outboxStatus),
+        artifactLifecycle: toArtifactLifecyclePanel(
+            snapshot.artifactLifecycle,
+            snapshot.artifactLifecycleStatus,
+            lifecycleEvents,
+            artifactStatus,
+            artifactId,
+        ),
+    };
+}
+
+function toDurableControl(
+    label: string,
+    targetId: string,
+    method: 'GET' | 'POST',
+    endpoint: string,
+    options: {
+        readonly available: boolean;
+        readonly reason: string;
+        readonly requestId: string;
+        readonly traceId: string;
+        readonly policyVersion: string;
+        readonly registryVersion: string;
+    },
+): DurableControlView {
+    return { label, targetId, endpoint, method, ...options };
+}
+
+function toManualReviewPanel(
+    result: ControlApiFetchResult<ManualReviewsEnvelope> | undefined,
+    records: readonly ManualReviewResponse[],
+): ManualReviewPanel {
+    return {
+        actionPolicy: resultPolicy(result, records.length > 0, 'Manual-review metadata loaded from Control API.'),
+        items: records.map(toManualReviewItem),
+        count: String(result?.body?.count ?? records.length),
+        emptyState:
+            records.length === 0
+                ? 'No manual-review items returned for the demo workflow.'
+                : 'Manual reviews expose opaque reason and resolution refs only.',
+    };
+}
+
+function toManualReviewItem(record: ManualReviewResponse): ManualReviewItemView {
+    return {
+        id: record.manual_review_item_id,
+        workflowId: record.workflow_id,
+        taskId: record.task_id ?? 'task unavailable',
+        requestId: record.request_id,
+        traceId: record.trace_id,
+        state: record.review_state,
+        blockingState: record.blocking_state,
+        owner: record.owner_principal_id,
+        ownerRole: record.owner_role ?? 'role unavailable',
+        reasonRef: toRefSummary(record.reason_ref, 'reason ref unavailable'),
+        safeActions: record.safe_actions.map((ref) => toRefSummary(ref, 'safe action ref unavailable')),
+        sideEffects: record.side_effect_refs.map((ref) => toRefSummary(ref, 'side effect ref unavailable')),
+        resolutionRef: toRefSummary(record.resolution_ref, 'resolution pending'),
+        resolutionAuditRef: toAuditRefView(record.resolution_audit_ref ?? emptyAuditRef()),
+        policyVersion: record.policy_version,
+        registryVersion: record.registry_version,
+        createdAt: record.created_at,
+        updatedAt: record.updated_at,
+    };
+}
+
+function toLeaseStatusPanel(
+    result: ControlApiFetchResult<WorkflowLeaseStatusEnvelope> | undefined,
+    leases: WorkflowLeaseStatusResponse | null,
+): LeaseStatusPanel {
+    return {
+        actionPolicy: resultPolicy(result, leases !== null, 'Workflow lease and stuck-worker metadata loaded.'),
+        workflowId: leases?.workflow_id ?? 'workflow unavailable',
+        workflowStatus: leases?.workflow_status ?? 'unavailable',
+        workflowLease: leases === null ? emptyLease() : toLeaseView(leases.workflow_lease),
+        agentLeases: leases?.agent_run_leases.map((lease) => ({
+            agentRunId: lease.agent_run_id,
+            status: lease.status,
+            lease: toLeaseView(lease.lease_ref),
+        })) ?? [],
+        activeCount: String(leases?.active_count ?? 0),
+        expiredCount: String(leases?.expired_count ?? 0),
+        stuckCount: String(leases?.stuck_count ?? 0),
+        checkedAt: leases?.checked_at ?? 'unavailable',
+    };
+}
+
+function toOutboxBacklogPanel(
+    workflowResult: ControlApiFetchResult<OutboxStatusEnvelope> | undefined,
+    globalResult: ControlApiFetchResult<OutboxStatusEnvelope> | undefined,
+): OutboxBacklogPanel {
+    const workflow = workflowResult?.body?.status;
+    const global = globalResult?.body?.status;
+    return {
+        actionPolicy: combinedResultPolicy(
+            [workflowResult, globalResult],
+            workflow !== undefined || global !== undefined,
+            'Outbox backlog metadata loaded from Control API.',
+            'Outbox status endpoints returned no metadata.',
+        ),
+        workflowStatus: toOutboxStatusView(workflow),
+        globalStatus: toOutboxStatusView(global),
+    };
+}
+
+function toOutboxStatusView(status: OutboxStatusResponse | undefined): OutboxStatusView {
+    return {
+        total: String(status?.total ?? 0),
+        backlog: String(status?.backlog_count ?? 0),
+        failed: String(status?.failed_count ?? 0),
+        deadLettered: String(status?.dead_lettered_count ?? 0),
+        byState: Object.entries(status?.counts_by_state ?? {}).map(([key, value]) => ({ key, value: String(value) })),
+        byDestination: Object.entries(status?.counts_by_destination ?? {}).map(([key, value]) => ({ key, value: String(value) })),
+    };
+}
+
+function toArtifactLifecyclePanel(
+    lifecycleResult: ControlApiFetchResult<ArtifactLifecycleEnvelope> | undefined,
+    statusResult: ControlApiFetchResult<ArtifactLifecycleStatusEnvelope> | undefined,
+    events: readonly ArtifactLifecycleEventResponse[],
+    status: ArtifactLifecycleStatusResponse | null,
+    artifactId: string,
+): ArtifactLifecyclePanel {
+    return {
+        actionPolicy: combinedResultPolicy(
+            [lifecycleResult, statusResult],
+            events.length > 0 || status !== null,
+            'Artifact lifecycle and signed-access eligibility metadata loaded.',
+            'Artifact lifecycle endpoints returned no metadata.',
+        ),
+        artifactId,
+        status: toArtifactLifecycleStatusView(status),
+        events: events.map(toArtifactLifecycleEventView),
+        signedAccess: toSignedAccessStatusView(status, undefined),
+        emptyState:
+            events.length === 0 && status === null
+                ? 'No artifact lifecycle metadata returned; signed URLs and artifact bodies are never requested.'
+                : 'Lifecycle panel contains status refs only and suppresses signed URLs.',
+    };
+}
+
+function toArtifactLifecycleStatusView(status: ArtifactLifecycleStatusResponse | null): ArtifactLifecycleStatusView {
+    return {
+        latestState: status?.latest_state ?? 'unavailable',
+        latestAction: status?.latest_action ?? 'unavailable',
+        legalHold: status?.legal_hold === true ? 'enabled' : 'not enabled',
+        redacted: status?.redacted === true ? 'redacted' : 'not redacted',
+        deletionScheduledAt: status?.deletion_scheduled_at ?? 'not scheduled',
+        eventCount: String(status?.event_count ?? 0),
+    };
+}
+
+function toArtifactLifecycleEventView(event: ArtifactLifecycleEventResponse): ArtifactLifecycleEventView {
+    return {
+        id: event.lifecycle_event_id,
+        action: event.action,
+        state: event.state,
+        storage: toRefSummary(event.storage_ref, 'storage ref unavailable'),
+        checksumSha256: event.checksum_sha256,
+        retention: toRecordLabel(event.retention_policy, ['retained_until', 'delete_after_seconds', 'legal_hold'], 'retention unavailable'),
+        signedAccess: signedAccessEligibilityLabel(event.signed_access_eligibility),
+        legalHold: event.legal_hold ? 'enabled' : 'not enabled',
+        redacted: event.redacted ? 'redacted' : 'not redacted',
+        deletionScheduledAt: event.deletion_scheduled_at ?? 'not scheduled',
+        auditTrail: event.audit_refs.map(toAuditRefView),
+        occurredAt: event.occurred_at,
+    };
+}
+
+function toSignedAccessStatusView(
+    status: ArtifactLifecycleStatusResponse | null,
+    decision: ArtifactSignedAccessDecisionResponse | undefined,
+): SignedAccessStatusView {
+    const eligibility = status?.signed_access_eligibility;
+    return {
+        eligible: eligibility?.eligible === true ? 'eligible' : 'not eligible',
+        requiresApproval: eligibility?.requires_approval === true ? 'approval required' : 'approval not required',
+        maxDurationSeconds: String(eligibility?.max_signed_duration_seconds ?? 'not available'),
+        decision: decision?.decision ?? 'not requested',
+        decisionReason: decision?.decision_reason ?? 'signed access grant is not rendered in the portal',
+        sha256: compactHash(decision?.sha256 ?? ''),
+    };
+}
+
+function signedAccessEligibilityLabel(eligibility: ArtifactLifecycleEventResponse['signed_access_eligibility']): string {
+    const approval = eligibility.requires_approval ? 'approval required' : 'no approval required';
+    const duration = eligibility.max_signed_duration_seconds === null ? 'no TTL' : `${eligibility.max_signed_duration_seconds}s max`;
+    return `${eligibility.eligible ? 'eligible' : 'ineligible'} · ${approval} · ${duration}`;
+}
+
+function emptyAuditRef(): AuditRefShape {
+    return { audit_event_id: 'audit ref unavailable', audit_stream: 'none', recorded_at: 'none' };
 }
 
 function toTaskTracePanel(
@@ -1290,7 +1846,7 @@ function toTraceArtifactMetadataView(artifact: ArtifactMetadataResponse): TraceA
         sizeBytes: String(artifact.size_bytes),
         sha256: artifact.sha256,
         sensitivity: artifact.sensitivity_label,
-        storage: `${artifact.storage_ref.storage_system}:${artifact.storage_ref.container_ref}`,
+        storage: toRecordLabel(artifact.storage_ref, ['storage_system', 'container_ref', 'ref_id', 'ref_type', 'scope_ref'], 'storage metadata'),
         source: toRecordLabel(artifact.source_ref, ['source_type', 'source_id'], 'source metadata'),
         retention: toRecordLabel(artifact.retention_policy, ['retained_until', 'delete_after_seconds', 'legal_hold'], 'retention metadata'),
         signedDownloadEligible: artifact.signed_download_eligible ? 'eligible by policy' : 'not eligible',
@@ -1687,6 +2243,11 @@ function formatNullableMoney(amount: number | null, currency: string): string {
 
 function formatNullableNumber(value: number | null): string {
     return value === null ? 'not reported' : String(value);
+}
+
+function compactHash(value: string): string {
+    if (value.length <= 16) return value.length === 0 ? 'not reported' : value;
+    return `${value.slice(0, 10)}…${value.slice(-6)}`;
 }
 
 function emptyRef(label: string): RefSummaryView {

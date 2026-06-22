@@ -1,4 +1,5 @@
 import type { EnvironmentName } from '../../../../packages/shared-types/src/gateway-control.ts';
+import { createHmac, randomBytes } from 'node:crypto';
 
 import type { ControlRouteAuthContext, ControlRouteDefinition, ControlRouteRequest } from './virtual-keys.ts';
 import {
@@ -22,6 +23,7 @@ import {
   toArtifactLifecycleEventResponse,
   toArtifactMetadataResponse,
   type AgentWorkflowStore,
+  type ArtifactSignedAccessDecisionResult,
   type InMemoryAgentWorkflowStoreOptions,
 } from './agent-workflow-store.ts';
 
@@ -43,6 +45,26 @@ export interface ArtifactRouteOptions {
   readonly runtimeEnvironment?: EnvironmentName | 'production';
   readonly store?: ArtifactStore;
   readonly authenticate?: (request: ControlRouteRequest) => ControlRouteAuthContext | Promise<ControlRouteAuthContext>;
+  readonly signedAccessTtlSeconds?: number | undefined;
+  readonly issueSignedAccess?: (input: ArtifactSignedAccessIssueInput) => ArtifactSignedAccessGrant | Promise<ArtifactSignedAccessGrant>;
+  readonly signedAccessSecret?: string | Uint8Array | undefined;
+}
+
+export interface ArtifactSignedAccessIssueInput {
+  readonly artifactId: string;
+  readonly actor: ControlRouteAuthContext;
+  readonly ttlSeconds: number;
+  readonly sha256: string;
+  readonly policyVersion: string;
+  readonly registryVersion: string;
+  readonly secret?: string | Uint8Array | undefined;
+}
+
+export interface ArtifactSignedAccessGrant {
+  readonly signed_url: string;
+  readonly expires_at: string;
+  readonly ttl_seconds: number;
+  readonly sha256: string;
 }
 
 export function createInMemoryArtifactStore(options: InMemoryAgentWorkflowStoreOptions = {}): AgentWorkflowStore {
@@ -124,9 +146,76 @@ export function registerArtifactRoutes(registrar: ArtifactRouteRegistrar, option
           actor,
           createAgentWorkflowReadContext(actor, request),
         );
-        return respond(reply, 200, { decision });
+        return respond(reply, 200, { decision: await issueSignedAccessIfEligible(decision, body, actor, options) });
       }),
   });
+}
+
+async function issueSignedAccessIfEligible(
+  decision: ArtifactSignedAccessDecisionResult,
+  body: ReturnType<typeof asArtifactSignedAccessRequest>,
+  actor: ControlRouteAuthContext,
+  options: ArtifactRouteOptions,
+): Promise<ArtifactSignedAccessDecisionResult> {
+  if (decision.decision !== 'eligible' || !decision.eligible || decision.requires_approval) return decision;
+
+  const routeDefaultTtlSeconds = normalizeTtl(options.signedAccessTtlSeconds ?? 300);
+  const requestedTtlSeconds = normalizeTtl(body.requested_duration_seconds ?? routeDefaultTtlSeconds);
+  const policyTtlSeconds = normalizeTtl(decision.max_signed_duration_seconds ?? routeDefaultTtlSeconds);
+  const ttlSeconds = Math.min(routeDefaultTtlSeconds, requestedTtlSeconds, policyTtlSeconds, 900);
+  const issuer = options.issueSignedAccess ?? defaultSignedAccessIssuer;
+  const signedAccess = await issuer({
+    artifactId: decision.artifact_id,
+    actor,
+    ttlSeconds,
+    sha256: decision.sha256,
+    policyVersion: body.policy_version,
+    registryVersion: body.registry_version,
+    secret: options.signedAccessSecret,
+  });
+  return { ...decision, signed_access: signedAccess };
+}
+
+function normalizeTtl(value: number): number {
+  if (!Number.isInteger(value) || value <= 0) return 300;
+  return Math.min(value, 900);
+}
+
+function defaultSignedAccessIssuer(input: ArtifactSignedAccessIssueInput): ArtifactSignedAccessGrant {
+  const expiresAt = new Date(Date.now() + input.ttlSeconds * 1000).toISOString();
+  const url = new URL(`https://control-api.local/artifacts/${encodeURIComponent(input.artifactId)}/object`);
+  url.searchParams.set('expires_at', expiresAt);
+  url.searchParams.set('principal_id', input.actor.principalId);
+  url.searchParams.set('policy_version', input.policyVersion);
+  url.searchParams.set('registry_version', input.registryVersion);
+  url.searchParams.set('signature', signArtifactAccessGrant(input, expiresAt));
+  return {
+    signed_url: url.toString(),
+    expires_at: expiresAt,
+    ttl_seconds: input.ttlSeconds,
+    sha256: input.sha256,
+  };
+}
+
+const processLocalSignedAccessSecret = randomBytes(32);
+
+function signArtifactAccessGrant(input: ArtifactSignedAccessIssueInput, expiresAt: string): string {
+  const material = JSON.stringify({
+    artifact_id: input.artifactId,
+    expires_at: expiresAt,
+    principal_id: input.actor.principalId,
+    auth_subject_ref: input.actor.authSubjectRef,
+    ttl_seconds: input.ttlSeconds,
+    sha256: input.sha256,
+    policy_version: input.policyVersion,
+    registry_version: input.registryVersion,
+  });
+  const secret = input.secret ?? process.env.DEVGATEWAY_ARTIFACT_SIGNING_SECRET ?? process.env.CONTROL_API_ARTIFACT_SIGNING_SECRET;
+  const key = typeof secret === 'string' ? Buffer.from(secret, 'utf8') : (secret ?? processLocalSignedAccessSecret);
+  if (key.length === 0) {
+    throw new Error('artifact signed-access signing secret must be non-empty');
+  }
+  return createHmac('sha256', key).update(material).digest('base64url');
 }
 
 const artifactListEnvelopeSchema = {

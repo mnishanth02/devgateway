@@ -115,13 +115,16 @@ export interface EmitCostEventOptions {
 
 export type CostBudgetLifecyclePhase = Extract<CostPhase, 'reservation' | 'settlement' | 'release'>;
 export type CostBudgetLifecycleEventName = `cost.budget.${CostBudgetLifecyclePhase}`;
+export type CostBudgetReservationState = 'held' | 'released' | 'settled' | 'orphaned' | 'reconciled';
 
 export interface CostBudgetLifecycleEventInput extends Omit<CostEventInput, 'attemptStatus' | 'eventType'> {
   readonly phase: CostBudgetLifecyclePhase;
+  readonly reservationState?: CostBudgetReservationState | undefined;
 }
 
 export interface CostBudgetLifecycleEvent {
   readonly phase: CostBudgetLifecyclePhase;
+  readonly reservationState: CostBudgetReservationState;
   readonly eventName: CostBudgetLifecycleEventName;
   readonly event: CostEventRecord;
   readonly metadata: Readonly<Record<string, unknown>>;
@@ -208,8 +211,10 @@ export function formatCostEvent(input: CostEventInput): CostEventRecord {
 
 export function formatBudgetLifecycleCostEvent(input: CostBudgetLifecycleEventInput): CostBudgetLifecycleEvent {
   assertNoForbiddenTelemetryFields(input, 'budget lifecycle cost event input');
-  const { phase, ...costInput } = input;
+  const { phase, reservationState, ...costInput } = input;
   const mapping = budgetLifecycleCostEventMapping[phase];
+  const effectiveReservationState = reservationState ?? defaultBudgetReservationState(phase);
+  assertBudgetReservationState(effectiveReservationState);
   const releaseDefaults =
     phase === 'release'
       ? {
@@ -226,6 +231,7 @@ export function formatBudgetLifecycleCostEvent(input: CostBudgetLifecycleEventIn
   const metadata = removeUndefined({
     budget_lifecycle_phase: phase,
     budget_lifecycle_event_name: mapping.eventName,
+    budget_reservation_state: effectiveReservationState,
     represented_event_type: event.event_type,
     represented_attempt_status: event.attempt_status,
     workflow_run_id: event.aggregation_targets.workflow_run_id,
@@ -235,10 +241,28 @@ export function formatBudgetLifecycleCostEvent(input: CostBudgetLifecycleEventIn
   assertNoForbiddenTelemetryFields(metadata, 'budget lifecycle cost event metadata');
   return {
     phase,
+    reservationState: effectiveReservationState,
     eventName: mapping.eventName,
     event,
     metadata,
   };
+}
+
+function defaultBudgetReservationState(phase: CostBudgetLifecyclePhase): CostBudgetReservationState {
+  switch (phase) {
+    case 'reservation':
+      return 'held';
+    case 'settlement':
+      return 'settled';
+    case 'release':
+      return 'released';
+  }
+}
+
+function assertBudgetReservationState(state: string): asserts state is CostBudgetReservationState {
+  if (!['held', 'released', 'settled', 'orphaned', 'reconciled'].includes(state)) {
+    throw new Error(`Unknown budget reservation state: ${state}`);
+  }
 }
 
 export async function emitCostEvent(

@@ -18,6 +18,16 @@ class ModelPolicyError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
+class ModelAbortOutcome:
+    request_ref: str
+    attempted: bool
+    supported: bool
+    outcome: str
+    evidence_ref: str
+    reason_ref: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class FixtureModelGovernance:
     allowed_aliases: tuple[str, ...] = FIXTURE_MODEL_ALIASES
     policy_version: str = FIXTURE_POLICY_VERSION
@@ -57,6 +67,17 @@ class GovernedFixtureModelAdapter:
             policy_version=request.policy_version,
             registry_version=request.registry_version,
             trace_context=request.trace_context,
+        )
+
+    def abort(self, request_ref: str, *, reason_ref: str | None = None) -> ModelAbortOutcome:
+        digest = hashlib.sha256(f"{request_ref}:{reason_ref or 'cancellation'}".encode("utf-8")).hexdigest()[:16]
+        return ModelAbortOutcome(
+            request_ref=request_ref,
+            attempted=True,
+            supported=False,
+            outcome="unsupported",
+            evidence_ref=f"fixture-ref:model-abort:{digest}",
+            reason_ref=reason_ref,
         )
 
     def _validate_governance(self, request: ModelRequest) -> None:

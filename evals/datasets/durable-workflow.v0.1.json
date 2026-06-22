@@ -1,0 +1,328 @@
+{
+  "contract_version": "0.1.0",
+  "dataset_id": "durable-workflow.v0.1",
+  "dataset_version": "0.1.0",
+  "suite": "durable_workflow",
+  "schema_status": "layout_stub_until_shared_eval_schema_generalizes_beyond_acl_safety",
+  "description": "Synthetic Track 3 durable workflow fixtures covering restart, lease recovery, fencing, and idempotent retry safety without live providers.",
+  "fixture_root": "evals/fixtures/durable-workflow",
+  "inert_fixture_mode": true,
+  "no_live_external_calls": true,
+  "production_enablement": false,
+  "source_data_policy": {
+    "synthetic_only": true,
+    "no_real_customer_data": true,
+    "no_real_repo_data": true,
+    "no_live_external_calls": true,
+    "fixture_review_required": true
+  },
+  "categories": [
+    "process_restart",
+    "lease_recovery",
+    "fencing",
+    "retry_idempotency"
+  ],
+  "artifact_ref_policy": {
+    "required": true,
+    "description": "Each Track 3 fixture case declares expected gate-result, trace, and audit artifacts that a future runner or chaos gate must write."
+  },
+  "cases": [
+    {
+      "case_id": "durable-workflow-process-kill-restart",
+      "category": "process_restart",
+      "title": "Resume workflow after worker process kill and restart",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/durable-workflow/durable-workflow-process-kill-restart.json",
+          "sha256_required": true,
+          "description": "Inert Track 3 fixture for durable-workflow-process-kill-restart."
+        }
+      ],
+      "inputs": {
+        "failure_point": "worker_killed_after_step_claim",
+        "restart_source": "postgres_checkpoint"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "A restarted worker resumes from the persisted checkpoint instead of rebuilding the workflow from memory.",
+          "The claimed step is completed once after restart with the same idempotency key.",
+          "Audit evidence links pre-kill and post-restart trace segments without raw prompt or provider payloads."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/durable-workflow/durable-workflow-process-kill-restart/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/durable-workflow/durable-workflow-process-kill-restart/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/durable-workflow/durable-workflow-process-kill-restart/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "workflow_id",
+        "checkpoint_ref",
+        "restart_event_ref"
+      ],
+      "tags": [
+        "track-3",
+        "durable-workflow",
+        "chaos-gate",
+        "postgres"
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      },
+      "chaos_scenario": {
+        "postgres_required": true,
+        "kill_point": "after_claim_before_completion"
+      }
+    },
+    {
+      "case_id": "durable-workflow-restart-after-db-commit",
+      "category": "process_restart",
+      "title": "Restart after state commit before next claim",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/durable-workflow/durable-workflow-restart-after-db-commit.json",
+          "sha256_required": true,
+          "description": "Inert Track 3 fixture for durable-workflow-restart-after-db-commit."
+        }
+      ],
+      "inputs": {
+        "failure_point": "after_state_commit_before_next_claim",
+        "persisted_state": "step_completed"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Committed state survives worker replacement and is not replayed as pending work.",
+          "The next pending step is selected using persisted ordering and durable workflow state.",
+          "Outbox references from the committed transition remain pending for separate delivery."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/durable-workflow/durable-workflow-restart-after-db-commit/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/durable-workflow/durable-workflow-restart-after-db-commit/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/durable-workflow/durable-workflow-restart-after-db-commit/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "workflow_id",
+        "committed_state_ref",
+        "outbox_ref"
+      ],
+      "tags": [
+        "track-3",
+        "durable-workflow",
+        "postgres"
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      },
+      "chaos_scenario": {
+        "postgres_required": true,
+        "kill_point": "after_db_commit"
+      }
+    },
+    {
+      "case_id": "durable-workflow-stuck-lease-recovery",
+      "category": "lease_recovery",
+      "title": "Recover expired pre-side-effect lease and escalate ambiguous work",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/durable-workflow/durable-workflow-stuck-lease-recovery.json",
+          "sha256_required": true,
+          "description": "Inert Track 3 fixture for durable-workflow-stuck-lease-recovery."
+        }
+      ],
+      "inputs": {
+        "lease_ttl_seconds": 1,
+        "idempotent_step": "pre_side_effect",
+        "ambiguous_step": "running"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Expired idempotent pre-side-effect work is returned to pending within the stuck-lease recovery SLO.",
+          "Expired ambiguous running work is moved to manual review instead of being auto-replayed.",
+          "Recovery evidence includes owner, fencing token, expiry, last heartbeat, and decision reason refs only."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/durable-workflow/durable-workflow-stuck-lease-recovery/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/durable-workflow/durable-workflow-stuck-lease-recovery/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/durable-workflow/durable-workflow-stuck-lease-recovery/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "lease_owner_ref",
+        "fencing_token",
+        "lease_expiry",
+        "manual_review_ref"
+      ],
+      "tags": [
+        "track-3",
+        "lease-recovery",
+        "chaos-gate",
+        "postgres"
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      },
+      "chaos_scenario": {
+        "postgres_required": true,
+        "fault": "expired_step_lease"
+      }
+    },
+    {
+      "case_id": "durable-workflow-stale-worker-fenced",
+      "category": "fencing",
+      "title": "Reject stale worker writes after lease replacement",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/durable-workflow/durable-workflow-stale-worker-fenced.json",
+          "sha256_required": true,
+          "description": "Inert Track 3 fixture for durable-workflow-stale-worker-fenced."
+        }
+      ],
+      "inputs": {
+        "old_worker": "lease_token_1",
+        "replacement_worker": "lease_token_2"
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "A stale worker write carrying an older fencing token is rejected fail-closed.",
+          "The replacement lease token remains the only authorized token for state mutation.",
+          "The denial records sanitized fencing evidence without exposing workflow payload bodies."
+        ],
+        "no_production_enablement": true,
+        "required_denial_reason": "stale_fencing_token"
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/durable-workflow/durable-workflow-stale-worker-fenced/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/durable-workflow/durable-workflow-stale-worker-fenced/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/durable-workflow/durable-workflow-stale-worker-fenced/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "rejected_fencing_token",
+        "active_fencing_token",
+        "denial_reason"
+      ],
+      "tags": [
+        "track-3",
+        "fencing",
+        "postgres"
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      },
+      "chaos_scenario": {
+        "postgres_required": true,
+        "fault": "stale_worker_write"
+      }
+    },
+    {
+      "case_id": "durable-workflow-retry-idempotency-conflict",
+      "category": "retry_idempotency",
+      "title": "Deny conflicting idempotency replay during retry",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/durable-workflow/durable-workflow-retry-idempotency-conflict.json",
+          "sha256_required": true,
+          "description": "Inert Track 3 fixture for durable-workflow-retry-idempotency-conflict."
+        }
+      ],
+      "inputs": {
+        "retry_attempt": 2,
+        "request_ref": "conflicting_fixture_ref"
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Conflicting idempotency replay is rejected rather than attached to the original attempt.",
+          "Retry metadata records the prior request ref and sanitized conflict reason.",
+          "No model, tool, budget, or outbox side effect is emitted for the denied replay."
+        ],
+        "no_production_enablement": true,
+        "required_denial_reason": "idempotency_conflict"
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/durable-workflow/durable-workflow-retry-idempotency-conflict/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/durable-workflow/durable-workflow-retry-idempotency-conflict/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/durable-workflow/durable-workflow-retry-idempotency-conflict/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "idempotency_key",
+        "original_request_ref",
+        "denial_reason"
+      ],
+      "tags": [
+        "track-3",
+        "retry",
+        "idempotency",
+        "postgres"
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      },
+      "chaos_scenario": {
+        "postgres_required": true,
+        "fault": "conflicting_replay"
+      }
+    }
+  ]
+}

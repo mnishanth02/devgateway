@@ -6,11 +6,17 @@ caller-supplied flags.
 """
 from __future__ import annotations
 
+import hashlib
+import json
+from datetime import datetime, timedelta
+
 from .contracts import (
     ApprovalRiskTier,
     ApprovalStatus,
     StepKind,
+    StepState,
     WorkflowState,
+    utc_now,
 )
 
 
@@ -34,6 +40,14 @@ APPROVAL_ACTIVE_STATES: frozenset[ApprovalStatus] = (
     frozenset(ApprovalStatus) - APPROVAL_TERMINAL_STATES
 )
 
+DEFAULT_APPROVAL_TTL_SECONDS_BY_RISK_TIER: dict[ApprovalRiskTier | str, int] = {
+    ApprovalRiskTier.LOW: 72 * 60 * 60,
+    ApprovalRiskTier.MEDIUM: 24 * 60 * 60,
+    ApprovalRiskTier.HIGH: 4 * 60 * 60,
+    ApprovalRiskTier.CRITICAL: 4 * 60 * 60,
+    "internal-default": 24 * 60 * 60,
+}
+
 
 def is_approval_terminal(state: ApprovalStatus) -> bool:
     """Return ``True`` if *state* is a terminal approval state (decision is final)."""
@@ -43,6 +57,35 @@ def is_approval_terminal(state: ApprovalStatus) -> bool:
 def is_approval_active(state: ApprovalStatus) -> bool:
     """Return ``True`` if *state* is an active (non-terminal) approval state."""
     return state in APPROVAL_ACTIVE_STATES
+
+
+def default_approval_ttl_seconds(risk_tier: ApprovalRiskTier | str | None) -> int:
+    """Return the default approval TTL seconds for a risk tier."""
+    if isinstance(risk_tier, str):
+        try:
+            risk_tier = ApprovalRiskTier(risk_tier)
+        except ValueError:
+            return DEFAULT_APPROVAL_TTL_SECONDS_BY_RISK_TIER["internal-default"]
+    if risk_tier is None:
+        return DEFAULT_APPROVAL_TTL_SECONDS_BY_RISK_TIER["internal-default"]
+    return DEFAULT_APPROVAL_TTL_SECONDS_BY_RISK_TIER[risk_tier]
+
+
+def approval_expires_at(risk_tier: ApprovalRiskTier | str | None, *, now: datetime | None = None) -> datetime:
+    """Return the fail-closed expiry timestamp for a newly-created approval."""
+    timestamp = now or utc_now()
+    return timestamp + timedelta(seconds=default_approval_ttl_seconds(risk_tier))
+
+
+def stable_approval_resume_token(*, workflow_id: str, step_id: str | None, approval_id: str) -> str:
+    """Create an opaque, deterministic token tying one approval to one paused step."""
+    material = json.dumps(
+        {"workflow_id": workflow_id, "step_id": step_id, "approval_id": approval_id},
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return "approval_resume_" + hashlib.sha256(material).hexdigest()[:32]
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +126,19 @@ def approval_decision_to_workflow_state(decision: ApprovalStatus) -> WorkflowSta
             f"got {decision!r} which is active/non-terminal."
         )
     return result
+
+
+def approval_decision_to_step_state(decision: ApprovalStatus) -> StepState:
+    """Map a terminal approval decision to the paused step's deterministic state."""
+    if decision is ApprovalStatus.APPROVED:
+        return StepState.PENDING
+    if decision in (ApprovalStatus.DENIED, ApprovalStatus.CANCELLED):
+        return StepState.CANCELLED
+    if decision in (ApprovalStatus.EXPIRED, ApprovalStatus.SUPERSEDED):
+        return StepState.FAILED
+    raise ValueError(
+        f"approval_decision_to_step_state requires a terminal approval state; got {decision!r}."
+    )
 
 
 # ---------------------------------------------------------------------------

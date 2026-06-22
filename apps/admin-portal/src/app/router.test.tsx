@@ -96,6 +96,29 @@ describe('admin portal router and authenticated layout', () => {
     expect(screen.getByText('Artifact metadata only')).toBeTruthy();
     expect(screen.getByText('Tool decision lattice')).toBeTruthy();
     expect(screen.getByText('Skill registry')).toBeTruthy();
+  }, 10_000);
+
+  it('renders the Phase 9 approval queue after a Better Auth admin session resolves', async () => {
+    stubControlApi({ session: Response.json(sessionFixture) });
+    renderRouter(['/approvals']);
+
+    expect(await screen.findByRole('heading', { name: 'Approval queue. Payloads stay outside.' })).toBeTruthy();
+    expect(screen.getByText('tool call tool_call_demo_001')).toBeTruthy();
+    expect(screen.getByText('approval_request_demo_001')).toBeTruthy();
+    expect(screen.getByText('Sanitized artifact metadata')).toBeTruthy();
+    expect(screen.getByText('Audit trail')).toBeTruthy();
+  });
+
+  it('renders the Phase 9 durable operations route after a Better Auth admin session resolves', async () => {
+    stubControlApi({ session: Response.json(sessionFixture) });
+    renderRouter(['/durable-operations']);
+
+    expect(await screen.findByRole('heading', { name: 'Durable operations, sealed by default.' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Durable controls' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '1 review items' })).toBeTruthy();
+    expect(screen.getByText('Stuck lease / worker status')).toBeTruthy();
+    expect(screen.getByText('Outbox backlog')).toBeTruthy();
+    expect(screen.getByText('Artifact lifecycle / signed-access status')).toBeTruthy();
   });
 
   it('marks the Trace navigation item as current on the trace route', async () => {
@@ -112,6 +135,28 @@ describe('admin portal router and authenticated layout', () => {
     renderRouter(['/trace']);
 
     expect(await screen.findByRole('heading', { name: 'Every handoff visible. Payloads stay sealed.' })).toBeTruthy();
+    const renderedText = document.body.textContent ?? '';
+    for (const value of Object.values(traceSensitiveValues)) {
+      expect(renderedText).not.toContain(value);
+    }
+  });
+
+  it('does not render secret-like approval metadata on the approval queue route', async () => {
+    stubControlApi({ session: Response.json(sessionFixture) });
+    renderRouter(['/approvals']);
+
+    expect(await screen.findByRole('heading', { name: 'Approval queue. Payloads stay outside.' })).toBeTruthy();
+    const renderedText = document.body.textContent ?? '';
+    for (const value of Object.values(traceSensitiveValues)) {
+      expect(renderedText).not.toContain(value);
+    }
+  });
+
+  it('does not render raw artifact bodies, signed URLs, tokens, or provider keys on durable operations', async () => {
+    stubControlApi({ session: Response.json(sessionFixture) });
+    renderRouter(['/durable-operations']);
+
+    expect(await screen.findByRole('heading', { name: 'Durable operations, sealed by default.' })).toBeTruthy();
     const renderedText = document.body.textContent ?? '';
     for (const value of Object.values(traceSensitiveValues)) {
       expect(renderedText).not.toContain(value);
@@ -169,6 +214,21 @@ describe('admin portal router and authenticated layout', () => {
     expect(screen.getByText('Authentication required')).toBeTruthy();
     expect(screen.queryByText('Registry route posture')).toBeNull();
   });
+
+  it('fails closed before rendering new Phase 9 routes when no Better Auth session is present', async () => {
+    stubControlApi({ session: new Response(null, { status: 401 }) });
+    renderRouter(['/approvals']);
+
+    expect(await screen.findByText('No admin session found.')).toBeTruthy();
+    expect(screen.queryByText('Approval queue. Payloads stay outside.')).toBeNull();
+
+    cleanup();
+    stubControlApi({ session: new Response(null, { status: 401 }) });
+    renderRouter(['/durable-operations']);
+
+    expect(await screen.findByText('No admin session found.')).toBeTruthy();
+    expect(screen.queryByText('Durable operations, sealed by default.')).toBeNull();
+  });
 });
 
 function renderRouter(initialEntries: string[] = ['/']): void {
@@ -187,11 +247,19 @@ function renderRouter(initialEntries: string[] = ['/']): void {
 
 function stubControlApi(overrides: { readonly session: Response }): void {
   const traceResponses = createTrack2EndpointResponses();
+  const durableResponses = createDurableEndpointResponses();
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       if (url.includes('/api/auth/get-session')) return overrides.session.clone();
+      if (url.includes('/api/approvals')) return Response.json(durableResponses.approvals);
+      if (url.includes('/api/workflows/workflow_demo_001/manual-review')) return Response.json(durableResponses.manualReviews);
+      if (url.includes('/api/workflows/workflow_demo_001/leases')) return Response.json(durableResponses.leases);
+      if (url.includes('/api/workflows/workflow_demo_001/outbox/status')) return Response.json(durableResponses.workflowOutboxStatus);
+      if (url.includes('/api/outbox/status')) return Response.json(durableResponses.outboxStatus);
+      if (url.includes('/api/artifacts/artifact_demo_001/lifecycle/status')) return Response.json(durableResponses.artifactLifecycleStatus);
+      if (url.includes('/api/artifacts/artifact_demo_001/lifecycle')) return Response.json(durableResponses.artifactLifecycle);
       if (url.includes('/api/tasks/task_demo_001/artifacts')) return Response.json(traceResponses.taskArtifacts);
       if (url.includes('/api/tasks/task_demo_001')) return Response.json(traceResponses.task);
       if (url.includes('/api/workflows/workflow_demo_001/events')) return Response.json(traceResponses.workflowEvents);
@@ -236,6 +304,181 @@ function createTrack2EndpointResponses() {
     workflowEvents: { events: [workflowEvent()], next_cursor: null },
     agentRun: { agent_run: agentRunResponse() },
     skills: { skills: [skillResponse()], count: 1 },
+  };
+}
+
+function createDurableEndpointResponses() {
+  return {
+    approvals: { approvals: [approvalResponse()], count: 1 },
+    manualReviews: { manual_reviews: [manualReviewResponse()], count: 1 },
+    leases: { leases: workflowLeaseStatus() },
+    workflowOutboxStatus: { status: outboxStatus() },
+    outboxStatus: { status: outboxStatus() },
+    artifactLifecycle: { events: [artifactLifecycleEvent()], count: 1 },
+    artifactLifecycleStatus: { status: artifactLifecycleStatus() },
+  };
+}
+
+function approvalResponse() {
+  return {
+    contract_version: 'gateway-control.v0.1',
+    approval_request_id: 'approval_request_demo_001',
+    workflow_id: 'workflow_demo_001',
+    workflow_run_id: 'workflow_demo_001',
+    task_id: 'task_demo_001',
+    request_id: 'request_demo_001',
+    step_id: 'step_demo_001',
+    delegation_id: 'delegation_demo_001',
+    tool_call_id: 'tool_call_demo_001',
+    requester_principal_id: 'principal_demo',
+    approver_principal_id: null,
+    required_role: 'workflow_operator',
+    approver_policy: { policy_id: 'approval_policy_demo', required_role: 'workflow_operator', mfa_required: true },
+    risk_tier: 'high',
+    action_summary_artifact_ref: traceArtifactRef(),
+    state: 'pending',
+    decision_ref: null,
+    expires_at: traceLater,
+    policy_ref: { policy_id: 'policy-demo-v1', policy_version: 'v1' },
+    audit_refs: [traceAuditRef()],
+    idempotency: traceIdempotency('approval', 'approval_request_demo_001'),
+    principal_id: 'principal_demo',
+    project_id: 'project_demo',
+    data_class: 'internal',
+    budget_scope_id: 'budget_scope_demo',
+    policy_version: 'policy-demo-v1',
+    registry_version: 'registry-demo-v1',
+    trace_id: 'trace_demo_001',
+    trace_context_ref: traceContext(),
+    created_at: traceNow,
+    updated_at: traceNow,
+    raw_prompt: traceSensitiveValues.rawPrompt,
+    artifact_body: traceSensitiveValues.artifactBody,
+    provider_key: traceSensitiveValues.providerKey,
+  };
+}
+
+function manualReviewResponse() {
+  return {
+    contract_version: 'gateway-control.v0.1',
+    manual_review_item_id: 'manual_review_item_demo_001',
+    workflow_id: 'workflow_demo_001',
+    workflow_run_id: 'workflow_demo_001',
+    task_id: 'task_demo_001',
+    request_id: 'request_demo_001',
+    reason_ref: traceOpaqueRef('manual_review_reason_demo_001', 'manual_review_reason_ref', 'workflow_demo_001'),
+    owner_principal_id: 'principal_demo',
+    owner_role: 'workflow_operator',
+    blocking_state: 'blocking_workflow',
+    review_state: 'open',
+    safe_actions: [traceOpaqueRef('safe_action_retry', 'safe_action_ref', 'workflow_demo_001')],
+    side_effect_refs: [traceOpaqueRef('side_effect_outbox', 'side_effect_ref', 'workflow_demo_001')],
+    resolution_ref: null,
+    resolution_audit_ref: null,
+    idempotency: traceIdempotency('manual_review', 'manual_review_item_demo_001'),
+    principal_id: 'principal_demo',
+    project_id: 'project_demo',
+    data_class: 'internal',
+    budget_scope_id: 'budget_scope_demo',
+    policy_version: 'policy-demo-v1',
+    registry_version: 'registry-demo-v1',
+    trace_id: 'trace_demo_001',
+    created_at: traceNow,
+    updated_at: traceNow,
+    raw_context: traceSensitiveValues.rawContext,
+    secret: traceSensitiveValues.secret,
+  };
+}
+
+function workflowLeaseStatus() {
+  return {
+    workflow_id: 'workflow_demo_001',
+    workflow_run_id: 'workflow_demo_001',
+    workflow_status: 'running',
+    workflow_lease: {
+      lease_id: 'lease_demo_001',
+      lease_owner_ref: 'agent_run_demo_001',
+      heartbeat_at: traceNow,
+      expires_at: traceLater,
+      lease_status: 'active',
+    },
+    agent_run_leases: [
+      {
+        agent_run_id: 'agent_run_demo_001',
+        lease_ref: {
+          lease_id: 'lease_demo_001',
+          lease_owner_ref: 'agent_run_demo_001',
+          heartbeat_at: traceNow,
+          expires_at: traceLater,
+          lease_status: 'active',
+        },
+        status: 'running',
+      },
+    ],
+    active_count: 1,
+    expired_count: 0,
+    stuck_count: 0,
+    checked_at: traceNow,
+    token: traceSensitiveValues.token,
+  };
+}
+
+function outboxStatus() {
+  return {
+    counts_by_state: { pending: 1, delivered: 2 },
+    counts_by_destination: { webhook: 1, audit_log: 2 },
+    backlog_count: 1,
+    failed_count: 0,
+    dead_lettered_count: 0,
+    total: 3,
+    signed_url: traceSensitiveValues.signedUrl,
+  };
+}
+
+function artifactLifecycleEvent() {
+  return {
+    contract_version: 'gateway-control.v0.1',
+    lifecycle_event_id: 'lifecycle_event_artifact_demo_001_1',
+    artifact_id: 'artifact_demo_001',
+    workflow_run_id: 'workflow_demo_001',
+    task_id: 'task_demo_001',
+    request_id: 'request_demo_001',
+    action: 'created',
+    state: 'active',
+    storage_ref: traceOpaqueRef('storage_ref_artifact_demo_001', 'artifact_storage_ref', 'project_demo'),
+    checksum_sha256: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+    retention_policy: { retained_until: traceLater, delete_after_seconds: 3600, legal_hold: false },
+    signed_access_eligibility: { eligible: true, requires_approval: true, max_signed_duration_seconds: 300 },
+    legal_hold: false,
+    redacted: false,
+    deletion_scheduled_at: null,
+    audit_refs: [traceAuditRef()],
+    idempotency: traceIdempotency('artifact_lifecycle', 'lifecycle_event_artifact_demo_001_1'),
+    principal_id: 'principal_demo',
+    project_id: 'project_demo',
+    data_class: 'internal',
+    budget_scope_id: 'budget_scope_demo',
+    policy_version: 'policy-demo-v1',
+    registry_version: 'registry-demo-v1',
+    trace_id: 'trace_demo_001',
+    trace_context_ref: traceContext(),
+    occurred_at: traceNow,
+    artifact_body: traceSensitiveValues.artifactBody,
+    signed_url: traceSensitiveValues.signedUrl,
+  };
+}
+
+function artifactLifecycleStatus() {
+  return {
+    artifact_id: 'artifact_demo_001',
+    latest_state: 'active',
+    latest_action: 'created',
+    legal_hold: false,
+    redacted: false,
+    deletion_scheduled_at: null,
+    signed_access_eligibility: { eligible: true, requires_approval: true, max_signed_duration_seconds: 300 },
+    event_count: 1,
+    refresh_token: traceSensitiveValues.token,
   };
 }
 

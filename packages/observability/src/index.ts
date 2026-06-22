@@ -10,6 +10,7 @@ import {
 export * from './audit.ts';
 export * from './cost.ts';
 export * from './otel.ts';
+export * from './outbox-consumers.ts';
 export * from './telemetry-sinks.ts';
 export * from './telemetry-safety.ts';
 

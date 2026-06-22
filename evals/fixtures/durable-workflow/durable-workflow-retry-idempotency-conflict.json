@@ -1,0 +1,37 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 3 fixture; not real customer, repository, provider, production telemetry, prompt, artifact body, or secret data.",
+  "case_id": "durable-workflow-retry-idempotency-conflict",
+  "category": "retry_idempotency",
+  "track": "track-3-durable-execution",
+  "chaos_scenario": {
+    "postgres_required": true,
+    "fault": "conflicting_replay"
+  },
+  "workflow_fixture": {
+    "workflow_id_ref": "fixture-ref:workflow:durable-workflow-retry-idempotency-conflict",
+    "postgres_required": true,
+    "provider_mode": "fixture",
+    "live_provider_calls": false,
+    "production_enablement": false,
+    "inputs": {
+      "retry_attempt": 2,
+      "request_ref": "conflicting_fixture_ref"
+    }
+  },
+  "expected_decision": "deny",
+  "expected_assertions": [
+    "Conflicting idempotency replay is rejected rather than attached to the original attempt.",
+    "Retry metadata records the prior request ref and sanitized conflict reason.",
+    "No model, tool, budget, or outbox side effect is emitted for the denied replay."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/durable-workflow/durable-workflow-retry-idempotency-conflict/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/durable-workflow/durable-workflow-retry-idempotency-conflict/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/durable-workflow/durable-workflow-retry-idempotency-conflict/audit-event.json"
+  },
+  "expected_denial_reason": "idempotency_conflict"
+}

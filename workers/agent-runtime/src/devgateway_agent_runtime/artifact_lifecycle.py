@@ -6,7 +6,10 @@ boolean flags.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from .contracts import ArtifactLifecycleStage
+from .object_storage import ObjectRef, ObjectStorage
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +133,25 @@ def guard_signed_access(
         )
 
 
+def guard_artifact_displayable(
+    *,
+    stage: ArtifactLifecycleStage,
+    artifact_state: str | None = None,
+    redacted: bool = False,
+    deleted: bool = False,
+    expires_at: datetime | None = None,
+    now: datetime | None = None,
+) -> None:
+    """Raise when an artifact body/preview must not be displayed or signed."""
+    current_time = now or datetime.now(timezone.utc)
+    if _is_expired(expires_at, current_time):
+        raise SignedAccessViolation("artifact is expired and cannot be displayed or signed.")
+    if redacted or deleted or stage in ARTIFACT_LIFECYCLE_TERMINAL_STAGES:
+        raise SignedAccessViolation("artifact is redacted or deleted and cannot be displayed or signed.")
+    if artifact_state in {"expired", "redacted", "deleted"}:
+        raise SignedAccessViolation("artifact lifecycle state is not displayable.")
+
+
 # ---------------------------------------------------------------------------
 # Checksum verifier (string comparison only — no file/object body access)
 # ---------------------------------------------------------------------------
@@ -157,3 +179,23 @@ def verify_checksum_sha256(expected: str, actual: str) -> None:
         raise ChecksumMismatch(
             "checksum mismatch: the supplied sha256 digest does not match the expected value."
         )
+
+
+def verify_object_checksum_sha256(
+    storage: ObjectStorage,
+    object_ref: ObjectRef,
+    expected_sha256: str,
+) -> None:
+    """Verify object metadata hash before signed access without reading the body."""
+    metadata = storage.head_object(object_ref)
+    verify_checksum_sha256(expected_sha256, metadata.sha256_hex)
+
+
+def _is_expired(expires_at: datetime | None, now: datetime) -> bool:
+    if expires_at is None:
+        return False
+    normalized_expires_at = expires_at
+    if normalized_expires_at.tzinfo is None:
+        normalized_expires_at = normalized_expires_at.replace(tzinfo=timezone.utc)
+    normalized_now = now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
+    return normalized_expires_at <= normalized_now

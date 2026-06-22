@@ -7,6 +7,8 @@
     "build": "python -m compileall -q src",
     "lint": "python -m compileall -q src tests",
     "test": "python -m unittest discover -s tests -p \"*_test.py\"",
+    "test:durable:postgres": "python -m pytest tests/postgres_durability_test.py -q",
+    "test:durable:chaos": "node -e \"if (!process.env.DATABASE_CHECK_URL && !process.env.AGENT_RUNTIME_POSTGRES_TEST_URL) { console.error('Track 3 chaos gate requires a disposable Postgres URL via DATABASE_CHECK_URL or AGENT_RUNTIME_POSTGRES_TEST_URL.'); process.exit(2); }\" && python -m pytest tests/postgres_durability_test.py -q -k \"in_progress_workflow_resumes_after_process_restart_without_restarting or lease_sweeper_recovers_pre_side_effect_and_escalates_running or outbox_claim_survives_crash_before_delivery or authorized_approved_approval_resumes_exactly_once\"",
     "transit": "python -c \"import sys; sys.path.insert(0, 'src'); from devgateway_agent_runtime.cli import main; raise SystemExit(main(['--mode', 'fixture', '--format', 'json']))\"",
     "typecheck": "python -m compileall -q src tests"
   }

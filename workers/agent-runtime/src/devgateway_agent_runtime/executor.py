@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from .contracts import (
     DelegationContract,
+    ModelResult,
     ScopeRefs,
     SubAgentExecutionResult,
     TraceContext,
@@ -13,9 +14,17 @@ from .contracts import (
     WorkflowEvent,
 )
 from .idempotency import IdempotencyRecord, IdempotencyScope, IdempotencyStatus, stable_idempotency_key
-from .model_adapter import GovernedFixtureModelAdapter, ModelPolicyError
+from .model_adapter import GovernedFixtureModelAdapter, ModelAbortOutcome, ModelPolicyError
 from .repositories import RuntimeRepository
 from .validation import validate_structured_output
+
+
+class CancellationObserved(RuntimeError):
+    """Raised when cancellation is observed before more runtime side effects."""
+
+
+class CancellationCheckError(RuntimeError):
+    """Raised when cancellation state cannot be checked fail-closed."""
 
 
 @dataclass(slots=True)
@@ -24,6 +33,7 @@ class FixtureSubAgentExecutor:
     model_adapter: GovernedFixtureModelAdapter
 
     def execute(self, delegation: DelegationContract, *, parent_scope: ScopeRefs) -> SubAgentExecutionResult:
+        self._check_cancellation(delegation, phase="before_scope_validation")
         scope_violations = self._scope_violations(delegation, parent_scope)
         if scope_violations:
             audit_ref = self._complete_operation(delegation, IdempotencyScope.AUDIT_EVENT, "scope-rejected")
@@ -54,7 +64,7 @@ class FixtureSubAgentExecutor:
             return result
 
         try:
-            model_result = self.model_adapter.invoke(delegation.to_model_request())
+            model_result = self._invoke_model(delegation)
         except ModelPolicyError:
             audit_ref = self._complete_operation(delegation, IdempotencyScope.AUDIT_EVENT, "model-policy-rejected")
             validation = ValidationResult(
@@ -106,6 +116,7 @@ class FixtureSubAgentExecutor:
             self._append_event(delegation, "sub_agent.validation_failed", result, trace_context=model_result.trace_context.child())
             return result
 
+        self._check_cancellation(delegation, phase="before_validated_output_side_effects")
         artifact_ref = self._complete_operation(delegation, IdempotencyScope.ARTIFACT_WRITE, "validated-output")
         cost_ref = self._complete_operation(delegation, IdempotencyScope.COST_EVENT, "model-cost")
         audit_ref = self._complete_operation(delegation, IdempotencyScope.AUDIT_EVENT, "completed")
@@ -125,6 +136,31 @@ class FixtureSubAgentExecutor:
             validated_output=dict(model_result.structured_output),
         )
         self._append_event(delegation, "sub_agent.completed", result, trace_context=model_result.trace_context.child())
+        return result
+
+    def _invoke_model(self, delegation: DelegationContract) -> ModelResult:
+        request = delegation.to_model_request()
+        self._check_cancellation(delegation, phase="before_model_call", abort_request_ref=request.request_ref)
+        stream = getattr(self.model_adapter, "invoke_stream", None)
+        if callable(stream):
+            last_result: ModelResult | None = None
+            for chunk in stream(request):
+                self._check_cancellation(
+                    delegation,
+                    phase="between_model_stream_chunks",
+                    abort_request_ref=request.request_ref,
+                )
+                if isinstance(chunk, ModelResult):
+                    last_result = chunk
+            if last_result is None:
+                raise ModelPolicyError("model stream did not produce a terminal result")
+            return last_result
+        result = self.model_adapter.invoke(request)
+        self._check_cancellation(
+            delegation,
+            phase="after_model_call_before_validation",
+            abort_request_ref=request.request_ref,
+        )
         return result
 
     def _scope_violations(self, delegation: DelegationContract, parent_scope: ScopeRefs) -> tuple[str, ...]:
@@ -147,6 +183,7 @@ class FixtureSubAgentExecutor:
         return tuple(dict.fromkeys((*violations, *explicit_checks)))
 
     def _complete_operation(self, delegation: DelegationContract, scope: IdempotencyScope, purpose: str) -> str:
+        self._check_cancellation(delegation, phase=f"before_side_effect:{scope.value}:{purpose}")
         request_ref = f"fixture-ref:{scope.value}:request:{delegation.workflow_id}:{delegation.delegation_id}:{purpose}"
         key = stable_idempotency_key(scope, request_ref)
         result_ref = f"fixture-ref:{scope.value}:result:{self._digest(request_ref, key)}"
@@ -190,6 +227,98 @@ class FixtureSubAgentExecutor:
                 trace_context=trace_context,
                 refs=refs,
             )
+        )
+
+    def _check_cancellation(
+        self,
+        delegation: DelegationContract,
+        *,
+        phase: str,
+        abort_request_ref: str | None = None,
+    ) -> None:
+        if not hasattr(self.repository, "has_active_cancellation"):
+            return
+        try:
+            active = self.repository.has_active_cancellation(delegation.workflow_id)  # type: ignore[attr-defined]
+        except Exception as exc:
+            raise CancellationCheckError(
+                f"failed to check cancellation for workflow {delegation.workflow_id} at {phase}"
+            ) from exc
+        if not active:
+            return
+
+        outcome = self._attempt_abort(delegation, phase=phase, request_ref=abort_request_ref)
+        validation = ValidationResult(
+            valid=False,
+            output_schema_ref=delegation.output_schema.schema_ref,
+            evidence_ref=(outcome.evidence_ref if outcome else f"fixture-ref:cancellation:{delegation.workflow_id}"),
+            failure_code="cancellation_observed",
+        )
+        result = SubAgentExecutionResult(
+            workflow_id=delegation.workflow_id,
+            delegation_id=delegation.delegation_id,
+            delegation_ref=delegation.delegation_ref,
+            status="cancelled",
+            model_alias=delegation.model_alias,
+            model_result_ref=None,
+            validation=validation,
+            artifact_ref=None,
+            cost_ref=None,
+            audit_ref=f"fixture-ref:audit:cancellation:{self._digest(delegation.workflow_id, phase)}",
+            confidence=None,
+        )
+        refs_trace = delegation.trace_context.child(baggage_refs=(*delegation.trace_context.baggage_refs, phase))
+        self._append_event(delegation, "cancellation_observed", result, trace_context=refs_trace)
+        if outcome is not None:
+            self.repository.append_event(
+                WorkflowEvent(
+                    event_id=f"evt_{uuid4().hex}",
+                    workflow_id=delegation.workflow_id,
+                    event_type="cancellation_observed",
+                    trace_context=refs_trace.child(),
+                    refs={
+                        "phase": phase,
+                        "abort_outcome": outcome.outcome,
+                        "abort_evidence_ref": outcome.evidence_ref,
+                        "abort_supported": str(outcome.supported).lower(),
+                    },
+                )
+            )
+        raise CancellationObserved(f"workflow cancellation observed at {phase}")
+
+    def _attempt_abort(
+        self,
+        delegation: DelegationContract,
+        *,
+        phase: str,
+        request_ref: str | None,
+    ) -> ModelAbortOutcome | None:
+        if request_ref is None:
+            return None
+        abort = getattr(self.model_adapter, "abort", None)
+        if not callable(abort):
+            return None
+        reason_ref = f"fixture-ref:cancellation:{delegation.workflow_id}:{phase}"
+        try:
+            outcome = abort(request_ref, reason_ref=reason_ref)
+        except Exception as exc:
+            return ModelAbortOutcome(
+                request_ref=request_ref,
+                attempted=True,
+                supported=True,
+                outcome="error",
+                evidence_ref=f"fixture-ref:model-abort-error:{self._digest(request_ref, phase, exc.__class__.__name__)}",
+                reason_ref=reason_ref,
+            )
+        if isinstance(outcome, ModelAbortOutcome):
+            return outcome
+        return ModelAbortOutcome(
+            request_ref=request_ref,
+            attempted=True,
+            supported=True,
+            outcome=str(outcome),
+            evidence_ref=f"fixture-ref:model-abort:{self._digest(request_ref, phase)}",
+            reason_ref=reason_ref,
         )
 
     @staticmethod

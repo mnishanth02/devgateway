@@ -1,0 +1,333 @@
+{
+  "contract_version": "0.1.0",
+  "dataset_id": "approval-gates.v0.1",
+  "dataset_version": "0.1.0",
+  "suite": "approval_gates",
+  "schema_status": "layout_stub_until_shared_eval_schema_generalizes_beyond_acl_safety",
+  "description": "Synthetic Track 3 approval-gate fixtures for durable pause/resume, fail-closed authorization, expiry, and denial behavior.",
+  "fixture_root": "evals/fixtures/approval-gates",
+  "inert_fixture_mode": true,
+  "no_live_external_calls": true,
+  "production_enablement": false,
+  "source_data_policy": {
+    "synthetic_only": true,
+    "no_real_customer_data": true,
+    "no_real_repo_data": true,
+    "no_live_external_calls": true,
+    "fixture_review_required": true
+  },
+  "categories": [
+    "pause_release",
+    "resume",
+    "authorization",
+    "expiry",
+    "denial"
+  ],
+  "artifact_ref_policy": {
+    "required": true,
+    "description": "Each Track 3 fixture case declares expected gate-result, trace, and audit artifacts that a future runner or chaos gate must write."
+  },
+  "cases": [
+    {
+      "case_id": "approval-gates-required-pause-releases-lease",
+      "category": "pause_release",
+      "title": "Required approval pauses workflow and releases worker lease",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/approval-gates/approval-gates-required-pause-releases-lease.json",
+          "sha256_required": true,
+          "description": "Inert Track 3 fixture for approval-gates-required-pause-releases-lease."
+        }
+      ],
+      "inputs": {
+        "risk_tier": "high",
+        "policy_required": true,
+        "step_kind": "approval_gate"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "Required approval moves the workflow and step to pending_approval durably.",
+          "The worker lease is released while the workflow waits for an authorized decision.",
+          "The resume token is stored as an opaque metadata reference only."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/approval-gates/approval-gates-required-pause-releases-lease/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/approval-gates/approval-gates-required-pause-releases-lease/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/approval-gates/approval-gates-required-pause-releases-lease/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "approval_id",
+        "resume_token_ref",
+        "lease_release_ref"
+      ],
+      "tags": [
+        "track-3",
+        "approvals",
+        "postgres"
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      },
+      "chaos_scenario": {
+        "postgres_required": true,
+        "approval_state": "pending"
+      }
+    },
+    {
+      "case_id": "approval-gates-authorized-resume-once",
+      "category": "resume",
+      "title": "Authorized approval resumes exactly once",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/approval-gates/approval-gates-authorized-resume-once.json",
+          "sha256_required": true,
+          "description": "Inert Track 3 fixture for approval-gates-authorized-resume-once."
+        }
+      ],
+      "inputs": {
+        "decision": "approved",
+        "approver_role": "authorized_project_approver"
+      },
+      "expected": {
+        "decision": "pass",
+        "assertions": [
+          "An authorized unexpired approval resumes the paused step exactly once.",
+          "A replayed approval decision is idempotently ignored without a second resume.",
+          "The resumed workflow uses trusted Control API decision records, not model-supplied approval claims."
+        ],
+        "no_production_enablement": true
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/approval-gates/approval-gates-authorized-resume-once/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/approval-gates/approval-gates-authorized-resume-once/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/approval-gates/approval-gates-authorized-resume-once/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "approval_id",
+        "approver_principal_ref",
+        "decision_audit_event_ref"
+      ],
+      "tags": [
+        "track-3",
+        "approvals",
+        "chaos-gate",
+        "postgres"
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      },
+      "chaos_scenario": {
+        "postgres_required": true,
+        "approval_state": "approved"
+      }
+    },
+    {
+      "case_id": "approval-gates-unauthorized-self-model-deny",
+      "category": "authorization",
+      "title": "Unauthorized, self, and model-claimed approvals deny fail-closed",
+      "severity": "critical",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/approval-gates/approval-gates-unauthorized-self-model-deny.json",
+          "sha256_required": true,
+          "description": "Inert Track 3 fixture for approval-gates-unauthorized-self-model-deny."
+        }
+      ],
+      "inputs": {
+        "decision_sources": [
+          "self_approval",
+          "model_claim",
+          "missing_role"
+        ]
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Self-approval does not satisfy the required approval gate.",
+          "Model-supplied approval claims are ignored and cannot resume the workflow.",
+          "Missing or stale approver role evidence denies the decision fail-closed."
+        ],
+        "no_production_enablement": true,
+        "required_denial_reason": "approval_not_authorized"
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/approval-gates/approval-gates-unauthorized-self-model-deny/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/approval-gates/approval-gates-unauthorized-self-model-deny/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/approval-gates/approval-gates-unauthorized-self-model-deny/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "approval_id",
+        "denial_reason",
+        "authorization_evidence_ref"
+      ],
+      "tags": [
+        "track-3",
+        "approvals",
+        "authorization",
+        "postgres"
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      },
+      "chaos_scenario": {
+        "postgres_required": true,
+        "fault": "untrusted_approval_source"
+      }
+    },
+    {
+      "case_id": "approval-gates-expiry-fails-closed",
+      "category": "expiry",
+      "title": "Approval expiry fails closed",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/approval-gates/approval-gates-expiry-fails-closed.json",
+          "sha256_required": true,
+          "description": "Inert Track 3 fixture for approval-gates-expiry-fails-closed."
+        }
+      ],
+      "inputs": {
+        "risk_tier": "high",
+        "expired_by_seconds": 1
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "Expired approvals transition to a terminal denied or failed workflow state according to policy.",
+          "Expired approval decisions cannot be replayed to resume a workflow.",
+          "Expiry evidence includes risk tier, TTL policy ref, and sanitized timer refs only."
+        ],
+        "no_production_enablement": true,
+        "required_denial_reason": "approval_expired"
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/approval-gates/approval-gates-expiry-fails-closed/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/approval-gates/approval-gates-expiry-fails-closed/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/approval-gates/approval-gates-expiry-fails-closed/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "approval_id",
+        "expiry_ref",
+        "ttl_policy_ref",
+        "denial_reason"
+      ],
+      "tags": [
+        "track-3",
+        "approvals",
+        "expiry",
+        "postgres"
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      },
+      "chaos_scenario": {
+        "postgres_required": true,
+        "fault": "expired_approval"
+      }
+    },
+    {
+      "case_id": "approval-gates-denial-terminalizes",
+      "category": "denial",
+      "title": "Approval denial terminalizes deterministically",
+      "severity": "high",
+      "fixture_refs": [
+        {
+          "kind": "synthetic_fixture",
+          "path": "evals/fixtures/approval-gates/approval-gates-denial-terminalizes.json",
+          "sha256_required": true,
+          "description": "Inert Track 3 fixture for approval-gates-denial-terminalizes."
+        }
+      ],
+      "inputs": {
+        "decision": "denied",
+        "approver_role": "authorized_project_approver"
+      },
+      "expected": {
+        "decision": "deny",
+        "assertions": [
+          "An explicit denial moves the paused step and workflow to deterministic terminal states.",
+          "The workflow does not continue to later model, tool, budget, or outbox side effects after denial.",
+          "Denial audit evidence links the approver, role, policy version, and reason refs."
+        ],
+        "no_production_enablement": true,
+        "required_denial_reason": "approval_denied"
+      },
+      "artifact_refs": {
+        "expected_gate_result": "artifacts/evals/approval-gates/approval-gates-denial-terminalizes/gate-result.json",
+        "expected_trace_bundle": "artifacts/evals/approval-gates/approval-gates-denial-terminalizes/trace.jsonl",
+        "expected_audit_event": "artifacts/evals/approval-gates/approval-gates-denial-terminalizes/audit-event.json"
+      },
+      "audit_evidence_required": [
+        "trace_id",
+        "case_id",
+        "suite",
+        "decision",
+        "policy_version",
+        "dataset_version",
+        "approval_id",
+        "approver_principal_ref",
+        "denial_reason"
+      ],
+      "tags": [
+        "track-3",
+        "approvals",
+        "postgres"
+      ],
+      "safeguards": {
+        "fixture_only": true,
+        "no_live_external_calls": true,
+        "synthetic_source_data": true,
+        "production_enablement": false
+      },
+      "chaos_scenario": {
+        "postgres_required": true,
+        "approval_state": "denied"
+      }
+    }
+  ]
+}

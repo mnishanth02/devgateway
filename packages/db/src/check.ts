@@ -63,6 +63,18 @@ const track3WorkflowEventStates = [
   'retry_scheduled',
 ] as const;
 
+const track3StepAttemptReplayDecisions = [
+  'replay',
+  'skip',
+  'abort',
+  'pre_side_effect',
+  'idempotent_pre_side_effect',
+  'ambiguous_post_side_effect',
+  'retry_scheduled',
+  'terminal_failure',
+  'manual_review',
+] as const;
+
 const track3IdempotencyKeyOperations = [
   'model_call',
   'budget_reservation',
@@ -1389,6 +1401,29 @@ function checkTrack3ExistingTableExtensions(statements: readonly string[]): Chec
     if (!tableHasAlteredColumn(statements, 'step_attempt', column)) {
       failures.push(`step_attempt missing ALTER TABLE ADD COLUMN ${column}`);
     }
+  }
+
+  const stepAttemptCheckSql = statements
+    .filter((statement) => isCreateTableStatement(statement, 'step_attempt') || isAlterTableStatement(statement, 'step_attempt'))
+    .join('\n');
+  const missingReplayDecisions = track3StepAttemptReplayDecisions.filter(
+    (decision) => !new RegExp(`'${escapeRegExp(decision)}'`, 'i').test(stepAttemptCheckSql),
+  );
+
+  if (missingReplayDecisions.length > 0) {
+    failures.push(`step_attempt replay_decision check missing Track 3 decision(s): ${missingReplayDecisions.join(', ')}`);
+  }
+
+  const operationalSchemaPath = join(schemaDirectory, 'operational.ts');
+  const operationalSchemaSql = existsSync(operationalSchemaPath) ? readFileSync(operationalSchemaPath, 'utf8') : '';
+  const missingSchemaReplayDecisions = track3StepAttemptReplayDecisions.filter(
+    (decision) => !new RegExp(`'${escapeRegExp(decision)}'`, 'i').test(operationalSchemaSql),
+  );
+
+  if (missingSchemaReplayDecisions.length > 0) {
+    failures.push(
+      `operational schema step_attempt replay_decision check missing Track 3 decision(s): ${missingSchemaReplayDecisions.join(', ')}`,
+    );
   }
 
   for (const column of ['manual_review_status', 'recovery_reason', 'sweep_evidence_ref'] as const) {

@@ -1195,8 +1195,47 @@ a {
   overflow-wrap: anywhere;
 }
 
+.durable-view button {
+  width: fit-content;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line-hot);
+  color: var(--line-hot);
+  background: rgba(17, 19, 15, 0.72);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.durable-view button:disabled {
+  border-color: var(--muted);
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.durable-actions,
+.durable-card-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.durable-actions {
+  grid-template-columns: repeat(auto-fit, minmax(12rem, max-content));
+}
+
+.durable-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+}
+
+.durable-card-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .trace-view a:focus-visible,
-.ops-home__trace-link:focus-visible {
+.ops-home__trace-link:focus-visible,
+.durable-view button:focus-visible {
   outline: 2px solid var(--line-hot);
   outline-offset: 3px;
 }
@@ -1251,7 +1290,8 @@ a {
 
   .trace-workflow-grid,
   .trace-strip,
-  .trace-layout__side {
+  .trace-layout__side,
+  .durable-card-grid--two {
     grid-template-columns: 1fr;
   }
 

@@ -3,11 +3,17 @@
 from .approvals import (
     APPROVAL_ACTIVE_STATES,
     APPROVAL_TERMINAL_STATES,
+    DEFAULT_APPROVAL_TTL_SECONDS_BY_RISK_TIER,
+    approval_decision_to_step_state,
     approval_decision_to_workflow_state,
+    approval_expires_at,
+    default_approval_ttl_seconds,
     is_approval_active,
     is_approval_terminal,
     should_pause_for_approval,
+    stable_approval_resume_token,
 )
+from .approval_expiry_worker import ApprovalExpiryWorker, ApprovalExpiryWorkerPolicy, ApprovalExpiryWorkerStats
 from .artifact_lifecycle import (
     ARTIFACT_LIFECYCLE_ACTIVE_STAGES,
     ARTIFACT_LIFECYCLE_TERMINAL_STAGES,
@@ -20,12 +26,14 @@ from .artifact_lifecycle import (
     is_lifecycle_terminal,
     verify_checksum_sha256,
 )
+from .budget_reaper import BudgetReaper, BudgetReaperPolicy, BudgetReaperStats
 from .cancellation import (
     CANCELLATION_ACTIVE_PROPAGATION_STATES,
     CANCELLATION_TERMINAL_PROPAGATION_STATES,
     decide_cancellation_action,
     is_cancellation_active,
 )
+from .cancellation_worker import CancellationWorker, CancellationWorkerPolicy, CancellationWorkerStats
 from .outbox import (
     DEFAULT_OUTBOX_RETRY_POLICY,
     OUTBOX_ACTIVE_STATES,
@@ -37,6 +45,7 @@ from .outbox import (
     outbox_idempotency_key,
     outbox_next_attempt_at,
 )
+from .outbox_worker import OutboxDeliveryError, OutboxDeliveryStats, OutboxWorker, OutboxWorkerPolicy
 from .contracts import (
     ApprovalDecision,
     ApprovalRequest,
@@ -87,6 +96,7 @@ from .dispatcher import BoundedDispatcher, DispatcherPolicy, PollingBackoffPolic
 from .executor import FixtureSubAgentExecutor
 from .fixtures import FixtureWorkflowRunner, run_fixture_workflow_smoke
 from .idempotency import IdempotencyRecord, IdempotencyScope, IdempotencyStatus
+from .lease_sweeper import LeaseSweeper, LeaseSweepResult
 from .leases import Lease, LeasePolicy
 from .memory import InMemoryRuntimeRepository
 from .model_adapter import (
@@ -100,6 +110,7 @@ from .model_adapter import (
 from .repositories import (
     ApprovalRepository,
     ArtifactLifecycleRepository,
+    BudgetReservationRepository,
     CancellationRepository,
     ManualReviewRepository,
     OutboxRepository,
@@ -127,7 +138,11 @@ RUNTIME_VERSION = "0.1.0"
 __all__ = [
     "APPROVAL_ACTIVE_STATES",
     "APPROVAL_TERMINAL_STATES",
+    "DEFAULT_APPROVAL_TTL_SECONDS_BY_RISK_TIER",
     "ApprovalDecision",
+    "ApprovalExpiryWorker",
+    "ApprovalExpiryWorkerPolicy",
+    "ApprovalExpiryWorkerStats",
     "ApprovalRepository",
     "ApprovalRequest",
     "ApprovalRiskTier",
@@ -138,6 +153,10 @@ __all__ = [
     "ArtifactLifecycleRepository",
     "ArtifactLifecycleStage",
     "BoundedDispatcher",
+    "BudgetReaper",
+    "BudgetReaperPolicy",
+    "BudgetReaperStats",
+    "BudgetReservationRepository",
     "CANCELLATION_ACTIVE_PROPAGATION_STATES",
     "CANCELLATION_TERMINAL_PROPAGATION_STATES",
     "CancellationAction",
@@ -145,6 +164,9 @@ __all__ = [
     "CancellationRecord",
     "CancellationRepository",
     "CancellationTarget",
+    "CancellationWorker",
+    "CancellationWorkerPolicy",
+    "CancellationWorkerStats",
     "ChecksumMismatch",
     "DEFAULT_OUTBOX_RETRY_POLICY",
     "DelegationContract",
@@ -165,6 +187,8 @@ __all__ = [
     "InMemoryRuntimeRepository",
     "Lease",
     "LeasePolicy",
+    "LeaseSweeper",
+    "LeaseSweepResult",
     "LegalHoldViolation",
     "ManualReviewItem",
     "ManualReviewRepository",
@@ -178,7 +202,11 @@ __all__ = [
     "OUTBOX_DESTINATION_KINDS",
     "OUTBOX_TERMINAL_STATES",
     "OutboxEventStatus",
+    "OutboxDeliveryError",
+    "OutboxDeliveryStats",
     "OutboxRepository",
+    "OutboxWorker",
+    "OutboxWorkerPolicy",
     "OutputSchemaContract",
     "PAUSED_WORKFLOW_STATES",
     "PersistedWorkflowContext",
@@ -217,10 +245,13 @@ __all__ = [
     "WorkflowTemplateRolloutState",
     "assert_version_immutable",
     "approval_decision_to_workflow_state",
+    "approval_decision_to_step_state",
+    "approval_expires_at",
     "calculate_backoff",
     "classify_exception",
     "assert_outbox_destination_kind",
     "decide_cancellation_action",
+    "default_approval_ttl_seconds",
     "guard_legal_hold_deletion",
     "guard_signed_access",
     "is_approval_active",
@@ -240,6 +271,7 @@ __all__ = [
     "run_fixture_workflow_smoke",
     "run_supervisor_execution_fixture",
     "should_pause_for_approval",
+    "stable_approval_resume_token",
     "validate_structured_output",
     "verify_checksum_sha256",
     "SignedAccessViolation",

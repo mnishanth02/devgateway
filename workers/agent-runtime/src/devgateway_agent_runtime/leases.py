@@ -7,6 +7,33 @@ from uuid import uuid4
 from .contracts import isoformat_utc, utc_now
 
 
+class StaleLeaseError(RuntimeError):
+    """Raised when a worker presents an old fencing token for a leased resource."""
+
+
+def issue_fencing_token(previous_token: int | None) -> int:
+    """Return the next monotonic fencing token for a resource."""
+
+    if previous_token is None:
+        return 1
+    return max(int(previous_token), 0) + 1
+
+
+def validate_fencing_token(*, current_token: int, presented_token: int) -> bool:
+    """Return True when the presented worker token is current for the resource."""
+
+    return int(current_token) == int(presented_token)
+
+
+def require_fencing_token(*, current_token: int, presented_token: int) -> None:
+    """Raise :class:`StaleLeaseError` when a worker write is fenced off."""
+
+    if not validate_fencing_token(current_token=current_token, presented_token=presented_token):
+        raise StaleLeaseError(
+            f"stale fencing token {presented_token}; current token is {current_token}"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class LeasePolicy:
     ttl_seconds: float = 30.0

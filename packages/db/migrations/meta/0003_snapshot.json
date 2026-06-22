@@ -11317,7 +11317,7 @@
         },
         "step_attempt_replay_decision_check": {
           "name": "step_attempt_replay_decision_check",
-          "value": "\"step_attempt\".\"replay_decision\" IS NULL OR \"step_attempt\".\"replay_decision\" IN ('replay', 'skip', 'abort')"
+          "value": "\"step_attempt\".\"replay_decision\" IS NULL OR \"step_attempt\".\"replay_decision\" IN ('replay', 'skip', 'abort', 'pre_side_effect', 'idempotent_pre_side_effect', 'ambiguous_post_side_effect', 'retry_scheduled', 'terminal_failure', 'manual_review')"
         },
         "step_attempt_failure_class_check": {
           "name": "step_attempt_failure_class_check",

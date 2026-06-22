@@ -84,9 +84,14 @@ export function registerTaskRoutes(registrar: TaskRouteRegistrar, options: TaskR
           asCancelTaskRequest(request.body),
           actor,
         );
+        const cancellationRequest = task.cancellation_request;
+        if (cancellationRequest === null) {
+          throw new Error('cancelTask returned no cancellation request');
+        }
         return respond(reply, 202, {
           task: toTaskResponse(task),
-          cancellation_request: task.cancellation_request,
+          cancellation_request: cancellationRequest,
+          execution_status: cancellationRequest.execution_status,
         });
       }),
   });
@@ -102,10 +107,11 @@ const taskEnvelopeSchema = {
 
 const taskCancelEnvelopeSchema = {
   type: 'object',
-  required: ['task', 'cancellation_request'],
+  required: ['task', 'cancellation_request', 'execution_status'],
   properties: {
     task: taskResponseSchema,
     cancellation_request: taskResponseSchema.shape.cancellation_request,
+    execution_status: taskResponseSchema.shape.cancellation_request.unwrap().shape.execution_status,
   },
 } as const;
 
@@ -146,7 +152,7 @@ export const cancelTaskSchema = {
   tags: ['control-api', 'tasks'],
   summary: 'Record a task cancellation request',
   description:
-    'Records the cancellation request only. Runtime workers must observe this request asynchronously; this route does not terminate execution directly.',
+    'Records the cancellation request only, then reports the durable runtime observation point (queued, running, or waiting_for_approval). Runtime workers observe and execute cancellation asynchronously; this route does not terminate execution directly.',
   params: taskParamsSchema,
   body: cancelTaskRequestSchema,
   response: {

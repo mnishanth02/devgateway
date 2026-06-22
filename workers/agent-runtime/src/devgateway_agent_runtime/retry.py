@@ -11,6 +11,8 @@ from typing import Callable
 
 from .contracts import FailureClass, RetryBackoffType, RetryDecision, RetryPolicy
 
+MAX_SAFE_RETRY_DELAY_SECONDS = 366.0 * 24.0 * 60.0 * 60.0
+
 
 # ---------------------------------------------------------------------------
 # Exception → FailureClass classification
@@ -93,6 +95,7 @@ def calculate_backoff(
     backoff = policy.backoff_policy
     base = backoff.initial_delay_seconds
     n = max(attempt, 1)
+    max_delay = _safe_max_delay(backoff.max_delay_seconds)
 
     if backoff.backoff_type == RetryBackoffType.FIXED:
         delay = base
@@ -102,14 +105,41 @@ def calculate_backoff(
         RetryBackoffType.EXPONENTIAL,
         RetryBackoffType.EXPONENTIAL_WITH_JITTER,
     ):
-        delay = base * math.pow(backoff.multiplier, n - 1)
+        try:
+            delay = base * math.pow(backoff.multiplier, n - 1)
+        except OverflowError:
+            delay = math.inf
     else:
         delay = base
 
     if jitter_fn is not None:
         delay = jitter_fn(delay)
 
-    return min(max(delay, 0.0), backoff.max_delay_seconds)
+    return _clamp_delay(delay, max_delay)
+
+
+def _safe_max_delay(value: float) -> float:
+    try:
+        max_delay = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if math.isnan(max_delay) or max_delay <= 0.0:
+        return 0.0
+    if math.isinf(max_delay):
+        return MAX_SAFE_RETRY_DELAY_SECONDS
+    return min(max_delay, MAX_SAFE_RETRY_DELAY_SECONDS)
+
+
+def _clamp_delay(value: float, max_delay: float) -> float:
+    try:
+        delay = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if math.isnan(delay):
+        return 0.0
+    if math.isinf(delay):
+        return max_delay if delay > 0.0 else 0.0
+    return min(max(delay, 0.0), max_delay)
 
 
 # ---------------------------------------------------------------------------

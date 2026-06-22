@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   CONTROL_API_SNAPSHOT_ENDPOINTS,
   CONTROL_API_TRACK2_TRACE_ENDPOINTS,
+  approveApprovalRequest,
   fetchControlApiResult,
   fetchOperationalSnapshot,
+  retryWorkflow,
 } from './control-api-client.js';
 
 describe('control API client', () => {
@@ -44,6 +46,47 @@ describe('control API client', () => {
     expect(result.error).toBe('connection refused');
   });
 
+  it('posts durable operator actions with JSON, cookies, and no cache', async () => {
+    const calls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push([input, init]);
+      return Response.json({ accepted: true }, { status: 202 });
+    });
+
+    await retryWorkflow(
+      'workflow_demo_001',
+      {
+        request_id: 'admin_retry_001',
+        trace_id: 'trace_demo_001',
+        policy_version: 'policy-demo-v1',
+        registry_version: 'registry-demo-v1',
+        idempotency_key: 'retry_workflow_demo_001',
+      },
+      { fetchImpl },
+    );
+    await approveApprovalRequest(
+      'approval_request_demo_001',
+      {
+        request_id: 'admin_approval_001',
+        trace_id: 'trace_demo_001',
+        policy_version: 'policy-demo-v1',
+        registry_version: 'registry-demo-v1',
+      },
+      { fetchImpl },
+    );
+
+    expect(calls[0]?.[0]).toBe('/api/workflows/workflow_demo_001/retry');
+    expect(calls[1]?.[0]).toBe('/api/approvals/approval_request_demo_001/approve');
+    for (const [, init] of calls) {
+      expect(init?.method).toBe('POST');
+      expect(init?.credentials).toBe('include');
+      expect(init?.cache).toBe('no-store');
+      expect((init?.headers as Record<string, string>)['content-type']).toBe('application/json');
+      expect(typeof init?.body).toBe('string');
+    }
+    expect(JSON.parse(calls[0]?.[1]?.body as string)).toMatchObject({ idempotency_key: 'retry_workflow_demo_001' });
+  });
+
   it('assembles a snapshot result for every control API endpoint key', async () => {
     const requestedPaths: string[] = [];
     const snapshot = await fetchOperationalSnapshot({
@@ -57,7 +100,7 @@ describe('control API client', () => {
 
     for (const key of Object.keys(CONTROL_API_SNAPSHOT_ENDPOINTS) as Array<keyof typeof CONTROL_API_SNAPSHOT_ENDPOINTS>) {
       expect(snapshot[key]).toBeDefined();
-      expect(snapshot[key].path).toBe(CONTROL_API_SNAPSHOT_ENDPOINTS[key]);
+      expect(snapshot[key]?.path).toBe(CONTROL_API_SNAPSHOT_ENDPOINTS[key]);
     }
     expect(snapshot.virtualKeys.status).toBe(401);
     expect(snapshot.registry.ok).toBe(true);

@@ -102,6 +102,7 @@ describe('tool-broker HTTP routes', () => {
             assert.equal(response.statusCode, 200);
             assert.equal(body.service, '@devgateway/tool-broker');
             assert.equal(body.visible_tool_count, 1);
+            assert.equal(asRecord(body.cancellation).state, 'not_requested');
             assert.equal(tools.length, 1);
 
             const tool = asRecord(tools[0]);
@@ -228,6 +229,33 @@ describe('tool-broker HTTP routes', () => {
             assert.deepEqual(structuredContent, { echoed: 'metadata' });
             assert.equal(asRecord(content[0]).type, 'text');
             assert.equal(typeof result.tool_call_id, 'string');
+        });
+    });
+
+    it('acknowledges cancellation state on discovery and call requests without enabling write tools', async () => {
+        const recording = createRecordingRegistry();
+
+        await withTestServer(createOptions(recording.registry), async (origin) => {
+            const discovery = await sendHttp(
+                origin,
+                'GET',
+                `/api/tools?allowed_tools=${READ_TOOL_ID}&data_class=internal&role=viewer&cancellation_requested=true`,
+            );
+            assert.equal(asRecord(asRecord(parseJson(discovery)).cancellation).state, 'requested');
+
+            const call = await sendHttp(origin, 'POST', '/api/tools/call', {
+                toolId: WRITE_TOOL_ID,
+                args: {},
+                cancellation_requested: true,
+            }, {
+                ...policyHeaders(),
+                'x-devgateway-cancellation-requested': 'true',
+            });
+            const body = asRecord(parseJson(call));
+            assert.equal(call.statusCode, 403);
+            assert.equal(asRecord(body.error).code, 'WRITE_TOOL_DENIED');
+            assert.equal(asRecord(body.cancellation).state, 'requested');
+            assert.equal(recording.writeExecutions(), 0);
         });
     });
 

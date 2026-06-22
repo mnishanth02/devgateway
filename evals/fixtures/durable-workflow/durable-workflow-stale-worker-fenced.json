@@ -1,0 +1,37 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 3 fixture; not real customer, repository, provider, production telemetry, prompt, artifact body, or secret data.",
+  "case_id": "durable-workflow-stale-worker-fenced",
+  "category": "fencing",
+  "track": "track-3-durable-execution",
+  "chaos_scenario": {
+    "postgres_required": true,
+    "fault": "stale_worker_write"
+  },
+  "workflow_fixture": {
+    "workflow_id_ref": "fixture-ref:workflow:durable-workflow-stale-worker-fenced",
+    "postgres_required": true,
+    "provider_mode": "fixture",
+    "live_provider_calls": false,
+    "production_enablement": false,
+    "inputs": {
+      "old_worker": "lease_token_1",
+      "replacement_worker": "lease_token_2"
+    }
+  },
+  "expected_decision": "deny",
+  "expected_assertions": [
+    "A stale worker write carrying an older fencing token is rejected fail-closed.",
+    "The replacement lease token remains the only authorized token for state mutation.",
+    "The denial records sanitized fencing evidence without exposing workflow payload bodies."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/durable-workflow/durable-workflow-stale-worker-fenced/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/durable-workflow/durable-workflow-stale-worker-fenced/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/durable-workflow/durable-workflow-stale-worker-fenced/audit-event.json"
+  },
+  "expected_denial_reason": "stale_fencing_token"
+}

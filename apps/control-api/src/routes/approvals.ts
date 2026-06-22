@@ -9,6 +9,7 @@ import {
   asApprovalListFilter,
   asApproveApprovalRequest,
   asDenyApprovalRequest,
+  asExpireApprovalRequest,
   assertAgentWorkflowRouteEnabledOutsideProduction,
   authenticateAgentWorkflowRequest,
   createAgentWorkflowReadContext,
@@ -16,6 +17,7 @@ import {
   defaultAgentWorkflowStore,
   denyApprovalRequestSchema,
   errorResponseSchema,
+  expireApprovalRequestSchema,
   getRouteParam,
   handleKnownAgentWorkflowRouteErrors,
   notFoundRouteError,
@@ -31,7 +33,7 @@ export interface ApprovalRouteRegistrar {
   route(route: ControlRouteDefinition): unknown;
 }
 
-export type ApprovalStore = Pick<AgentWorkflowStore, 'listApprovals' | 'getApproval' | 'approveApproval' | 'denyApproval'>;
+export type ApprovalStore = Pick<AgentWorkflowStore, 'listApprovals' | 'getApproval' | 'approveApproval' | 'denyApproval' | 'expireApproval'>;
 
 export interface ApprovalRouteOptions {
   readonly runtimeEnvironment?: EnvironmentName | 'production';
@@ -108,6 +110,25 @@ export function registerApprovalRoutes(registrar: ApprovalRouteRegistrar, option
         const approval = await store.denyApproval(
           getRouteParam(request.params, 'approval_request_id'),
           asDenyApprovalRequest(request.body),
+          actor,
+          reader,
+        );
+        return respond(reply, 200, { approval: toApprovalResponse(approval) });
+      }),
+  });
+
+  registrar.route({
+    method: 'POST',
+    url: `${APPROVALS_BASE_PATH}/:approval_request_id/expire`,
+    schema: expireApprovalSchema,
+    handler: async (request, reply) =>
+      handleKnownAgentWorkflowRouteErrors(reply, async () => {
+        assertAgentWorkflowRouteEnabledOutsideProduction(options, 'approval-expire');
+        const actor = await authenticateAgentWorkflowRequest(request, options);
+        const reader = createAgentWorkflowReadContext(actor, request);
+        const approval = await store.expireApproval(
+          getRouteParam(request.params, 'approval_request_id'),
+          asExpireApprovalRequest(request.body),
           actor,
           reader,
         );
@@ -197,6 +218,25 @@ export const denyApprovalSchema = {
     200: approvalEnvelopeSchema,
     400: errorResponseSchema,
     401: errorResponseSchema,
+    404: errorResponseSchema,
+    409: errorResponseSchema,
+    503: errorResponseSchema,
+  },
+} as const;
+
+export const expireApprovalSchema = {
+  operationId: 'expireApproval',
+  tags: ['control-api', 'approvals'],
+  summary: 'Expire a pending approval request from an internal system actor',
+  description:
+    'Internal/system path used by approval-expiry workers. It terminalizes a pending approval as expired and rejects non-expired terminal states with invalid_state.',
+  params: approvalParamsSchema,
+  body: expireApprovalRequestSchema,
+  response: {
+    200: approvalEnvelopeSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    403: errorResponseSchema,
     404: errorResponseSchema,
     409: errorResponseSchema,
     503: errorResponseSchema,

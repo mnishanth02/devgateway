@@ -1,81 +1,105 @@
 # Track 3 validation evidence
 
-Status: Complete Track 3 evidence snapshot  
-Scope: durable workflow, approval, outbox, cancellation, retry, manual-review, artifact lifecycle, workflow-template, Control API, runtime repository, and non-production browser-validation evidence. This document does not enable production model routes, provider keys, write tools, retrieval, memory, or production workflow dispatch.
+Status: Conditional / live-infrastructure gates blocked  
+Last updated: 2026-06-22  
+Scope: Track 3 durable workflow, approval, outbox, cancellation, retry, manual-review, artifact lifecycle, workflow-template, Control API, runtime repository, admin portal, and validation evidence. This document does not enable production model routes, provider keys, write tools, retrieval, memory, or production workflow dispatch.
 
-## Track 3 implementation surfaces
+## Evidence posture
+
+Track 3 remediation is implemented and validated with fixture, unit, typecheck, offline database, eval-smoke, browser, model-review, and security-review evidence. Formal Track 3 exit is **not** claimed because this session did not have a disposable live Postgres URL or live object-store environment. Live Postgres durability, chaos/restart behavior, database trigger execution, and object-store body lifecycle rehearsal remain blocked by environment, not by a known product failure.
+
+## Implementation surfaces
 
 | Evidence area | Artifact | Status | Notes |
 |---|---|---|---|
-| JSON schemas | `packages\schemas\schemas\agent\approval-request.v0.1.schema.json`, `workflow-outbox.v0.1.schema.json`, `workflow-template.v0.1.schema.json`, `retry-policy.v0.1.schema.json`, `cancellation.v0.1.schema.json`, `manual-review.v0.1.schema.json`, `artifact-lifecycle.v0.1.schema.json` | Complete | New Track 3 contracts are cataloged in `packages\schemas\schemas\index.v0.1.json` and exported by `packages\schemas\src\index.ts`. |
-| Shared contracts | `packages\shared-types\src\agent-workflow.ts` | Complete | Adds durable approval, outbox, cancellation, manual-review, artifact-lifecycle, workflow-template, and retry-policy records. |
-| Database schema | `packages\db\src\schema\operational.ts` | Complete | Adds Track 3 tables and extensions for approvals, outbox, templates, cancellation, manual review, artifact lifecycle, retry/fencing, idempotency, and workflow state/event vocabulary. |
-| Migration | `packages\db\migrations\0003_track_3_durable_workflows.sql`, `packages\db\migrations\meta\0003_snapshot.json`, `packages\db\migrations\meta\_journal.json` | Complete | Applies cleanly to a fresh disposable Postgres database and includes template-version immutability trigger enforcement. |
-| DB invariant checks | `packages\db\src\check.ts` | Complete | Adds offline/database checks for Track 3 tables, constraints, idempotency operations, metadata-only storage posture, and existing-table Track 3 extensions. |
-| Runtime contracts | `workers\agent-runtime\src\devgateway_agent_runtime\contracts.py` | Complete | Adds Track 3 contracts, nested retry-policy runtime shape, approval/outbox/cancellation/manual-review/artifact/template dataclasses, and safe state vocabulary bridges. |
-| Runtime repository | `workers\agent-runtime\src\devgateway_agent_runtime\postgres_repository.py` | Complete | Adds Postgres-backed durable workflow operations with project scoping, lease fencing, idempotent replay validation, approval expiry, cancellation propagation, outbox delivery, artifact lifecycle, and template helpers. |
-| Runtime helpers | `workers\agent-runtime\src\devgateway_agent_runtime\approvals.py`, `outbox.py`, `artifact_lifecycle.py`, `cancellation.py`, `retry.py`, `templates.py` | Complete | Pure fixture-safe helpers; no live provider calls or live dependency imports at module import time. |
-| Runtime dispatcher | `workers\agent-runtime\src\devgateway_agent_runtime\dispatcher.py` | Complete | Checks cancellation before handler execution, fails closed on cancellation-check errors, and preserves fenced step completion behavior. |
-| Control API approval routes | `apps\control-api\src\routes\approvals.ts` | Complete | Non-production approval list/read/approve/deny routes; approve/deny require explicit project scope and role/principal authorization. |
-| Control API outbox routes | `apps\control-api\src\routes\outbox.ts` | Complete | Non-production outbox listing/status/read routes with metadata-only responses. |
-| Control API artifact lifecycle routes | `apps\control-api\src\routes\artifacts.ts` | Complete | Adds lifecycle list/status and signed-access decision routes; never returns signed URLs or object bodies. |
-| Control API template routes | `apps\control-api\src\routes\templates.ts` | Complete | Adds workflow-template/template-version listing and read routes with metadata-only response shape. |
-| Shared Control API store/tests | `apps\control-api\src\routes\agent-workflow-store.ts`, `apps\control-api\src\routes\control-routes.test.ts` | Complete | Adds fixture state, visibility rules, policy pin checks, role-only approval support, artifact signed-access pin checks, and response sanitization tests. |
-| Server mounting | `apps\control-api\src\server.ts` | Complete | Track 3 Control API routes are mounted outside production only; production remains fail-closed. |
+| JSON schemas | `packages\schemas\schemas\agent\approval-request.v0.1.schema.json`, `workflow-outbox.v0.1.schema.json`, `workflow-template.v0.1.schema.json`, `retry-policy.v0.1.schema.json`, `cancellation.v0.1.schema.json`, `manual-review.v0.1.schema.json`, `artifact-lifecycle.v0.1.schema.json` | Implemented / fixture-validated | Track 3 contracts are cataloged and exported. |
+| Shared contracts | `packages\shared-types\src\agent-workflow.ts` | Implemented / typechecked | Durable approval, outbox, cancellation, manual-review, artifact-lifecycle, workflow-template, and retry-policy records are shared. |
+| Database schema and migration | `packages\db\src\schema\operational.ts`, `packages\db\migrations\0003_track_3_durable_workflows.sql` | Implemented / offline-validated; live DB blocked | Offline structural checks pass. Disposable Postgres migration/invariant execution was not run in this session because no database URL was configured. |
+| Runtime contracts and repository | `workers\agent-runtime\src\devgateway_agent_runtime\contracts.py`, `postgres_repository.py` | Implemented / unit-validated; live DB blocked | Runtime tests pass. Postgres durability tests collected 27 cases but skipped without a DB URL. |
+| Runtime workers/helpers | `approvals.py`, `outbox.py`, `artifact_lifecycle.py`, `cancellation.py`, `retry.py`, `templates.py`, worker/reaper modules | Implemented / unit-validated | Includes approval expiry, outbox delivery, cancellation, lease sweeping, budget reaping, retry/manual-review routing, and artifact lifecycle helpers. |
+| Runtime dispatcher/service | `dispatcher.py`, `service.py`, `executor.py` | Implemented / unit-validated | Cancellation checks, fenced completion, retry routing, rollback robustness, and service error handling are covered by runtime tests. |
+| Control API Track 3 routes | `apps\control-api\src\routes\approvals.ts`, `outbox.ts`, `artifacts.ts`, `templates.ts` | Implemented / test-validated | Non-production-only routes with project scope, authorization, policy pins, metadata-only responses, and signed-access decisions without signed URLs. |
+| Admin portal durable views | `apps\admin-portal\src\app\routes\approval-queue-view.tsx`, `durable-operations-view.tsx`, trace/home routes | Implemented / test- and browser-validated | Browser evidence covers `/`, `/trace`, `/approvals`, and `/durable-operations`. |
+| Observability/config/tool-broker support | `packages\observability`, `packages\config`, `apps\tool-broker` | Implemented / test-validated | Tests cover audit/trace helpers, object-storage env validation, and approval-bypass/tool safety boundaries. |
+| Eval datasets | `evals\datasets\durable-workflow.v0.1.json`, `approval-gates.v0.1.json`, `workflow-outbox.v0.1.json` | Fixture-validated | Fixture smoke runs Track 3 eval suites with no live provider calls. |
 
-## Key safety properties validated
+## Final validation command evidence
 
-| Property | Status | Evidence |
+Commands were run from `C:\Users\v-mnmurugan\projects\nishanth\devgateway` on 2026-06-22.
+
+| Command | Result | Evidence |
 |---|---|---|
-| Production fail-closed posture | Complete | Control API tests cover Track 3 route production-disabled responses; routes remain non-production only. |
-| Metadata-only boundaries | Complete | Control API tests assert no raw payload bodies, object bodies, signed URLs, raw prompts/context, provider keys, API keys, access tokens, or refresh tokens in Track 3 responses. |
-| Approval proof boundary | Complete | Runtime refuses to record `approved` approvals; approved decisions require Control API proof metadata. Control API blocks requester self-approval, stale policy pins, missing roles, missing project scope, and supports role-only approvals. |
-| Project/tenant scoping | Complete | Runtime lookups and mutations are project-scoped; Control API mutations/read surfaces enforce principal/project visibility. Regression tests cover cross-principal/project denial and scoped mutation behavior. |
-| Lease fencing | Complete | Runtime step and outbox mutations bind active lease id, owner, fencing token, project, expiry, and target resource before side effects. |
-| Outbox retry safety | Complete | Stale `delivering` rows recover only when no valid active lease exists; exhausted rows dead-letter instead of retrying forever; ack/nack require `outbox:{outbox_id}` lease binding. |
-| Cancellation safety | Complete | Cancellation records are project-scoped; completion and idempotency replays validate persisted records before returning. |
-| Artifact lifecycle safety | Complete | Legal hold is computed from full locked history until explicit release; all post-terminal lifecycle events are rejected; signed-access decisions validate policy/registry pins and never return signed URLs. |
-| Workflow template immutability | Complete | `workflow_template_version` mutation trigger rejects UPDATE/DELETE; DB checks verify trigger presence. |
-| Retry contract alignment | Complete | JSON schema, shared TypeScript contract, Python runtime dataclasses, and retry decision logic align on nested `backoff_policy`, `timeout_policy`, and `failure_class_policies`. |
+| `pnpm --filter @devgateway/agent-runtime test` | Pass | Exit 0; `Ran 252 tests in 0.938s`; `OK`. |
+| `pnpm --filter @devgateway/agent-runtime typecheck` | Pass | Exit 0; `python -m compileall -q src tests`. |
+| `pnpm --filter @devgateway/agent-runtime test:durable:postgres` | Skipped by environment | Exit 0; `27 skipped in 0.27s`; no Postgres URL configured. |
+| `pnpm --filter @devgateway/db db:check:offline` | Pass | Exit 0; all Track 2/3 offline structural checks `[PASS]`; database-connectivity note: no database URL configured, offline checks only. |
+| `pnpm --filter @devgateway/control-api typecheck` | Pass | Exit 0; `tsc --noEmit`. |
+| `pnpm --filter @devgateway/control-api test` | Pass | Exit 0; `tests 111`, `pass 111`, `skipped 0`, `duration_ms 14388.4602`. |
+| `pnpm --filter @devgateway/admin-portal typecheck` | Pass | Exit 0; `tsc --noEmit`. |
+| `pnpm --filter @devgateway/admin-portal test` | Pass | Exit 0; Node tests `tests 9`, `pass 9`, `skipped 0`; Vitest `Test Files 6 passed (6)`, `Tests 33 passed (33)`. |
+| `pnpm --filter @devgateway/tool-broker typecheck` | Pass | Exit 0; `tsc --noEmit`. |
+| `pnpm --filter @devgateway/tool-broker test` | Pass | Exit 0; `tests 15`, `pass 15`, `skipped 0`, `duration_ms 495.8667`. |
+| `pnpm --filter @devgateway/config typecheck` | Pass | Exit 0; `tsc --noEmit`. |
+| `pnpm --filter @devgateway/config test` | Pass | Exit 0; `tests 14`, `pass 14`, `skipped 0`, `duration_ms 358.3331`. |
+| `pnpm --filter @devgateway/observability typecheck` | Pass | Exit 0; `tsc --noEmit`. |
+| `pnpm --filter @devgateway/observability test` | Pass | Exit 0; `tests 29`, `pass 29`, `skipped 0`, `duration_ms 337.5837`. |
+| `node scripts/validate-eval-layout.mjs` | Pass | Exit 0; `Eval dataset layout validation passed (15 datasets, 94 fixtures).` |
+| `pnpm eval:smoke` | Pass | Exit 0; fixture-mode eval smoke ran the configured suites, including Track 3 durable-workflow, approval-gates, and workflow-outbox suites; sample final suite reported `pass: true`, `total_cases: 4`, `passed_cases: 4`, `failed_cases: 0`, `live_provider_calls: 0`. |
+| `pnpm test:durable:chaos` | Blocked by missing live DB URL | Exit 2 by design; message: `Track 3 chaos gate requires a disposable Postgres URL via DATABASE_CHECK_URL or AGENT_RUNTIME_POSTGRES_TEST_URL.` This is recorded as live-infra blocked, not a product failure. |
 
-## Final model and security review log
+## Browser validation evidence
 
-| Finding | Source | Resolution |
+| Surface | Result | Evidence |
 |---|---|---|
-| Outbox `delivering` rows could hang after stale lease recovery. | Gemini 3.1 Pro | Claim recovery now checks absence of a valid active lease, and exhausted recovered rows are dead-lettered. |
-| Runtime lease/resource mutations were not consistently project-scoped. | Security review | Runtime workflow, step, artifact, event, cancellation, approval, lease, and outbox paths now enforce project scoping and fenced target binding. |
-| Approval decisions did not enforce approver roles. | Security review | `ControlRouteAuthContext.roles` added; approve/deny require required roles and block requester self-approval. |
-| Approval/cancellation runtime writes were not fully project-scoped. | Security review | Approval decision, approval reads, cancellation reads/completion, and replay fallbacks now require project-scoped matching. |
-| Approval mutations were project-scoped but role-only policies were unreachable. | GPT-5.5 | Approval mutations now separate explicit project-scope existence from role/principal authorization; role-only regression added. |
-| Outbox ack/nack lease fencing was not tied to the target outbox row. | GPT-5.5 | Ack/nack now require `lease.resource_id === outbox:{outbox_id}` and SQL binds `workflow_outbox.outbox_id` to the lease key. |
-| Artifact legal hold and terminal lifecycle could be bypassed. | GPT-5.5 | Runtime computes effective legal hold from ordered history under lock and rejects all post-terminal lifecycle events. |
-| Cancellation idempotency conflicts could return an uninserted record. | GPT-5.5 | Conflict handling fetches scoped persisted records and compares replay fields; mismatches raise. |
-| Approval request creation lacked idempotent replay handling. | GPT-5.5 | Approval inserts use `ON CONFLICT DO NOTHING`; scoped replay fetch validates persisted request identity before returning. |
-| Signed artifact access ignored requested policy/registry pins. | GPT-5.5 | Signed-access route compares requested pins to artifact and latest lifecycle pins before eligibility decisions. |
-| Retry JSON schema and Python runtime shape diverged. | GPT-5.5, Gemini 3.1 Pro | Retry schema and runtime now use nested backoff/timeout/failure-class policies with compatibility shims and tests. |
-| Final focused review of all remediations. | GPT-5.5, Claude Opus 4.8, Gemini 3.1 Pro, security review | All final reviews reported no remaining blocking/high-confidence issues. |
+| `/` home | Pass | `.devgateway\ui-browser-validation\home.png`; local browser validation completed. |
+| `/trace` | Pass | `.devgateway\ui-browser-validation\trace.png`, `trace.snapshot.txt`; fail-closed/auth-safe trace state rendered without forbidden raw/signed/secret strings. |
+| `/approvals` | Pass | `.devgateway\ui-browser-validation\approvals.png`, `approvals.snapshot.txt`; approval queue rendered fixture-safe metadata. |
+| `/durable-operations` | Pass | `.devgateway\ui-browser-validation\durable.png`, `durable.snapshot.txt`; durable operations rendered metadata without raw artifact bodies, signed URLs, provider keys, tokens, or secret strings. |
+| Local service logs | Captured | `.devgateway\ui-browser-validation\control-api.out.log`, `control-api.err.log`, `admin-portal.out.log`, `admin-portal.err.log`, `page-evidence.js`. |
 
-## Validation commands
+## Review outcomes and remediation evidence
 
-| Command | Result | Notes |
+| Review | Outcome | Remediations / evidence |
 |---|---|---|
-| `pnpm --filter @devgateway/schemas check` | Pass | Validated 31 schema JSON files and catalog references. |
-| `pnpm --filter @devgateway/db db:check:offline` | Pass | Offline structural checks pass, including Track 3 table/constraint/event/idempotency/template checks. |
-| Disposable Postgres check: create fresh DB, set `DATABASE_CHECK_URL`, run `pnpm --filter @devgateway/db db:check:database`, then drop DB | Pass | Connected to disposable Postgres, applied committed migration SQL, and validated DB runtime invariants. |
-| `pnpm --filter @devgateway/agent-runtime test` | Pass | Ran 231 Python runtime tests. |
-| `pnpm --filter @devgateway/agent-runtime typecheck` | Pass | `python -m compileall -q src tests`. |
-| `pnpm --filter @devgateway/agent-runtime build` | Pass | `python -m compileall -q src`. |
-| `pnpm --filter @devgateway/control-api test` | Pass | Ran 102 Control API tests, including approval/outbox/artifact/template Track 3 routes and server foundation coverage. |
-| `pnpm --filter @devgateway/control-api typecheck` | Pass | `tsc --noEmit`. |
+| Basic pre-review checks | Passed before final review | Eval layout, eval smoke, agent-runtime/control-api/admin-portal/tool-broker/config/observability tests and typechecks passed; Postgres durability skipped without DB URL; chaos gate clearly required DB URL. |
+| UI browser validation | Passed | `/`, `/trace`, `/approvals`, and `/durable-operations` validated with evidence under `.devgateway\ui-browser-validation\`. |
+| Adversarial security review | No vulnerabilities found | Final security review reported no high-confidence vulnerabilities after Track 3 remediation. |
+| GPT-5.5 code review | Findings remediated | Fixed replay decision vocabulary, approval event type mapping, and retry `next_attempt_at` claim predicate; remediation validation passed agent-runtime test/typecheck and `db:check:offline`. |
+| Gemini 3.1 Pro review | Findings remediated | Fixed artifact signed-access HMAC, object-key traversal, runtime retry/manual-review routing and `BaseException` handling, worker rollback robustness, retry backoff bounds, and delimiter-safe approval/outbox keys; remediation validation passed agent-runtime/control-api/observability test/typecheck. |
+| Claude Opus 4.8 review | Finding remediated | Approval expiry budget reaping is scoped to the expired workflow and no longer performs project-wide `ttl=0` release; remediation validation passed agent-runtime test/typecheck. Targeted Postgres regression was skipped without DB URL. |
 
-## Local application and browser validation
+## Track 3 exit criteria status
 
-| Evidence area | Result | Notes |
-|---|---|---|
-| Local Control API/admin portal startup | Pass | Local services were restarted on `127.0.0.1:43100` and `127.0.0.1:43101`; OpenAPI contained the new Track 3 paths after restart. |
-| Browser `/trace` validation | Pass | Browser validation confirmed the trace UI renders the fail-closed auth state and does not expose forbidden raw/signed/secret strings. |
-| Screenshot artifact | Captured | `C:\Users\v-mnmurugan\.copilot\session-state\384a9fe2-c231-43f7-89a5-e402d4faf7c6\files\track3-trace-ui.png` |
+| # | Criterion | Current status |
+|---:|---|---|
+| 1 | Track 0 governance approval remains recorded and production capability remains separately gated. | Satisfied by existing governance posture; no production enablement added by Track 3. |
+| 2 | Track 1/2 production blockers are still fail-closed or explicitly resolved by separate evidence. | Satisfied for this scope; Control API Track 3 routes remain non-production-only and fail closed in production tests. |
+| 3 | Workflow state survives worker process restart using Postgres-backed runtime state. | Implemented and test-authored; live evidence blocked because Postgres durability tests skipped without DB URL and chaos gate was not live-run. |
+| 4 | Approval request pauses workflow durably and releases worker lease. | Implemented and unit/fixture-validated; live Postgres proof blocked. |
+| 5 | Approval decision resumes exactly once when authorized, unexpired, and audited. | Implemented and unit/fixture-validated; live restart/chaos proof blocked. |
+| 6 | Approval denial/expiry/cancellation fail closed according to policy. | Implemented and unit/API-validated; live Postgres expiry/cancellation rehearsal remains blocked. |
+| 7 | Failed retryable steps are explainable and retryable with bounded backoff. | Implemented and unit-validated; Gemini backoff-bound finding remediated. |
+| 8 | Non-idempotent or ambiguous side effects open manual review instead of auto-retry. | Implemented and unit-validated; retry/manual-review routing finding remediated. |
+| 9 | Stuck lease recovery test passes and stale worker writes are fenced off. | Implemented and unit/fixture-validated; live chaos proof blocked. |
+| 10 | Cancellation execution stops queued/future work, best-effort aborts active work, releases unused reservations, and preserves audit evidence. | Implemented and unit/API-validated; live long-running worker rehearsal remains blocked. |
+| 11 | Workflow outbox delivers trace/audit/portal/eval events idempotently and survives crash before delivery. | Implemented and unit/API/eval-validated; live crash-before-delivery chaos proof blocked. |
+| 12 | Artifact lifecycle uses object storage for bodies, enforces ACL/signed-access/retention/legal-hold rules, and reconciles orphaned writes. | Metadata/ACL/signed-access logic implemented and API/browser-validated; live object-store body lifecycle/orphan reconciliation remains blocked. |
+| 13 | Workflow templates are immutable by version and active runs remain pinned to their original template version. | Implemented and offline/API-validated; live database trigger execution blocked without disposable Postgres. |
+| 14 | Long-running worker service readiness, shutdown, metrics, and runbooks are in place. | Implemented and unit/observability-validated; live service rehearsal not run. |
+| 15 | Durable workflow, approval, retry, lease, cancellation, outbox, artifact, budget, template, and prompt-injection eval suites pass. | Fixture eval smoke passed, including Track 3 durable-workflow, approval-gates, and workflow-outbox suites with `live_provider_calls: 0`. |
+| 16 | No raw prompts, raw artifact bodies, provider keys, raw virtual keys, signed URLs, tokens, or secret fields are exposed in logs, portal, APIs, outbox payloads, or metadata. | Satisfied by API/admin tests, browser validation, and final security review. |
+| 17 | Database-backed migration/invariant validation passes against disposable Postgres. | Blocked. Offline DB checks pass, but no `DATABASE_CHECK_URL`/`AGENT_RUNTIME_POSTGRES_TEST_URL` was configured for live database validation. |
+| 18 | Track 3 validation evidence records commands, chaos tests, model reviews, browser checks, and any remaining production blockers. | Satisfied by this document. |
 
-## Exit decision
+## Exit decision and blockers
 
-Track 3 durable workflows and approvals are implemented for the non-production DevGateway foundation. Contracts, migrations, runtime repository logic, Control API surfaces, local/browser behavior, and final adversarial/model review gates have completed with no remaining blocking or high-confidence findings.
+Decision: **Conditional approval for implemented/offline/fixture/browser-validated Track 3 remediation; formal Track 3 exit remains blocked on live-infrastructure gates.**
+
+Blockers before unconditional Track 3 exit:
+
+1. Configure a disposable Postgres URL in `DATABASE_CHECK_URL` or `AGENT_RUNTIME_POSTGRES_TEST_URL` and rerun `pnpm --filter @devgateway/agent-runtime test:durable:postgres` expecting live execution instead of 27 skips.
+2. With the same disposable Postgres environment, rerun `pnpm test:durable:chaos` expecting the restart/lease/outbox/approval chaos subset to pass instead of the current exit-2 environment gate.
+3. Run database-backed migration/invariant validation against disposable Postgres, including Track 3 trigger/enforcement checks, rather than offline structural validation only.
+4. Run a disposable object-storage lifecycle rehearsal for artifact body writes, ACL/signed-access, retention/legal-hold, and orphan reconciliation. The current evidence validates metadata/signed-access decisions but not live object-store behavior.
+
+No remaining offline/unit/typecheck/browser/model-review/security-review blocker is known from this final validation pass.

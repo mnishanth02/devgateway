@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Sequence
 from uuid import uuid4
@@ -44,7 +44,10 @@ from .contracts import (
     CancellationRecord,
     CancellationTarget,
     FailureClass,
+    ManualReviewItem,
+    ManualReviewStatus,
     OutboxEventStatus,
+    RetryDecision,
     WorkflowTransitionError,
     isoformat_utc,
     utc_now,
@@ -52,6 +55,15 @@ from .contracts import (
 from .idempotency import IdempotencyRecord, IdempotencyScope, IdempotencyStatus
 from .leases import Lease, LeasePolicy, StepClaim
 from .memory import RepositoryError
+from .approvals import (
+    approval_decision_to_step_state,
+    approval_decision_to_workflow_state,
+    approval_expires_at,
+    default_approval_ttl_seconds,
+    stable_approval_resume_token,
+)
+
+DEFAULT_STATE_CHANGE_OUTBOX_DESTINATIONS: tuple[str, ...] = ("trace", "portal_update")
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +189,42 @@ _RUNTIME_EVENT_TYPE_TO_DB: dict[str, str] = {
     "step.manual_review": "step_state_changed",
     "lease.acquired": "lease_acquired",
     "lease.released": "lease_released",
+    "budget.reservation.orphaned": "budget_recorded",
+    "budget.reservation.reconciled": "budget_recorded",
+    "budget.reservation.released": "budget_recorded",
+    "budget.reservation.reestimate_required": "budget_recorded",
+    "approval.approved.resumed": "approval_approved",
+    "approval.denied.resumed": "approval_denied",
+    "approval.expired.resumed": "approval_expired",
 }
+
+STEP_ATTEMPT_REPLAY_DECISIONS: tuple[str, ...] = (
+    "replay",
+    "skip",
+    "abort",
+    "pre_side_effect",
+    "idempotent_pre_side_effect",
+    "ambiguous_post_side_effect",
+    "retry_scheduled",
+    "terminal_failure",
+    "manual_review",
+)
+
+_MANUAL_REVIEW_REASONS = frozenset(
+    {
+        "non_idempotent_side_effect",
+        "stuck_lease_recovery",
+        "stuck_lease",
+        "ambiguous_external_call",
+        "partial_artifact_write",
+        "retry_exhausted_non_idempotent",
+        "retry_exhausted",
+        "worker_crash_non_recoverable",
+        "budget_anomaly",
+        "policy_ambiguity",
+        "cancellation_unresolvable",
+    }
+)
 
 
 def idempotency_status_to_db(status: IdempotencyStatus) -> str:
@@ -241,11 +288,25 @@ def db_to_step_state(state: str) -> StepState:
 def event_type_to_db(event_type: str) -> str:
     if event_type in _RUNTIME_EVENT_TYPE_TO_DB:
         return _RUNTIME_EVENT_TYPE_TO_DB[event_type]
+    if event_type.startswith("budget."):
+        return "budget_recorded"
     if event_type.startswith("workflow."):
         return "workflow_state_changed"
     if event_type.startswith("step."):
         return "step_state_changed"
     return event_type
+
+
+def _outbox_destinations_for_event(event: WorkflowEvent) -> tuple[str, ...]:
+    destinations: list[str] = list(DEFAULT_STATE_CHANGE_OUTBOX_DESTINATIONS)
+    refs = event.refs
+    if "audit_ref" in refs:
+        destinations.append("audit")
+    if "notification_ref" in refs:
+        destinations.append("notification")
+    if "eval_evidence_ref" in refs:
+        destinations.append("eval_evidence")
+    return tuple(dict.fromkeys(destinations))
 
 
 # ---------------------------------------------------------------------------
@@ -458,6 +519,43 @@ def row_to_idempotency(row: Mapping[str, Any]) -> IdempotencyRecord:
         status=db_to_idempotency_status(row["status"]),
         created_at=_parse_dt(row["created_at"]),
         updated_at=_parse_dt(row["updated_at"]),
+    )
+
+
+def row_to_retry_decision(row: Mapping[str, Any]) -> RetryDecision:
+    meta = _parse_meta(row, "metadata")
+    return RetryDecision(
+        workflow_id=row["workflow_run_id_text"],
+        step_id=row["workflow_step_id_text"],
+        attempt=int(row["attempt_number"]),
+        failure_class=FailureClass(row["failure_class"]),
+        eligible=bool(meta.get("retry_eligible", False)),
+        delay_seconds=float(meta.get("retry_delay_seconds", 0.0)),
+        reason_ref=row.get("failure_reason") or meta.get("reason_ref"),
+    )
+
+
+def _manual_review_reason(reason_ref: str | None) -> str:
+    if reason_ref in _MANUAL_REVIEW_REASONS:
+        return str(reason_ref)
+    return "ambiguous_external_call"
+
+
+def row_to_manual_review_item(row: Mapping[str, Any]) -> ManualReviewItem:
+    step_id = row.get("workflow_step_id_text")
+    return ManualReviewItem(
+        review_id=row["manual_review_item_id"],
+        workflow_id=row["workflow_run_id_text"],
+        review_ref=f"runtime-ref:manual-review:{row['manual_review_item_id']}",
+        status=ManualReviewStatus(row["review_state"]),
+        created_at=_parse_dt(row["created_at"]),
+        updated_at=_parse_dt(row["updated_at"]),
+        step_id=step_id,
+        reviewer_ref=str(row.get("owner_principal_id")) if row.get("owner_principal_id") is not None else None,
+        reason_ref=row.get("reason"),
+        artifact_refs=tuple(_parse_meta(row, "side_effect_refs").values())
+        if isinstance(row.get("side_effect_refs"), dict)
+        else tuple(row.get("side_effect_refs") or ()),
     )
 
 
@@ -784,6 +882,26 @@ def build_claim_step_query(
     placeholders = ",".join(["%s"] * len(terminal_states))
     conditions.append(f"wr.state NOT IN ({placeholders})")
     params.extend(terminal_states)
+    conditions.append("(ws.next_attempt_at IS NULL OR ws.next_attempt_at <= %s)")
+    params.append(now)
+    conditions.append(
+        """
+        NOT EXISTS (
+            SELECT 1
+              FROM workflow_cancellation wc
+             WHERE wc.workflow_run_id = wr.id
+               AND wc.project_id = wr.project_id
+               AND wc.propagation_state NOT IN (
+                   'completed', 'partially_completed',
+                   'partially_completed_manual_review'
+               )
+               AND (
+                   wc.target_refs->>'target' = 'workflow'
+                   OR wc.target_refs->>'step_id' = ws.workflow_step_id
+               )
+        )
+        """
+    )
 
     if kinds:
         kinds_values = [step_kind_to_db(k) for k in kinds]
@@ -937,8 +1055,8 @@ class PostgresRuntimeRepository:
         event: WorkflowEvent,
         *,
         step_pk: int | None = None,
-    ) -> None:
-        """INSERT a single workflow_event row, allocating the next sequence number."""
+    ) -> int | None:
+        """INSERT a workflow_event row and enqueue delivery records in the same transaction."""
         s = self._scope
         seq = self._next_seq(cur, run_pk)
         meta: dict[str, Any] = {
@@ -965,6 +1083,7 @@ class PostgresRuntimeRepository:
                 %s, %s, %s,
                 %s, %s
             )
+            RETURNING id
             """,
             (
                 event.event_id, run_pk, step_pk,
@@ -975,6 +1094,389 @@ class PostgresRuntimeRepository:
                 event.trace_context.trace_id, event.trace_context.span_id,
                 json.dumps(meta),
                 event.occurred_at, event.occurred_at,
+            ),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        event_pk = int(row["id"] if isinstance(row, dict) else row[0])
+        self._enqueue_outbox_for_event(cur, run_pk=run_pk, source_event_pk=event_pk, event=event)
+        return event_pk
+
+    def _insert_step_attempt(
+        self,
+        cur: Any,
+        *,
+        run_pk: int,
+        step_pk: int,
+        step_id: str,
+        step_row: Mapping[str, Any],
+        lease: Lease,
+        attempt_number: int,
+        now: datetime,
+    ) -> None:
+        s = self._scope
+        meta = {
+            "workflow_step_id": step_id,
+            "input_ref": step_row.get("task_ref"),
+            "step_idempotency_key": step_row.get("idempotency_key"),
+            "workflow_step_metadata": _parse_meta(step_row, "metadata"),
+        }
+        attempt_idempotency_key = (
+            f"{step_row.get('idempotency_key')}:attempt:{attempt_number}"
+            if step_row.get("idempotency_key")
+            else None
+        )
+        cur.execute(
+            """
+            INSERT INTO step_attempt (
+                step_attempt_id, workflow_run_id, workflow_step_id,
+                task_ref, project_id, principal_id, budget_scope_id,
+                attempt_number, data_class, policy_version, registry_version,
+                trace_id, request_id, idempotency_key, state,
+                lease_owner, lease_expires_at, heartbeat_at,
+                fencing_token, replay_decision, metadata, created_at, updated_at
+            ) VALUES (
+                %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s, 'queued',
+                %s, %s, %s,
+                %s, 'pre_side_effect', %s::jsonb, %s, %s
+            )
+            ON CONFLICT DO NOTHING
+            """,
+            (
+                f"attempt_{step_id}_{attempt_number}_{lease.fencing_token}",
+                run_pk,
+                step_pk,
+                step_row.get("task_ref") or step_id,
+                s.project_id,
+                s.principal_id,
+                s.budget_scope_id,
+                attempt_number,
+                s.data_class,
+                s.policy_version,
+                s.registry_version,
+                step_row.get("step_trace_id") or uuid4().hex,
+                uuid4().hex[:16],
+                attempt_idempotency_key,
+                lease.owner_id,
+                lease.expires_at,
+                now,
+                lease.fencing_token,
+                json.dumps(meta),
+                now,
+                now,
+            ),
+        )
+
+    def _mark_step_attempt_running(
+        self,
+        cur: Any,
+        *,
+        step_pk: int,
+        lease: Lease,
+        now: datetime,
+    ) -> None:
+        cur.execute(
+            """
+            UPDATE step_attempt
+               SET state = 'running',
+                   started_at = COALESCE(started_at, %s),
+                   heartbeat_at = %s,
+                   replay_decision = 'ambiguous_post_side_effect',
+                   updated_at = %s
+             WHERE workflow_step_id = %s
+               AND project_id = %s
+               AND lease_owner = %s
+               AND fencing_token = %s
+               AND state = 'queued'
+            """,
+            (
+                now,
+                now,
+                now,
+                step_pk,
+                self._scope.project_id,
+                lease.owner_id,
+                lease.fencing_token,
+            ),
+        )
+
+    def _complete_step_attempt(
+        self,
+        cur: Any,
+        *,
+        step_pk: int,
+        lease: Lease,
+        output_ref: str,
+        now: datetime,
+    ) -> None:
+        cur.execute(
+            """
+            UPDATE step_attempt
+               SET state = 'succeeded',
+                   completed_at = %s,
+                   artifact_refs = artifact_refs || %s::jsonb,
+                   metadata = metadata || %s::jsonb,
+                   updated_at = %s
+             WHERE workflow_step_id = %s
+               AND project_id = %s
+               AND lease_owner = %s
+               AND fencing_token = %s
+               AND state IN ('queued', 'running')
+            """,
+            (
+                now,
+                json.dumps([output_ref]),
+                json.dumps({"output_ref": output_ref}),
+                now,
+                step_pk,
+                self._scope.project_id,
+                lease.owner_id,
+                lease.fencing_token,
+            ),
+        )
+
+    def _fail_step_attempt(
+        self,
+        cur: Any,
+        *,
+        step_pk: int,
+        lease: Lease,
+        failure_class: FailureClass,
+        reason_ref: str | None,
+        now: datetime,
+        next_attempt_at: datetime | None = None,
+        retry_eligible: bool = False,
+        retry_delay_seconds: float = 0.0,
+        replay_decision: str | None = None,
+    ) -> int | None:
+        metadata = {
+            "reason_ref": reason_ref,
+            "next_attempt_at": isoformat_utc(next_attempt_at) if next_attempt_at else None,
+            "retry_eligible": retry_eligible,
+            "retry_delay_seconds": retry_delay_seconds,
+        }
+        cur.execute(
+            """
+            UPDATE step_attempt
+               SET state = 'failed',
+                   completed_at = %s,
+                   failure_reason = %s,
+                   failure_class = %s,
+                   replay_decision = COALESCE(%s, replay_decision),
+                   metadata = metadata || %s::jsonb,
+                   updated_at = %s
+             WHERE workflow_step_id = %s
+               AND project_id = %s
+               AND lease_owner = %s
+               AND fencing_token = %s
+               AND state IN ('queued', 'running')
+             RETURNING id
+            """,
+            (
+                now,
+                reason_ref,
+                failure_class.value,
+                replay_decision,
+                json.dumps(metadata),
+                now,
+                step_pk,
+                self._scope.project_id,
+                lease.owner_id,
+                lease.fencing_token,
+            ),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        return int(row["id"] if isinstance(row, dict) else row[0])
+
+    def _latest_step_attempt_pk(self, cur: Any, *, step_pk: int) -> int | None:
+        cur.execute(
+            """
+            SELECT id
+              FROM step_attempt
+             WHERE workflow_step_id = %s
+               AND project_id = %s
+             ORDER BY attempt_number DESC, id DESC
+             LIMIT 1
+            """,
+            (step_pk, self._scope.project_id),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        return int(row["id"] if isinstance(row, dict) else row[0])
+
+    def _insert_manual_review_locked(
+        self,
+        cur: Any,
+        *,
+        run_pk: int,
+        workflow_id: str,
+        step_pk: int | None,
+        step_id: str | None,
+        attempt_pk: int | None,
+        item: ManualReviewItem,
+        reason: str,
+        trace_context: TraceContext,
+        now: datetime,
+        evidence: Mapping[str, Any] | None = None,
+    ) -> None:
+        idempotency_key = "manual_review:" + hashlib.sha256(
+            f"{workflow_id}:{step_id}:{attempt_pk}:{reason}".encode("utf-8")
+        ).hexdigest()[:24]
+        cur.execute(
+            """
+            INSERT INTO manual_review_item (
+                manual_review_item_id, reason, workflow_run_id, workflow_step_id,
+                step_attempt_id, owner_principal_id, blocking_state, review_state,
+                safe_actions, side_effect_refs, resolution_ref, idempotency_key,
+                trace_id, request_id, project_id, created_at, updated_at
+            ) VALUES (
+                %s, %s, %s, %s,
+                %s, %s, 'blocking_step', %s,
+                %s::jsonb, %s::jsonb, NULL, %s,
+                %s, %s, %s, %s, %s
+            )
+            ON CONFLICT (idempotency_key) DO NOTHING
+            """,
+            (
+                item.review_id,
+                reason,
+                run_pk,
+                step_pk,
+                attempt_pk,
+                self._scope.principal_id,
+                item.status.value,
+                json.dumps([{"ref_id": f"runtime-ref:step:{step_id}", "ref_type": "step", "scope_ref": workflow_id}]),
+                json.dumps([evidence or {}]),
+                idempotency_key,
+                trace_context.trace_id,
+                trace_context.span_id,
+                self._scope.project_id,
+                now,
+                now,
+            ),
+        )
+
+    def _release_lease_locked(self, cur: Any, *, lease: Lease, now: datetime) -> None:
+        cur.execute(
+            """
+            UPDATE workflow_lease
+               SET status = 'released',
+                   released_at = %s,
+                   updated_at = %s
+             WHERE workflow_lease_id = %s
+               AND lease_key = %s
+               AND lease_owner = %s
+               AND fencing_token = %s
+               AND project_id = %s
+               AND status = 'active'
+            """,
+            (
+                now,
+                now,
+                lease.lease_id,
+                lease.resource_id,
+                lease.owner_id,
+                lease.fencing_token,
+                self._scope.project_id,
+            ),
+        )
+
+    def _enqueue_trace_outbox(
+        self,
+        cur: Any,
+        *,
+        run_pk: int,
+        source_event_pk: int | None,
+        source_event_id: str,
+        trace_context: TraceContext,
+        now: datetime,
+    ) -> None:
+        self._enqueue_outbox_event(
+            cur,
+            run_pk=run_pk,
+            source_event_pk=source_event_pk,
+            source_event_id=source_event_id,
+            destination_kind="trace",
+            trace_context=trace_context,
+            now=now,
+        )
+
+    def _enqueue_outbox_for_event(
+        self,
+        cur: Any,
+        *,
+        run_pk: int,
+        source_event_pk: int | None,
+        event: WorkflowEvent,
+    ) -> None:
+        if source_event_pk is None:
+            return
+        for destination_kind in _outbox_destinations_for_event(event):
+            self._enqueue_outbox_event(
+                cur,
+                run_pk=run_pk,
+                source_event_pk=source_event_pk,
+                source_event_id=event.event_id,
+                destination_kind=destination_kind,
+                trace_context=event.trace_context,
+                now=event.occurred_at,
+            )
+
+    def _enqueue_outbox_event(
+        self,
+        cur: Any,
+        *,
+        run_pk: int,
+        source_event_pk: int | None,
+        source_event_id: str,
+        destination_kind: str,
+        trace_context: TraceContext,
+        now: datetime,
+    ) -> None:
+        from .outbox import assert_outbox_destination_kind, outbox_idempotency_key
+
+        if source_event_pk is None:
+            return
+        assert_outbox_destination_kind(destination_kind)
+        idempotency_key = outbox_idempotency_key(destination_kind, source_event_id)
+        digest = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[:24]
+        cur.execute(
+            """
+            INSERT INTO workflow_outbox (
+                outbox_id, workflow_run_id, source_workflow_event_id,
+                destination_kind, delivery_state, attempt_count,
+                next_attempt_at, last_failure_ref, idempotency_key,
+                trace_id, request_id, project_id, policy_version,
+                created_at, updated_at
+            ) VALUES (
+                %s, %s, %s,
+                %s, 'pending', 0,
+                NULL, NULL, %s,
+                %s, %s, %s, %s,
+                %s, %s
+            )
+            ON CONFLICT (destination_kind, source_workflow_event_id, idempotency_key)
+            DO NOTHING
+            """,
+            (
+                f"outbox_{digest}",
+                run_pk,
+                source_event_pk,
+                destination_kind,
+                idempotency_key,
+                trace_context.trace_id,
+                trace_context.span_id,
+                self._scope.project_id,
+                self._scope.policy_version,
+                now,
+                now,
             ),
         )
 
@@ -1465,6 +1967,13 @@ class PostgresRuntimeRepository:
                 raise RepositoryError(
                     f"UPDATE workflow_step returned no row for {step_id}; lease may be stale or fenced"
                 )
+            if target == StepState.RUNNING:
+                self._mark_step_attempt_running(
+                    cur,
+                    step_pk=step_pk,
+                    lease=lease,
+                    now=timestamp,
+                )
 
             event = self._make_event(
                 workflow_id, f"step.{target.value}", trace_context,
@@ -1581,8 +2090,386 @@ class PostgresRuntimeRepository:
                 now=timestamp,
             )
             self._insert_event(cur, run_pk, event, step_pk=step_pk)
+            self._complete_step_attempt(
+                cur,
+                step_pk=step_pk,
+                lease=lease,
+                output_ref=output_ref,
+                now=timestamp,
+            )
+            self._release_lease_locked(cur, lease=lease, now=timestamp)
 
         return row_to_step(updated_row)
+
+    def schedule_step_retry(
+        self,
+        decision: RetryDecision,
+        *,
+        next_attempt_at: datetime,
+        trace_context: TraceContext,
+        lease: Lease,
+        now: datetime | None = None,
+    ) -> WorkflowStep:
+        timestamp = now or utc_now()
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT ws.id, wr.id AS run_pk, wr.workflow_run_id, wr.state AS wf_state
+                  FROM workflow_step ws
+                  JOIN workflow_run wr ON ws.workflow_run_id = wr.id
+                 WHERE ws.workflow_step_id = %s
+                   AND ws.project_id = %s
+                   AND wr.project_id = %s
+                """,
+                (decision.step_id, self._scope.project_id, self._scope.project_id),
+            )
+            ctx_row = cur.fetchone()
+            if ctx_row is None:
+                raise RepositoryError(f"unknown step: {decision.step_id}")
+            step_pk = int(ctx_row["id"] if isinstance(ctx_row, dict) else ctx_row[0])
+            run_pk = int(ctx_row["run_pk"] if isinstance(ctx_row, dict) else ctx_row[1])
+            workflow_id = ctx_row["workflow_run_id"] if isinstance(ctx_row, dict) else ctx_row[2]
+            wf_state = WorkflowState(ctx_row["wf_state"] if isinstance(ctx_row, dict) else ctx_row[3])
+
+            cur.execute(
+                """
+                WITH updated AS (
+                    UPDATE workflow_step
+                       SET state = %s,
+                           next_attempt_at = %s,
+                           failure_class = %s,
+                           failure_reason = %s,
+                           updated_at = %s,
+                           metadata = metadata || %s::jsonb
+                     WHERE workflow_step_id = %s
+                       AND project_id = %s
+                       AND workflow_run_id = %s
+                       AND EXISTS (
+                         SELECT 1
+                           FROM workflow_lease wl
+                          WHERE wl.workflow_step_id = workflow_step.id
+                            AND wl.workflow_run_id = %s
+                            AND wl.project_id = %s
+                            AND wl.workflow_lease_id = %s
+                            AND wl.lease_owner = %s
+                            AND wl.fencing_token = %s
+                            AND wl.status = 'active'
+                            AND wl.expires_at > %s
+                       )
+                    RETURNING workflow_step_id, state, step_type, task_ref,
+                              idempotency_key, ordinal, metadata,
+                              created_at, updated_at
+                )
+                SELECT updated.*, wr.workflow_run_id
+                  FROM updated
+                  JOIN workflow_run wr ON wr.id = %s AND wr.project_id = %s
+                """,
+                (
+                    step_state_to_db(StepState.PENDING),
+                    next_attempt_at,
+                    decision.failure_class.value,
+                    decision.reason_ref,
+                    timestamp,
+                    json.dumps(
+                        {
+                            "retry": decision.to_dict(),
+                            "next_attempt_at": isoformat_utc(next_attempt_at),
+                        }
+                    ),
+                    decision.step_id,
+                    self._scope.project_id,
+                    run_pk,
+                    run_pk,
+                    self._scope.project_id,
+                    lease.lease_id,
+                    lease.owner_id,
+                    lease.fencing_token,
+                    timestamp,
+                    run_pk,
+                    self._scope.project_id,
+                ),
+            )
+            updated_row = cur.fetchone()
+            if updated_row is None:
+                raise RepositoryError(
+                    f"retry schedule fenced off for {decision.step_id}; lease may be stale"
+                )
+            self._fail_step_attempt(
+                cur,
+                step_pk=step_pk,
+                lease=lease,
+                failure_class=decision.failure_class,
+                reason_ref=decision.reason_ref,
+                now=timestamp,
+                next_attempt_at=next_attempt_at,
+                retry_eligible=True,
+                retry_delay_seconds=decision.delay_seconds,
+                replay_decision="retry_scheduled",
+            )
+            event = self._make_event(
+                workflow_id,
+                "retry_scheduled",
+                trace_context,
+                state=wf_state,
+                step_id=decision.step_id,
+                refs={
+                    "failure_class": decision.failure_class.value,
+                    "next_attempt_at": isoformat_utc(next_attempt_at),
+                    "attempt": str(decision.attempt),
+                },
+                now=timestamp,
+            )
+            event_pk = self._insert_event(cur, run_pk, event, step_pk=step_pk)
+            self._enqueue_trace_outbox(
+                cur,
+                run_pk=run_pk,
+                source_event_pk=event_pk,
+                source_event_id=event.event_id,
+                trace_context=trace_context,
+                now=timestamp,
+            )
+        return row_to_step(updated_row)
+
+    def record_step_failure(
+        self,
+        decision: RetryDecision,
+        *,
+        trace_context: TraceContext,
+        lease: Lease,
+        now: datetime | None = None,
+    ) -> WorkflowStep:
+        timestamp = now or utc_now()
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT ws.id, wr.id AS run_pk, wr.workflow_run_id, wr.state AS wf_state
+                  FROM workflow_step ws
+                  JOIN workflow_run wr ON ws.workflow_run_id = wr.id
+                 WHERE ws.workflow_step_id = %s
+                   AND ws.project_id = %s
+                   AND wr.project_id = %s
+                """,
+                (decision.step_id, self._scope.project_id, self._scope.project_id),
+            )
+            ctx_row = cur.fetchone()
+            if ctx_row is None:
+                raise RepositoryError(f"unknown step: {decision.step_id}")
+            step_pk = int(ctx_row["id"] if isinstance(ctx_row, dict) else ctx_row[0])
+            run_pk = int(ctx_row["run_pk"] if isinstance(ctx_row, dict) else ctx_row[1])
+            workflow_id = ctx_row["workflow_run_id"] if isinstance(ctx_row, dict) else ctx_row[2]
+            wf_state = WorkflowState(ctx_row["wf_state"] if isinstance(ctx_row, dict) else ctx_row[3])
+            cur.execute(
+                """
+                WITH updated AS (
+                    UPDATE workflow_step
+                       SET state = %s,
+                           failure_class = %s,
+                           failure_reason = %s,
+                           updated_at = %s
+                     WHERE workflow_step_id = %s
+                       AND project_id = %s
+                       AND workflow_run_id = %s
+                       AND EXISTS (
+                         SELECT 1 FROM workflow_lease wl
+                          WHERE wl.workflow_step_id = workflow_step.id
+                            AND wl.workflow_run_id = %s
+                            AND wl.project_id = %s
+                            AND wl.workflow_lease_id = %s
+                            AND wl.lease_owner = %s
+                            AND wl.fencing_token = %s
+                            AND wl.status = 'active'
+                            AND wl.expires_at > %s
+                       )
+                    RETURNING workflow_step_id, state, step_type, task_ref,
+                              idempotency_key, ordinal, metadata,
+                              created_at, updated_at
+                )
+                SELECT updated.*, wr.workflow_run_id
+                  FROM updated
+                  JOIN workflow_run wr ON wr.id = %s AND wr.project_id = %s
+                """,
+                (
+                    step_state_to_db(StepState.FAILED),
+                    decision.failure_class.value,
+                    decision.reason_ref,
+                    timestamp,
+                    decision.step_id,
+                    self._scope.project_id,
+                    run_pk,
+                    run_pk,
+                    self._scope.project_id,
+                    lease.lease_id,
+                    lease.owner_id,
+                    lease.fencing_token,
+                    timestamp,
+                    run_pk,
+                    self._scope.project_id,
+                ),
+            )
+            updated_row = cur.fetchone()
+            if updated_row is None:
+                raise RepositoryError(
+                    f"step failure fenced off for {decision.step_id}; lease may be stale"
+                )
+            self._fail_step_attempt(
+                cur,
+                step_pk=step_pk,
+                lease=lease,
+                failure_class=decision.failure_class,
+                reason_ref=decision.reason_ref,
+                now=timestamp,
+                retry_eligible=False,
+                retry_delay_seconds=0.0,
+                replay_decision="terminal_failure",
+            )
+            event = self._make_event(
+                workflow_id,
+                "step.failed",
+                trace_context,
+                state=wf_state,
+                step_id=decision.step_id,
+                refs={"failure_class": decision.failure_class.value},
+                now=timestamp,
+            )
+            event_pk = self._insert_event(cur, run_pk, event, step_pk=step_pk)
+            self._enqueue_trace_outbox(
+                cur,
+                run_pk=run_pk,
+                source_event_pk=event_pk,
+                source_event_id=event.event_id,
+                trace_context=trace_context,
+                now=timestamp,
+            )
+        return row_to_step(updated_row)
+
+    def open_step_manual_review(
+        self,
+        item: ManualReviewItem,
+        *,
+        decision: RetryDecision,
+        trace_context: TraceContext,
+        lease: Lease,
+        now: datetime | None = None,
+    ) -> ManualReviewItem:
+        timestamp = now or utc_now()
+        reason = _manual_review_reason(item.reason_ref)
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT ws.id, wr.id AS run_pk, wr.workflow_run_id, wr.state AS wf_state
+                  FROM workflow_step ws
+                  JOIN workflow_run wr ON ws.workflow_run_id = wr.id
+                 WHERE ws.workflow_step_id = %s
+                   AND ws.project_id = %s
+                   AND wr.project_id = %s
+                """,
+                (decision.step_id, self._scope.project_id, self._scope.project_id),
+            )
+            ctx_row = cur.fetchone()
+            if ctx_row is None:
+                raise RepositoryError(f"unknown step: {decision.step_id}")
+            step_pk = int(ctx_row["id"] if isinstance(ctx_row, dict) else ctx_row[0])
+            run_pk = int(ctx_row["run_pk"] if isinstance(ctx_row, dict) else ctx_row[1])
+            workflow_id = ctx_row["workflow_run_id"] if isinstance(ctx_row, dict) else ctx_row[2]
+            wf_state = WorkflowState(ctx_row["wf_state"] if isinstance(ctx_row, dict) else ctx_row[3])
+            cur.execute(
+                """
+                UPDATE workflow_step
+                   SET state = %s,
+                       failure_class = %s,
+                       failure_reason = %s,
+                       updated_at = %s,
+                       metadata = metadata || %s::jsonb
+                 WHERE workflow_step_id = %s
+                   AND project_id = %s
+                   AND workflow_run_id = %s
+                   AND EXISTS (
+                     SELECT 1 FROM workflow_lease wl
+                      WHERE wl.workflow_step_id = workflow_step.id
+                        AND wl.workflow_run_id = %s
+                        AND wl.project_id = %s
+                        AND wl.workflow_lease_id = %s
+                        AND wl.lease_owner = %s
+                        AND wl.fencing_token = %s
+                        AND wl.status = 'active'
+                        AND wl.expires_at > %s
+                   )
+                RETURNING id
+                """,
+                (
+                    step_state_to_db(StepState.MANUAL_REVIEW),
+                    decision.failure_class.value,
+                    decision.reason_ref,
+                    timestamp,
+                    json.dumps({"manual_review_reason": reason, "retry": decision.to_dict()}),
+                    decision.step_id,
+                    self._scope.project_id,
+                    run_pk,
+                    run_pk,
+                    self._scope.project_id,
+                    lease.lease_id,
+                    lease.owner_id,
+                    lease.fencing_token,
+                    timestamp,
+                ),
+            )
+            if cur.fetchone() is None:
+                raise RepositoryError(
+                    f"manual review fenced off for {decision.step_id}; lease may be stale"
+                )
+            attempt_pk = self._fail_step_attempt(
+                cur,
+                step_pk=step_pk,
+                lease=lease,
+                failure_class=decision.failure_class,
+                reason_ref=decision.reason_ref,
+                now=timestamp,
+                retry_eligible=False,
+                retry_delay_seconds=0.0,
+                replay_decision="manual_review",
+            ) or self._latest_step_attempt_pk(cur, step_pk=step_pk)
+            self._insert_manual_review_locked(
+                cur,
+                run_pk=run_pk,
+                workflow_id=workflow_id,
+                step_pk=step_pk,
+                step_id=decision.step_id,
+                attempt_pk=attempt_pk,
+                item=item,
+                reason=reason,
+                trace_context=trace_context,
+                now=timestamp,
+                evidence={"failure_class": decision.failure_class.value, "reason_ref": decision.reason_ref},
+            )
+            cur.execute(
+                """
+                UPDATE workflow_run
+                   SET manual_review_status = 'pending',
+                       updated_at = %s
+                 WHERE id = %s
+                   AND project_id = %s
+                """,
+                (timestamp, run_pk, self._scope.project_id),
+            )
+            event = self._make_event(
+                workflow_id,
+                "manual_review_opened",
+                trace_context,
+                state=wf_state,
+                step_id=decision.step_id,
+                refs={"manual_review_reason": reason, "failure_class": decision.failure_class.value},
+                now=timestamp,
+            )
+            event_pk = self._insert_event(cur, run_pk, event, step_pk=step_pk)
+            self._enqueue_trace_outbox(
+                cur,
+                run_pk=run_pk,
+                source_event_pk=event_pk,
+                source_event_id=event.event_id,
+                trace_context=trace_context,
+                now=timestamp,
+            )
+        return item
 
     def claim_next_step(
         self,
@@ -1690,6 +2577,24 @@ class PostgresRuntimeRepository:
                 )
                 return None
             lease = row_to_lease(lease_row)
+            attempt_number = int(
+                step_row["ordinal"] if isinstance(step_row, dict) else step_row[9]
+            )
+            self._insert_step_attempt(
+                cur,
+                run_pk=run_pk,
+                step_pk=step_pk,
+                step_id=step_id_text,
+                step_row={
+                    "task_ref": step_row["task_ref"] if isinstance(step_row, dict) else step_row[6],
+                    "metadata": step_row["metadata"] if isinstance(step_row, dict) else step_row[8],
+                    "step_trace_id": step_trace_id,
+                    "idempotency_key": step_row["idempotency_key"] if isinstance(step_row, dict) else step_row[7],
+                },
+                lease=lease,
+                attempt_number=attempt_number,
+                now=timestamp,
+            )
 
             # Record claim event
             child_trace = TraceContext(
@@ -1854,6 +2759,179 @@ class PostgresRuntimeRepository:
             row = cur.fetchone()
         return row is not None
 
+    def sweep_expired_step_leases(self, *, now: datetime | None = None) -> dict[str, int]:
+        timestamp = now or utc_now()
+        recovered = 0
+        escalated = 0
+        expired = 0
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT wl.id AS lease_pk, wl.workflow_lease_id, wl.lease_key, wl.lease_owner,
+                       wl.fencing_token, wl.expires_at, wl.heartbeat_at, wl.acquired_at,
+                       ws.id AS step_pk, ws.workflow_step_id, ws.state AS step_state,
+                       wr.id AS run_pk, wr.workflow_run_id, wr.state AS wf_state,
+                       sa.id AS attempt_pk, sa.state AS attempt_state,
+                       sa.replay_decision, sa.attempt_number
+                  FROM workflow_lease wl
+                  JOIN workflow_step ws ON ws.id = wl.workflow_step_id
+                  JOIN workflow_run wr ON wr.id = wl.workflow_run_id
+                  LEFT JOIN LATERAL (
+                      SELECT id, state, replay_decision, attempt_number
+                        FROM step_attempt
+                       WHERE workflow_step_id = ws.id
+                         AND project_id = wl.project_id
+                       ORDER BY attempt_number DESC, id DESC
+                       LIMIT 1
+                  ) sa ON true
+                 WHERE wl.status = 'active'
+                   AND wl.expires_at < %s
+                   AND wl.project_id = %s
+                 ORDER BY wl.expires_at, wl.id
+                 FOR UPDATE OF wl, ws SKIP LOCKED
+                """,
+                (timestamp, self._scope.project_id),
+            )
+            rows = cur.fetchall()
+            for row in rows:
+                expired += 1
+                lease_id = row["workflow_lease_id"]
+                owner = row["lease_owner"]
+                token = int(row["fencing_token"])
+                step_pk = int(row["step_pk"])
+                step_id = row["workflow_step_id"]
+                run_pk = int(row["run_pk"])
+                workflow_id = row["workflow_run_id"]
+                step_state = db_to_step_state(row["step_state"])
+                attempt_state = row.get("attempt_state")
+                replay_decision = row.get("replay_decision")
+                can_reclaim = step_state == StepState.CLAIMED and (
+                    attempt_state in (None, "queued")
+                    or replay_decision in ("pre_side_effect", "idempotent_pre_side_effect")
+                )
+                decision = "reclaim" if can_reclaim else "manual_review"
+                evidence = {
+                    "lease_owner": owner,
+                    "fencing_token": token,
+                    "expires_at": isoformat_utc(_parse_dt(row["expires_at"])),
+                    "last_heartbeat_at": isoformat_utc(_parse_dt(row.get("heartbeat_at") or row["acquired_at"])),
+                    "decision": decision,
+                    "step_state": step_state.value,
+                    "attempt_state": attempt_state,
+                    "replay_decision": replay_decision,
+                }
+                sweep_ref = f"runtime-ref:lease-sweep:{lease_id}:{decision}"
+                cur.execute(
+                    """
+                    UPDATE workflow_lease
+                       SET status = 'expired',
+                           recovery_reason = %s,
+                           sweep_evidence_ref = %s,
+                           metadata = metadata || %s::jsonb,
+                           updated_at = %s
+                     WHERE id = %s
+                       AND status = 'active'
+                    """,
+                    (
+                        "stuck_lease_recovery" if can_reclaim else "stuck_lease",
+                        sweep_ref,
+                        json.dumps({"lease_sweep": evidence}),
+                        timestamp,
+                        row["lease_pk"],
+                    ),
+                )
+                trace_context = TraceContext(
+                    trace_id=uuid4().hex,
+                    span_id=uuid4().hex[:16],
+                    correlation_id=workflow_id,
+                    baggage_refs=(sweep_ref,),
+                )
+                if can_reclaim:
+                    cur.execute(
+                        """
+                        UPDATE workflow_step
+                           SET state = %s,
+                               next_attempt_at = NULL,
+                               updated_at = %s,
+                               metadata = metadata || %s::jsonb
+                         WHERE id = %s
+                           AND project_id = %s
+                        """,
+                        (
+                            step_state_to_db(StepState.PENDING),
+                            timestamp,
+                            json.dumps({"lease_sweep": evidence}),
+                            step_pk,
+                            self._scope.project_id,
+                        ),
+                    )
+                    event_type = "retry_scheduled"
+                    refs = {"lease_sweep_ref": sweep_ref, "decision": decision}
+                    recovered += 1
+                else:
+                    cur.execute(
+                        """
+                        UPDATE workflow_step
+                           SET state = %s,
+                               failure_class = %s,
+                               failure_reason = %s,
+                               updated_at = %s,
+                               metadata = metadata || %s::jsonb
+                         WHERE id = %s
+                           AND project_id = %s
+                        """,
+                        (
+                            step_state_to_db(StepState.MANUAL_REVIEW),
+                            FailureClass.WORKER_CRASH_ACTIVE_LEASE.value,
+                            sweep_ref,
+                            timestamp,
+                            json.dumps({"lease_sweep": evidence}),
+                            step_pk,
+                            self._scope.project_id,
+                        ),
+                    )
+                    item = ManualReviewItem(
+                        review_id=f"manual_review_{uuid4().hex}",
+                        workflow_id=workflow_id,
+                        step_id=step_id,
+                        review_ref=f"runtime-ref:manual-review:{workflow_id}:{step_id}:stuck-lease",
+                        reason_ref="stuck_lease",
+                    )
+                    self._insert_manual_review_locked(
+                        cur,
+                        run_pk=run_pk,
+                        workflow_id=workflow_id,
+                        step_pk=step_pk,
+                        step_id=step_id,
+                        attempt_pk=row.get("attempt_pk"),
+                        item=item,
+                        reason="stuck_lease",
+                        trace_context=trace_context,
+                        now=timestamp,
+                        evidence=evidence,
+                    )
+                    event_type = "manual_review_opened"
+                    refs = {"lease_sweep_ref": sweep_ref, "decision": decision}
+                    escalated += 1
+                event = self._make_event(
+                    workflow_id,
+                    event_type,
+                    trace_context,
+                    step_id=step_id,
+                    refs=refs,
+                    now=timestamp,
+                )
+                event_pk = self._insert_event(cur, run_pk, event, step_pk=step_pk)
+                self._enqueue_trace_outbox(
+                    cur,
+                    run_pk=run_pk,
+                    source_event_pk=event_pk,
+                    source_event_id=event.event_id,
+                    trace_context=trace_context,
+                    now=timestamp,
+                )
+        return {"expired": expired, "recovered": recovered, "escalated": escalated}
+
     def recover_stale_leases(self, *, now: datetime | None = None) -> int:
         timestamp = now or utc_now()
         with self._cursor() as cur:
@@ -1901,8 +2979,6 @@ class PostgresRuntimeRepository:
                    step_state_to_db(StepState.CLAIMED), step_state_to_db(StepState.RUNNING),
                 ),
             )
-            # The number of expired leases is the rowcount of the first CTE
-            # (psycopg rowcount reports the outer UPDATE); use a follow-up count.
             cur.execute(
                 """
                 SELECT COUNT(*) FROM workflow_lease
@@ -1986,7 +3062,17 @@ class PostgresRuntimeRepository:
                     f"idempotency race: cannot fetch existing record "
                     f"for {record.scope.value}:{record.key}"
                 )
-            return row_to_idempotency(existing_row), False
+            existing = row_to_idempotency(existing_row)
+            conflicts = [
+                record.request_ref is not None and existing.request_ref != record.request_ref,
+                record.workflow_id is not None and existing.workflow_id != record.workflow_id,
+                record.step_id is not None and existing.step_id != record.step_id,
+            ]
+            if any(conflicts):
+                raise RepositoryError(
+                    f"idempotency conflict for {record.scope.value}:{record.key}"
+                )
+            return existing, False
 
     def get_idempotency(
         self, scope: IdempotencyScope, key: str
@@ -2048,6 +3134,64 @@ class PostgresRuntimeRepository:
                     f"{scope.value}:{key}"
                 )
         return row_to_idempotency(row)
+
+    # ------------------------------------------------------------------
+    # RetryRepository
+    # ------------------------------------------------------------------
+
+    def record_retry_decision(self, decision: RetryDecision) -> RetryDecision:
+        timestamp = utc_now()
+        with self._cursor() as cur:
+            step_pk = self._lookup_step_pk(cur, decision.step_id)
+            cur.execute(
+                """
+                UPDATE step_attempt
+                   SET failure_class = %s,
+                       failure_reason = %s,
+                       metadata = metadata || %s::jsonb,
+                       updated_at = %s
+                 WHERE workflow_step_id = %s
+                   AND project_id = %s
+                   AND attempt_number = %s
+                """,
+                (
+                    decision.failure_class.value,
+                    decision.reason_ref,
+                    json.dumps(
+                        {
+                            "retry_eligible": decision.eligible,
+                            "retry_delay_seconds": decision.delay_seconds,
+                        }
+                    ),
+                    timestamp,
+                    step_pk,
+                    self._scope.project_id,
+                    decision.attempt,
+                ),
+            )
+        return decision
+
+    def get_retry_decisions(self, step_id: str) -> tuple[RetryDecision, ...]:
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT sa.attempt_number, sa.failure_class, sa.failure_reason, sa.metadata,
+                       wr.workflow_run_id AS workflow_run_id_text,
+                       ws.workflow_step_id AS workflow_step_id_text
+                  FROM step_attempt sa
+                  JOIN workflow_step ws ON ws.id = sa.workflow_step_id
+                  JOIN workflow_run wr ON wr.id = sa.workflow_run_id
+                 WHERE ws.workflow_step_id = %s
+                   AND sa.project_id = %s
+                   AND ws.project_id = %s
+                   AND wr.project_id = %s
+                   AND sa.failure_class IS NOT NULL
+                 ORDER BY sa.attempt_number, sa.id
+                """,
+                (step_id, self._scope.project_id, self._scope.project_id, self._scope.project_id),
+            )
+            rows = cur.fetchall()
+        return tuple(row_to_retry_decision(row) for row in rows)
 
     # ------------------------------------------------------------------
     # CancellationRepository
@@ -2245,6 +3389,740 @@ class PostgresRuntimeRepository:
         )
         return action
 
+    def propagate_cancellations(self, *, now: datetime | None = None, limit: int = 100) -> dict[str, int]:
+        """Propagate active workflow cancellations inside one repository transaction.
+
+        This helper is intentionally metadata/ref-only.  It terminalizes queued
+        work, releases still-reserved budget reservations, preserves completed
+        work, and opens manual review for ambiguous in-flight side effects.
+        """
+        timestamp = now or utc_now()
+        stats = {
+            "claimed": 0,
+            "completed": 0,
+            "partially_completed_manual_review": 0,
+            "steps_cancelled": 0,
+            "steps_manual_review": 0,
+            "approvals_cancelled": 0,
+            "delegations_cancelled": 0,
+            "tool_calls_cancelled": 0,
+            "agent_runs_cancelled": 0,
+            "reservations_released": 0,
+            "manual_review_escalations": 0,
+        }
+        active_states = (
+            "requested",
+            "propagating",
+            "pending_manual_review",
+            "unwinding",
+            "releasing_reservations",
+        )
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT wc.id AS cancellation_pk, wc.workflow_cancellation_id,
+                       wc.target_refs, wc.trace_id, wc.request_id,
+                       wr.id AS run_pk, wr.workflow_run_id, wr.state AS workflow_state
+                  FROM workflow_cancellation wc
+                  JOIN workflow_run wr ON wr.id = wc.workflow_run_id
+                 WHERE wc.project_id = %s
+                   AND wr.project_id = %s
+                   AND wc.propagation_state = ANY(%s)
+                 ORDER BY wc.created_at, wc.id
+                 LIMIT %s
+                 FOR UPDATE OF wc, wr SKIP LOCKED
+                """,
+                (self._scope.project_id, self._scope.project_id, list(active_states), limit),
+            )
+            rows = cur.fetchall()
+            stats["claimed"] = len(rows)
+            for row in rows:
+                cancellation_pk = int(row["cancellation_pk"] if isinstance(row, dict) else row[0])
+                cancellation_id = row["workflow_cancellation_id"] if isinstance(row, dict) else row[1]
+                target_refs = _parse_meta(row, "target_refs") if isinstance(row, dict) else (row[2] or {})
+                trace_id = row["trace_id"] if isinstance(row, dict) else row[3]
+                request_id = row["request_id"] if isinstance(row, dict) else row[4]
+                run_pk = int(row["run_pk"] if isinstance(row, dict) else row[5])
+                workflow_id = row["workflow_run_id"] if isinstance(row, dict) else row[6]
+                workflow_state = WorkflowState(row["workflow_state"] if isinstance(row, dict) else row[7])
+                target_step_id = target_refs.get("step_id") if isinstance(target_refs, dict) else None
+                trace_context = TraceContext(
+                    trace_id=trace_id or uuid4().hex,
+                    span_id=(request_id or uuid4().hex[:16])[:16],
+                    correlation_id=workflow_id,
+                )
+
+                cur.execute(
+                    """
+                    UPDATE workflow_cancellation
+                       SET propagation_state = 'propagating',
+                           updated_at = %s
+                     WHERE id = %s
+                       AND project_id = %s
+                       AND propagation_state <> 'propagating'
+                    """,
+                    (timestamp, cancellation_pk, self._scope.project_id),
+                )
+                observed_event = self._make_event(
+                    workflow_id,
+                    "cancellation_observed",
+                    trace_context,
+                    state=workflow_state,
+                    refs={"cancellation_ref": f"runtime-ref:cancellation:{cancellation_id}"},
+                    now=timestamp,
+                )
+                self._insert_event(cur, run_pk, observed_event)
+
+                target_filter = ""
+                target_params: list[Any] = []
+                if target_step_id:
+                    target_filter = " AND workflow_step_id = %s"
+                    target_params.append(target_step_id)
+
+                cancelled_step_ids = self._cancel_pending_steps_locked(
+                    cur,
+                    run_pk=run_pk,
+                    target_filter=target_filter,
+                    target_params=target_params,
+                    cancellation_id=cancellation_id,
+                    now=timestamp,
+                )
+                stats["steps_cancelled"] += len(cancelled_step_ids)
+                safe_running_step_ids = self._cancel_safe_running_steps_locked(
+                    cur,
+                    run_pk=run_pk,
+                    target_filter=target_filter,
+                    target_params=target_params,
+                    cancellation_id=cancellation_id,
+                    now=timestamp,
+                )
+                stats["steps_cancelled"] += len(safe_running_step_ids)
+                cancelled_step_pks = [pk for pk, _step_id in (*cancelled_step_ids, *safe_running_step_ids)]
+                if cancelled_step_pks:
+                    cur.execute(
+                        """
+                        UPDATE step_attempt
+                           SET state = 'cancelled',
+                               completed_at = COALESCE(completed_at, %s),
+                               replay_decision = COALESCE(replay_decision, 'abort'),
+                               metadata = metadata || %s::jsonb,
+                               updated_at = %s
+                         WHERE workflow_run_id = %s
+                           AND project_id = %s
+                           AND workflow_step_id = ANY(%s)
+                           AND state IN ('queued', 'running', 'cancel_requested')
+                        """,
+                        (
+                            timestamp,
+                            json.dumps({"cancellation_ref": f"runtime-ref:cancellation:{cancellation_id}"}),
+                            timestamp,
+                            run_pk,
+                            self._scope.project_id,
+                            cancelled_step_pks,
+                        ),
+                    )
+
+                manual_reviews = self._escalate_ambiguous_running_steps_locked(
+                    cur,
+                    run_pk=run_pk,
+                    workflow_id=workflow_id,
+                    target_filter=target_filter,
+                    target_params=target_params,
+                    cancellation_id=cancellation_id,
+                    trace_context=trace_context,
+                    now=timestamp,
+                )
+                stats["steps_manual_review"] += manual_reviews
+                stats["manual_review_escalations"] += manual_reviews
+
+                approvals_cancelled = self._cancel_pending_approvals_locked(
+                    cur,
+                    run_pk=run_pk,
+                    target_step_id=target_step_id,
+                    cancellation_id=cancellation_id,
+                    now=timestamp,
+                )
+                stats["approvals_cancelled"] += approvals_cancelled
+                stats["delegations_cancelled"] += self._cancel_pending_delegations_locked(cur, run_pk=run_pk, now=timestamp)
+                stats["tool_calls_cancelled"] += self._cancel_pending_tool_calls_locked(cur, run_pk=run_pk, now=timestamp)
+                stats["agent_runs_cancelled"] += self._cancel_pending_agent_runs_locked(cur, run_pk=run_pk, now=timestamp)
+                stats["reservations_released"] += self._release_unused_reservations_locked(
+                    cur,
+                    run_pk=run_pk,
+                    cancellation_id=cancellation_id,
+                    now=timestamp,
+                )
+
+                terminal_state = (
+                    CancellationPropagationState.PARTIALLY_COMPLETED_MANUAL_REVIEW
+                    if manual_reviews > 0
+                    else CancellationPropagationState.COMPLETED
+                )
+                workflow_target = WorkflowState.MANUAL_REVIEW if manual_reviews > 0 else WorkflowState.CANCELLED
+                if workflow_state not in TERMINAL_WORKFLOW_STATES:
+                    cur.execute(
+                        """
+                        UPDATE workflow_run
+                           SET state = %s,
+                               cancellation_ref = %s,
+                               manual_review_status = CASE WHEN %s THEN 'pending' ELSE manual_review_status END,
+                               completed_at = CASE WHEN %s THEN completed_at ELSE COALESCE(completed_at, %s) END,
+                               updated_at = %s
+                         WHERE id = %s
+                           AND project_id = %s
+                           AND state NOT IN ('succeeded', 'completed', 'failed', 'cancelled', 'timed_out', 'denied')
+                        """,
+                        (
+                            workflow_target.value,
+                            f"runtime-ref:cancellation:{cancellation_id}",
+                            manual_reviews > 0,
+                            manual_reviews > 0,
+                            timestamp,
+                            timestamp,
+                            run_pk,
+                            self._scope.project_id,
+                        ),
+                    )
+
+                cur.execute(
+                    """
+                    UPDATE workflow_cancellation
+                       SET propagation_state = %s,
+                           terminal_ref = %s,
+                           budget_release_ref = CASE WHEN %s THEN %s ELSE budget_release_ref END,
+                           manual_review_ref = CASE WHEN %s THEN %s ELSE manual_review_ref END,
+                           updated_at = %s
+                     WHERE id = %s
+                       AND project_id = %s
+                    """,
+                    (
+                        terminal_state.value,
+                        f"runtime-ref:cancellation-terminal:{cancellation_id}:{workflow_target.value}",
+                        stats["reservations_released"] > 0,
+                        f"runtime-ref:budget-release:cancellation:{cancellation_id}",
+                        manual_reviews > 0,
+                        f"runtime-ref:manual-review:cancellation:{cancellation_id}",
+                        timestamp,
+                        cancellation_pk,
+                        self._scope.project_id,
+                    ),
+                )
+                completed_event = self._make_event(
+                    workflow_id,
+                    "cancellation_completed",
+                    trace_context.child(),
+                    state=workflow_target,
+                    refs={
+                        "cancellation_ref": f"runtime-ref:cancellation:{cancellation_id}",
+                        "terminal_ref": f"runtime-ref:cancellation-terminal:{cancellation_id}:{workflow_target.value}",
+                    },
+                    now=timestamp,
+                )
+                self._insert_event(cur, run_pk, completed_event)
+                if manual_reviews > 0:
+                    stats["partially_completed_manual_review"] += 1
+                else:
+                    stats["completed"] += 1
+        return stats
+
+    def _cancel_pending_steps_locked(
+        self,
+        cur: Any,
+        *,
+        run_pk: int,
+        target_filter: str,
+        target_params: Sequence[Any],
+        cancellation_id: str,
+        now: datetime,
+    ) -> list[tuple[int, str]]:
+        cur.execute(
+            f"""
+            UPDATE workflow_step
+               SET state = 'cancelled',
+                   completed_at = COALESCE(completed_at, %s),
+                   metadata = metadata || %s::jsonb,
+                   updated_at = %s
+             WHERE workflow_run_id = %s
+               AND project_id = %s
+               AND state IN ('created', 'planning', 'delegating', 'synthesizing', 'pending_approval')
+               {target_filter}
+             RETURNING id, workflow_step_id
+            """,
+            (
+                now,
+                json.dumps({"cancellation_ref": f"runtime-ref:cancellation:{cancellation_id}", "action": "skip"}),
+                now,
+                run_pk,
+                self._scope.project_id,
+                *target_params,
+            ),
+        )
+        return [(int(row["id"] if isinstance(row, dict) else row[0]), row["workflow_step_id"] if isinstance(row, dict) else row[1]) for row in cur.fetchall()]
+
+    def _cancel_safe_running_steps_locked(
+        self,
+        cur: Any,
+        *,
+        run_pk: int,
+        target_filter: str,
+        target_params: Sequence[Any],
+        cancellation_id: str,
+        now: datetime,
+    ) -> list[tuple[int, str]]:
+        cur.execute(
+            f"""
+            UPDATE workflow_step
+               SET state = 'cancelled',
+                   completed_at = COALESCE(completed_at, %s),
+                   metadata = metadata || %s::jsonb,
+                   updated_at = %s
+             WHERE workflow_run_id = %s
+               AND project_id = %s
+               AND state = 'running'
+               AND lower(COALESCE(metadata->>'safe_interruptible', 'false')) IN ('true', '1', 'yes')
+               {target_filter}
+             RETURNING id, workflow_step_id
+            """,
+            (
+                now,
+                json.dumps({"cancellation_ref": f"runtime-ref:cancellation:{cancellation_id}", "action": "abort"}),
+                now,
+                run_pk,
+                self._scope.project_id,
+                *target_params,
+            ),
+        )
+        return [(int(row["id"] if isinstance(row, dict) else row[0]), row["workflow_step_id"] if isinstance(row, dict) else row[1]) for row in cur.fetchall()]
+
+    def _escalate_ambiguous_running_steps_locked(
+        self,
+        cur: Any,
+        *,
+        run_pk: int,
+        workflow_id: str,
+        target_filter: str,
+        target_params: Sequence[Any],
+        cancellation_id: str,
+        trace_context: TraceContext,
+        now: datetime,
+    ) -> int:
+        cur.execute(
+            f"""
+            SELECT id, workflow_step_id
+              FROM workflow_step
+             WHERE workflow_run_id = %s
+               AND project_id = %s
+               AND state = 'running'
+               AND lower(COALESCE(metadata->>'safe_interruptible', 'false')) NOT IN ('true', '1', 'yes')
+               {target_filter}
+             FOR UPDATE
+            """,
+            (run_pk, self._scope.project_id, *target_params),
+        )
+        rows = cur.fetchall()
+        for row in rows:
+            step_pk = int(row["id"] if isinstance(row, dict) else row[0])
+            step_id = row["workflow_step_id"] if isinstance(row, dict) else row[1]
+            attempt_pk = self._latest_step_attempt_pk(cur, step_pk=step_pk)
+            cur.execute(
+                """
+                UPDATE workflow_step
+                   SET state = 'manual_review',
+                       failure_class = %s,
+                       failure_reason = %s,
+                       metadata = metadata || %s::jsonb,
+                       updated_at = %s
+                 WHERE id = %s
+                   AND project_id = %s
+                """,
+                (
+                    FailureClass.NON_IDEMPOTENT_UNKNOWN_SIDE_EFFECT.value,
+                    f"runtime-ref:cancellation-ambiguous:{cancellation_id}:{step_id}",
+                    json.dumps({"cancellation_ref": f"runtime-ref:cancellation:{cancellation_id}"}),
+                    now,
+                    step_pk,
+                    self._scope.project_id,
+                ),
+            )
+            cur.execute(
+                """
+                UPDATE step_attempt
+                   SET state = 'cancel_requested',
+                       failure_class = %s,
+                       failure_reason = %s,
+                       replay_decision = COALESCE(replay_decision, 'abort'),
+                       metadata = metadata || %s::jsonb,
+                       updated_at = %s
+                 WHERE id = %s
+                   AND project_id = %s
+                   AND state IN ('queued', 'running', 'cancel_requested')
+                """,
+                (
+                    FailureClass.NON_IDEMPOTENT_UNKNOWN_SIDE_EFFECT.value,
+                    f"runtime-ref:cancellation-ambiguous:{cancellation_id}:{step_id}",
+                    json.dumps({"cancellation_ref": f"runtime-ref:cancellation:{cancellation_id}"}),
+                    now,
+                    attempt_pk,
+                    self._scope.project_id,
+                ),
+            )
+            self._insert_manual_review_locked(
+                cur,
+                run_pk=run_pk,
+                workflow_id=workflow_id,
+                step_pk=step_pk,
+                step_id=step_id,
+                attempt_pk=attempt_pk,
+                item=ManualReviewItem(
+                    review_id=f"manual_review_{uuid4().hex}",
+                    workflow_id=workflow_id,
+                    step_id=step_id,
+                    review_ref=f"runtime-ref:manual-review:cancellation:{cancellation_id}:{step_id}",
+                    reason_ref="cancellation_unresolvable",
+                ),
+                reason="cancellation_unresolvable",
+                trace_context=trace_context.child(),
+                now=now,
+                evidence={"cancellation_ref": f"runtime-ref:cancellation:{cancellation_id}", "step_id": step_id},
+            )
+        return len(rows)
+
+    def _cancel_pending_approvals_locked(
+        self,
+        cur: Any,
+        *,
+        run_pk: int,
+        target_step_id: str | None,
+        cancellation_id: str,
+        now: datetime,
+    ) -> int:
+        step_filter = ""
+        params: list[Any] = [now, json.dumps({"cancellation_ref": f"runtime-ref:cancellation:{cancellation_id}"}), now, run_pk, self._scope.project_id]
+        if target_step_id:
+            step_filter = " AND workflow_step_id = (SELECT id FROM workflow_step WHERE workflow_step_id = %s AND project_id = %s)"
+            params.extend([target_step_id, self._scope.project_id])
+        cur.execute(
+            f"""
+            UPDATE approval_request
+               SET state = 'cancelled',
+                   decision_metadata = decision_metadata || %s::jsonb,
+                   updated_at = %s
+             WHERE workflow_run_id = %s
+               AND project_id = %s
+               AND state = 'pending'
+               {step_filter}
+            """,
+            params[1:],
+        )
+        return int(cur.rowcount or 0)
+
+    def _cancel_pending_delegations_locked(self, cur: Any, *, run_pk: int, now: datetime) -> int:
+        cur.execute(
+            """
+            UPDATE delegation
+               SET state = 'cancelled',
+                   completed_at = COALESCE(completed_at, %s),
+                   updated_at = %s
+             WHERE workflow_run_id = %s
+               AND project_id = %s
+               AND state IN ('draft', 'queued', 'dispatched')
+            """,
+            (now, now, run_pk, self._scope.project_id),
+        )
+        return int(cur.rowcount or 0)
+
+    def _cancel_pending_tool_calls_locked(self, cur: Any, *, run_pk: int, now: datetime) -> int:
+        cur.execute(
+            """
+            UPDATE tool_call
+               SET state = 'cancelled',
+                   completed_at = COALESCE(completed_at, %s),
+                   updated_at = %s
+             WHERE workflow_run_id = %s
+               AND project_id = %s
+               AND state IN ('queued', 'denied')
+            """,
+            (now, now, run_pk, self._scope.project_id),
+        )
+        return int(cur.rowcount or 0)
+
+    def _cancel_pending_agent_runs_locked(self, cur: Any, *, run_pk: int, now: datetime) -> int:
+        cur.execute(
+            """
+            UPDATE agent_run
+               SET state = 'cancelled',
+                   completed_at = COALESCE(completed_at, %s),
+                   updated_at = %s
+             WHERE workflow_run_id = %s
+               AND project_id = %s
+               AND state IN ('queued', 'leased')
+            """,
+            (now, now, run_pk, self._scope.project_id),
+        )
+        return int(cur.rowcount or 0)
+
+    def _release_unused_reservations_locked(
+        self,
+        cur: Any,
+        *,
+        run_pk: int,
+        cancellation_id: str,
+        now: datetime,
+    ) -> int:
+        cur.execute(
+            """
+            UPDATE budget_reservation
+               SET status = 'released',
+                   released_at = COALESCE(released_at, %s),
+                   release_idempotency_key = COALESCE(
+                       release_idempotency_key,
+                       'cancellation:' || reservation_id
+                   ),
+                   updated_at = %s
+             WHERE workflow_run_id = %s
+               AND status = 'reserved'
+               AND production_enabled = false
+            """,
+            (now, now, run_pk),
+        )
+        return int(cur.rowcount or 0)
+
+    # ------------------------------------------------------------------
+    # BudgetReservationRepository
+    # ------------------------------------------------------------------
+
+    def reap_orphaned_budget_reservations(
+        self,
+        *,
+        now: datetime | None = None,
+        limit: int = 100,
+        approval_wait_ttl_seconds: float = 14_400.0,
+        abandoned_workflow_seconds: float = 86_400.0,
+        workflow_id: str | None = None,
+    ) -> dict[str, int]:
+        """Detect and release orphaned reserved budget rows exactly once."""
+        timestamp = now or utc_now()
+        stats = {
+            "inspected": 0,
+            "orphaned": 0,
+            "reconciled": 0,
+            "released": 0,
+            "approval_wait_released": 0,
+            "expired_lease_released": 0,
+            "abandoned_workflow_released": 0,
+            "terminal_workflow_released": 0,
+        }
+        terminal_states = tuple(state.value for state in TERMINAL_WORKFLOW_STATES)
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT br.id AS reservation_pk,
+                       br.reservation_id,
+                       br.workflow_run_id AS run_pk,
+                       wr.workflow_run_id,
+                       wr.state AS workflow_state,
+                       wr.trace_id,
+                       wr.request_id,
+                       CASE
+                         WHEN wr.state = ANY(%s) THEN 'terminal_workflow'
+                         WHEN EXISTS (
+                              SELECT 1
+                                FROM approval_request ar
+                               WHERE ar.workflow_run_id = wr.id
+                                 AND ar.project_id = wr.project_id
+                                 AND ar.state = 'pending'
+                                 AND ar.created_at <= %s - (%s * interval '1 second')
+                         ) THEN 'approval_wait_ttl_expired'
+                         WHEN EXISTS (
+                              SELECT 1
+                                FROM workflow_lease wl
+                               WHERE wl.workflow_run_id = wr.id
+                                 AND wl.project_id = wr.project_id
+                                 AND wl.status = 'active'
+                                 AND wl.expires_at <= %s
+                         ) THEN 'expired_lease'
+                         WHEN wr.updated_at <= %s - (%s * interval '1 second')
+                              AND NOT EXISTS (
+                                  SELECT 1
+                                    FROM workflow_lease wl
+                                   WHERE wl.workflow_run_id = wr.id
+                                     AND wl.project_id = wr.project_id
+                                     AND wl.status = 'active'
+                                     AND wl.expires_at > %s
+                              ) THEN 'abandoned_workflow'
+                         ELSE NULL
+                       END AS orphan_reason
+                  FROM budget_reservation br
+                  JOIN workflow_run wr ON wr.id = br.workflow_run_id
+                 WHERE wr.project_id = %s
+                   AND br.status = 'reserved'
+                   AND br.production_enabled = false
+                   AND (%s::text IS NULL OR wr.workflow_run_id = %s)
+                 ORDER BY br.reserved_at, br.id
+                 LIMIT %s
+                 FOR UPDATE OF br, wr SKIP LOCKED
+                """,
+                (
+                    list(terminal_states),
+                    timestamp,
+                    approval_wait_ttl_seconds,
+                    timestamp,
+                    timestamp,
+                    abandoned_workflow_seconds,
+                    timestamp,
+                    self._scope.project_id,
+                    workflow_id,
+                    workflow_id,
+                    limit,
+                ),
+            )
+            rows = tuple(cur.fetchall())
+            stats["inspected"] = len(rows)
+            for row in rows:
+                reason = row["orphan_reason"] if isinstance(row, dict) else row[7]
+                if reason is None:
+                    continue
+                stats["orphaned"] += 1
+                reservation_pk = int(row["reservation_pk"] if isinstance(row, dict) else row[0])
+                reservation_id = row["reservation_id"] if isinstance(row, dict) else row[1]
+                run_pk = int(row["run_pk"] if isinstance(row, dict) else row[2])
+                workflow_id = row["workflow_run_id"] if isinstance(row, dict) else row[3]
+                workflow_state = WorkflowState(row["workflow_state"] if isinstance(row, dict) else row[4])
+                trace_id = (row["trace_id"] if isinstance(row, dict) else row[5]) or uuid4().hex
+                request_id = (row["request_id"] if isinstance(row, dict) else row[6]) or uuid4().hex[:16]
+                release_key = f"budget-reaper:{reason}:{reservation_id}"
+                cur.execute(
+                    """
+                    UPDATE budget_reservation
+                       SET status = 'released',
+                           released_at = COALESCE(released_at, %s),
+                           release_idempotency_key = COALESCE(release_idempotency_key, %s),
+                           updated_at = %s
+                     WHERE id = %s
+                       AND status = 'reserved'
+                       AND production_enabled = false
+                     RETURNING id
+                    """,
+                    (timestamp, release_key, timestamp, reservation_pk),
+                )
+                if cur.fetchone() is None:
+                    continue
+                stats["released"] += 1
+                stats["reconciled"] += 1
+                if reason == "approval_wait_ttl_expired":
+                    stats["approval_wait_released"] += 1
+                elif reason == "expired_lease":
+                    stats["expired_lease_released"] += 1
+                elif reason == "abandoned_workflow":
+                    stats["abandoned_workflow_released"] += 1
+                elif reason == "terminal_workflow":
+                    stats["terminal_workflow_released"] += 1
+                trace_context = TraceContext(
+                    trace_id=trace_id,
+                    span_id=str(request_id)[:16],
+                    correlation_id=workflow_id,
+                )
+                event = self._make_event(
+                    workflow_id,
+                    "budget.reservation.reconciled",
+                    trace_context,
+                    state=workflow_state,
+                    refs={
+                        "budget_reservation_id": str(reservation_id),
+                        "budget_reservation_state": "reconciled",
+                        "orphan_reason": str(reason),
+                        "release_idempotency_key": release_key,
+                        "audit_ref": f"runtime-ref:audit:budget-reaper:{reservation_id}",
+                    },
+                    now=timestamp,
+                )
+                self._insert_event(cur, run_pk, event)
+        return stats
+
+    def settle_budget_reservation(
+        self,
+        reservation_id: str,
+        *,
+        actual_amount: float,
+        actual_input_tokens: int | None = None,
+        actual_output_tokens: int | None = None,
+        idempotency_key: str,
+        allow_retry_reuse: bool = False,
+        retry_attempt: int = 1,
+        now: datetime | None = None,
+    ) -> bool:
+        """Settle a held reservation once; same-body replay is a no-op."""
+        if retry_attempt > 1 and not allow_retry_reuse:
+            raise RepositoryError("retry settlement may reuse a reservation only when policy allows")
+        timestamp = now or utc_now()
+        actual_total_tokens = (
+            (actual_input_tokens or 0) + (actual_output_tokens or 0)
+            if actual_input_tokens is not None or actual_output_tokens is not None
+            else None
+        )
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT br.id, br.status, br.settle_idempotency_key, br.actual_amount,
+                       br.actual_input_tokens, br.actual_output_tokens
+                  FROM budget_reservation br
+                  JOIN workflow_run wr ON wr.id = br.workflow_run_id
+                 WHERE br.reservation_id = %s
+                   AND wr.project_id = %s
+                   AND br.production_enabled = false
+                 FOR UPDATE
+                """,
+                (reservation_id, self._scope.project_id),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise RepositoryError(f"unknown budget reservation: {reservation_id}")
+            status = row["status"] if isinstance(row, dict) else row[1]
+            existing_key = row["settle_idempotency_key"] if isinstance(row, dict) else row[2]
+            if status == "settled":
+                existing_amount = float(row["actual_amount"] if isinstance(row, dict) else row[3])
+                existing_input = row["actual_input_tokens"] if isinstance(row, dict) else row[4]
+                existing_output = row["actual_output_tokens"] if isinstance(row, dict) else row[5]
+                if (
+                    existing_key == idempotency_key
+                    and existing_amount == float(actual_amount)
+                    and existing_input == actual_input_tokens
+                    and existing_output == actual_output_tokens
+                ):
+                    return False
+                raise RepositoryError("conflicting budget settlement replay rejected")
+            if status != "reserved":
+                raise RepositoryError(f"cannot settle budget reservation {reservation_id} because it is {status}")
+            cur.execute(
+                """
+                UPDATE budget_reservation
+                   SET status = 'settled',
+                       actual_amount = %s,
+                       actual_input_tokens = %s,
+                       actual_output_tokens = %s,
+                       actual_total_tokens = %s,
+                       settle_idempotency_key = %s,
+                       settled_at = %s,
+                       updated_at = %s
+                 WHERE id = %s
+                   AND status = 'reserved'
+                 RETURNING id
+                """,
+                (
+                    actual_amount,
+                    actual_input_tokens,
+                    actual_output_tokens,
+                    actual_total_tokens,
+                    idempotency_key,
+                    timestamp,
+                    timestamp,
+                    int(row["id"] if isinstance(row, dict) else row[0]),
+                ),
+            )
+            if cur.fetchone() is None:
+                raise RepositoryError("budget settlement was fenced by another writer")
+        return True
+
     # ------------------------------------------------------------------
     # ApprovalRepository
     # ------------------------------------------------------------------
@@ -2332,6 +4210,11 @@ class PostgresRuntimeRepository:
         bigint FKs for principal/role lookups.  The ``production_enabled``
         column is always false (enforced by DB CHECK constraint).
         """
+        if request.expires_at is None:
+            request = replace(
+                request,
+                expires_at=approval_expires_at(request.risk_tier, now=request.requested_at),
+            )
         s = self._scope
         meta: dict[str, Any] = {
             "requester_ref": request.requester_ref,
@@ -2478,7 +4361,8 @@ class PostgresRuntimeRepository:
         target_state = approval_status_to_db(decision.decision)
 
         with self._cursor() as cur:
-            self._expire_pending_approvals(cur, timestamp=timestamp)
+            if decision.decision is not ApprovalStatus.EXPIRED:
+                self._expire_pending_approvals(cur, timestamp=timestamp)
             cur.execute(
                 """
                 UPDATE approval_request
@@ -2577,6 +4461,389 @@ class PostgresRuntimeRepository:
             return False
         val = row["has_active"] if isinstance(row, dict) else row[0]
         return bool(val)
+
+    def pause_step_for_approval(
+        self,
+        request: ApprovalRequest,
+        *,
+        lease: Lease,
+        trace_context: TraceContext,
+        resume_token: str | None = None,
+        now: datetime | None = None,
+    ) -> ApprovalRequest:
+        timestamp = now or utc_now()
+        token = resume_token or stable_approval_resume_token(
+            workflow_id=request.workflow_id,
+            step_id=request.step_id,
+            approval_id=request.approval_id,
+        )
+        approval = self.create_approval_request(
+            replace(
+                request,
+                expires_at=request.expires_at or approval_expires_at(request.risk_tier, now=timestamp),
+                context_ref=request.context_ref or f"runtime-ref:{token}",
+            )
+        )
+        if approval.step_id is None:
+            raise RepositoryError("approval pause requires a workflow step id")
+
+        paused_step = self.update_step_state(
+            approval.step_id,
+            StepState.PENDING_APPROVAL,
+            trace_context=trace_context.child(),
+            refs={
+                "approval_request_id": approval.approval_id,
+                "approval_resume_token": token,
+            },
+            lease=lease,
+            now=timestamp,
+        )
+
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                UPDATE workflow_step
+                   SET metadata = metadata || %s::jsonb,
+                       updated_at = %s
+                 WHERE workflow_step_id = %s
+                   AND project_id = %s
+                """,
+                (
+                    json.dumps(
+                        {
+                            "approval_request_id": approval.approval_id,
+                            "approval_resume_token": token,
+                            "approval_pause_state": paused_step.state.value,
+                            "approval_paused_at": isoformat_utc(timestamp),
+                        }
+                    ),
+                    timestamp,
+                    approval.step_id,
+                    self._scope.project_id,
+                ),
+            )
+
+        workflow = self.get_workflow(approval.workflow_id)
+        if workflow is not None and workflow.state != WorkflowState.PENDING_APPROVAL:
+            self.transition_workflow(
+                approval.workflow_id,
+                WorkflowState.PENDING_APPROVAL,
+                trace_context=trace_context.child(),
+                refs={"approval_request_id": approval.approval_id, "approval_resume_token": token},
+                now=timestamp,
+            )
+        self.release_lease(lease.lease_id, owner_id=lease.owner_id)
+        return approval
+
+    def resume_approval_decision(
+        self,
+        decision: ApprovalDecision,
+        *,
+        trace_context: TraceContext,
+        resume_token: str | None = None,
+        now: datetime | None = None,
+    ) -> bool:
+        timestamp = now or utc_now()
+        workflow_target = approval_decision_to_workflow_state(decision.decision)
+        step_target = approval_decision_to_step_state(decision.decision)
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT ar.state,
+                       ar.expires_at,
+                       ar.workflow_step_id,
+                       wr.id AS run_pk,
+                       wr.workflow_run_id,
+                       wr.state AS workflow_state,
+                       ws.workflow_step_id AS step_id_text,
+                       ws.state AS step_state,
+                       ws.metadata AS step_metadata
+                  FROM approval_request ar
+                  JOIN workflow_run wr ON wr.id = ar.workflow_run_id
+                  LEFT JOIN workflow_step ws ON ws.id = ar.workflow_step_id
+                 WHERE ar.approval_request_id = %s
+                   AND ar.project_id = %s
+                   AND wr.workflow_run_id = %s
+                   AND wr.project_id = %s
+                """,
+                (decision.approval_id, self._scope.project_id, decision.workflow_id, self._scope.project_id),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return False
+            approval_state = db_to_approval_status(row["state"])
+            if approval_state != decision.decision:
+                return False
+            expires_at = _parse_dt(row["expires_at"]) if row.get("expires_at") else None
+            if decision.decision is ApprovalStatus.APPROVED and expires_at is not None and expires_at <= timestamp:
+                return False
+            step_id = row.get("step_id_text")
+            if not step_id or row.get("step_state") != step_state_to_db(StepState.PENDING_APPROVAL):
+                return False
+            metadata = _parse_meta(row, "step_metadata")
+            if metadata.get("approval_resumed_at") is not None:
+                return False
+            if resume_token is not None and metadata.get("approval_resume_token") != resume_token:
+                return False
+            expected_token = resume_token or metadata.get("approval_resume_token")
+            new_metadata = {
+                **metadata,
+                "approval_resumed_at": isoformat_utc(timestamp),
+                "approval_resume_decision": decision.decision.value,
+                "approval_resume_decision_ref": decision.reason_ref,
+            }
+            if expected_token is not None:
+                new_metadata["approval_resume_token"] = expected_token
+
+            cur.execute(
+                """
+                UPDATE workflow_step
+                   SET state = %s,
+                       metadata = %s::jsonb,
+                       updated_at = %s
+                 WHERE workflow_step_id = %s
+                   AND project_id = %s
+                   AND state = %s
+                   AND NOT (metadata ? 'approval_resumed_at')
+                 RETURNING id
+                """,
+                (
+                    step_state_to_db(step_target),
+                    json.dumps(new_metadata),
+                    timestamp,
+                    step_id,
+                    self._scope.project_id,
+                    step_state_to_db(StepState.PENDING_APPROVAL),
+                ),
+            )
+            updated_step = cur.fetchone()
+            if updated_step is None:
+                return False
+
+            if decision.decision is ApprovalStatus.APPROVED:
+                cur.execute(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                          FROM budget_reservation br
+                         WHERE br.workflow_run_id = %s
+                           AND br.status = 'reserved'
+                           AND br.production_enabled = false
+                    ) AS has_held_reservation
+                    """,
+                    (int(row["run_pk"]),),
+                )
+                held_row = cur.fetchone()
+                has_held = bool(held_row["has_held_reservation"] if isinstance(held_row, dict) else held_row[0])
+                if not has_held:
+                    reestimate_event = self._make_event(
+                        decision.workflow_id,
+                        "budget.reservation.reestimate_required",
+                        trace_context.child(),
+                        state=WorkflowState.RUNNING,
+                        step_id=step_id,
+                        refs={
+                            "approval_request_id": decision.approval_id,
+                            "budget_reservation_state": "held_required",
+                            "reestimate_reason": "approval_wait_reservation_released",
+                            "audit_ref": f"runtime-ref:audit:budget-reestimate:{decision.approval_id}",
+                        },
+                        now=timestamp,
+                    )
+                    self._insert_event(cur, int(row["run_pk"]), reestimate_event)
+
+            current_workflow_state = WorkflowState(row["workflow_state"])
+            if current_workflow_state != workflow_target:
+                transitioned = Workflow(
+                    workflow_id=row["workflow_run_id"],
+                    state=current_workflow_state,
+                    idempotency_key="",
+                    trace_context=trace_context,
+                ).transition_to(workflow_target, now=timestamp)
+                cur.execute(
+                    """
+                    UPDATE workflow_run
+                       SET state = %s,
+                           updated_at = %s,
+                           metadata = metadata || %s::jsonb
+                     WHERE id = %s
+                       AND project_id = %s
+                    """,
+                    (
+                        transitioned.state.value,
+                        timestamp,
+                        json.dumps(
+                            {
+                                "approval_resume_decision": decision.decision.value,
+                                "approval_request_id": decision.approval_id,
+                            }
+                        ),
+                        int(row["run_pk"]),
+                        self._scope.project_id,
+                    ),
+                )
+            event = self._make_event(
+                decision.workflow_id,
+                f"approval.{decision.decision.value}.resumed",
+                trace_context.child(),
+                state=workflow_target,
+                step_id=step_id,
+                refs={"approval_request_id": decision.approval_id},
+                now=timestamp,
+            )
+            self._insert_event(cur, int(row["run_pk"]), event)
+        return True
+
+    def expire_due_approvals(self, *, now: datetime | None = None, limit: int = 100) -> int:
+        timestamp = now or utc_now()
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT ar.approval_request_id,
+                       wr.workflow_run_id,
+                       ar.risk_tier
+                  FROM approval_request ar
+                  JOIN workflow_run wr ON wr.id = ar.workflow_run_id
+                 WHERE ar.state = 'pending'
+                   AND ar.project_id = %s
+                   AND wr.project_id = %s
+                   AND COALESCE(
+                         ar.expires_at,
+                         ar.created_at + make_interval(secs => CASE ar.risk_tier
+                           WHEN 'low' THEN %s
+                           WHEN 'medium' THEN %s
+                           WHEN 'high' THEN %s
+                           WHEN 'critical' THEN %s
+                           ELSE %s
+                         END)
+                       ) <= %s
+                 ORDER BY COALESCE(ar.expires_at, ar.created_at), ar.id
+                 LIMIT %s
+                """,
+                (
+                    self._scope.project_id,
+                    self._scope.project_id,
+                    default_approval_ttl_seconds(ApprovalRiskTier.LOW),
+                    default_approval_ttl_seconds(ApprovalRiskTier.MEDIUM),
+                    default_approval_ttl_seconds(ApprovalRiskTier.HIGH),
+                    default_approval_ttl_seconds(ApprovalRiskTier.CRITICAL),
+                    default_approval_ttl_seconds(None),
+                    timestamp,
+                    limit,
+                ),
+            )
+            due_rows = tuple(cur.fetchall())
+
+        expired = 0
+        for row in due_rows:
+            decision = ApprovalDecision(
+                approval_id=row["approval_request_id"],
+                workflow_id=row["workflow_run_id"],
+                decision=ApprovalStatus.EXPIRED,
+                decided_by_ref="runtime-ref:approval-expiry-worker",
+                decided_at=timestamp,
+                reason_ref=f"runtime-ref:approval-expired:{row['approval_request_id']}",
+            )
+            try:
+                self.record_approval_decision(decision)
+            except RepositoryError:
+                continue
+            self.resume_approval_decision(decision, trace_context=TraceContext.new(correlation_id=row["workflow_run_id"]), now=timestamp)
+            self.reap_orphaned_budget_reservations(
+                now=timestamp,
+                limit=limit,
+                workflow_id=row["workflow_run_id"],
+            )
+            expired += 1
+        return expired
+
+    # ------------------------------------------------------------------
+    # ManualReviewRepository
+    # ------------------------------------------------------------------
+
+    def create_review_item(self, item: ManualReviewItem) -> ManualReviewItem:
+        timestamp = item.created_at
+        reason = _manual_review_reason(item.reason_ref)
+        with self._cursor() as cur:
+            run_pk = self._lookup_run_pk(cur, item.workflow_id)
+            step_pk = self._lookup_step_pk(cur, item.step_id) if item.step_id else None
+            attempt_pk = self._latest_step_attempt_pk(cur, step_pk=step_pk) if step_pk else None
+            self._insert_manual_review_locked(
+                cur,
+                run_pk=run_pk,
+                workflow_id=item.workflow_id,
+                step_pk=step_pk,
+                step_id=item.step_id,
+                attempt_pk=attempt_pk,
+                item=item,
+                reason=reason,
+                trace_context=TraceContext.new(correlation_id=item.workflow_id),
+                now=timestamp,
+                evidence={"reason": reason},
+            )
+        return item
+
+    def get_review_item(self, review_id: str) -> ManualReviewItem | None:
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT mri.manual_review_item_id, mri.reason, mri.review_state,
+                       mri.owner_principal_id, mri.side_effect_refs,
+                       mri.created_at, mri.updated_at,
+                       wr.workflow_run_id AS workflow_run_id_text,
+                       ws.workflow_step_id AS workflow_step_id_text
+                  FROM manual_review_item mri
+                  JOIN workflow_run wr ON wr.id = mri.workflow_run_id
+                  LEFT JOIN workflow_step ws ON ws.id = mri.workflow_step_id
+                 WHERE mri.manual_review_item_id = %s
+                   AND mri.project_id = %s
+                   AND wr.project_id = %s
+                """,
+                (review_id, self._scope.project_id, self._scope.project_id),
+            )
+            row = cur.fetchone()
+        return None if row is None else row_to_manual_review_item(row)
+
+    def update_review_item(self, item: ManualReviewItem) -> ManualReviewItem:
+        timestamp = item.updated_at
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                UPDATE manual_review_item
+                   SET review_state = %s,
+                       updated_at = %s
+                 WHERE manual_review_item_id = %s
+                   AND project_id = %s
+                RETURNING manual_review_item_id
+                """,
+                (item.status.value, timestamp, item.review_id, self._scope.project_id),
+            )
+            if cur.fetchone() is None:
+                raise RepositoryError(f"unknown manual review item: {item.review_id}")
+        return item
+
+    def list_pending_reviews(self, workflow_id: str) -> tuple[ManualReviewItem, ...]:
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT mri.manual_review_item_id, mri.reason, mri.review_state,
+                       mri.owner_principal_id, mri.side_effect_refs,
+                       mri.created_at, mri.updated_at,
+                       wr.workflow_run_id AS workflow_run_id_text,
+                       ws.workflow_step_id AS workflow_step_id_text
+                  FROM manual_review_item mri
+                  JOIN workflow_run wr ON wr.id = mri.workflow_run_id
+                  LEFT JOIN workflow_step ws ON ws.id = mri.workflow_step_id
+                 WHERE wr.workflow_run_id = %s
+                   AND mri.project_id = %s
+                   AND wr.project_id = %s
+                   AND mri.review_state = 'open'
+                 ORDER BY mri.created_at, mri.id
+                """,
+                (workflow_id, self._scope.project_id, self._scope.project_id),
+            )
+            rows = cur.fetchall()
+        return tuple(row_to_manual_review_item(row) for row in rows)
 
     # ------------------------------------------------------------------
     # OutboxRepository
@@ -2821,6 +5088,58 @@ class PostgresRuntimeRepository:
                 (timestamp, timestamp, lease.lease_id, expected_resource_id, lease.owner_id, self._scope.project_id),
             )
         return True
+
+    def outbox_backlog_summary(self, *, now: datetime | None = None) -> dict[str, object]:
+        timestamp = now or utc_now()
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                SELECT destination_kind,
+                       delivery_state,
+                       COUNT(*) AS count,
+                       SUM(
+                         CASE
+                           WHEN delivery_state IN ('pending', 'failed')
+                            AND (next_attempt_at IS NULL OR next_attempt_at <= %s)
+                           THEN 1 ELSE 0
+                         END
+                       ) AS due_count,
+                       MIN(created_at) AS oldest_enqueued_at
+                  FROM workflow_outbox
+                 WHERE project_id = %s
+                   AND delivery_state <> 'delivered'
+                 GROUP BY destination_kind, delivery_state
+                """,
+                (timestamp, self._scope.project_id),
+            )
+            rows = cur.fetchall()
+
+        by_state: dict[str, int] = {}
+        by_destination: dict[str, int] = {}
+        due = 0
+        total = 0
+        oldest: datetime | None = None
+        for row in rows:
+            destination = str(row["destination_kind"] if isinstance(row, dict) else row[0])
+            state = str(row["delivery_state"] if isinstance(row, dict) else row[1])
+            count = int(row["count"] if isinstance(row, dict) else row[2])
+            due_count = int((row["due_count"] if isinstance(row, dict) else row[3]) or 0)
+            oldest_value = row["oldest_enqueued_at"] if isinstance(row, dict) else row[4]
+            by_state[state] = by_state.get(state, 0) + count
+            by_destination[destination] = by_destination.get(destination, 0) + count
+            due += due_count
+            total += count
+            parsed_oldest = _parse_dt(oldest_value) if oldest_value else None
+            if parsed_oldest is not None and (oldest is None or parsed_oldest < oldest):
+                oldest = parsed_oldest
+
+        return {
+            "total": total,
+            "due": due,
+            "by_state": by_state,
+            "by_destination": by_destination,
+            "oldest_enqueued_at": isoformat_utc(oldest) if oldest else None,
+        }
 
     def nack_outbox_event(self, outbox_id: str, *, lease: Lease) -> bool:
         """Mark an outbox event failed, schedule its next retry, and release the lease.

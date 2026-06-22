@@ -1,0 +1,36 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 3 fixture; not real customer, repository, provider, production telemetry, prompt, artifact body, or secret data.",
+  "case_id": "workflow-outbox-crash-before-delivery",
+  "category": "crash_recovery",
+  "track": "track-3-durable-execution",
+  "chaos_scenario": {
+    "postgres_required": true,
+    "fault": "crash_before_delivery_ack"
+  },
+  "workflow_fixture": {
+    "workflow_id_ref": "fixture-ref:workflow:workflow-outbox-crash-before-delivery",
+    "postgres_required": true,
+    "provider_mode": "fixture",
+    "live_provider_calls": false,
+    "production_enablement": false,
+    "inputs": {
+      "failure_point": "after_outbox_claim_before_delivery",
+      "lease_ttl_seconds": 1
+    }
+  },
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "An outbox event claimed before a worker crash is reclaimed after its delivery lease expires.",
+    "The reclaimed event retains its original source event and idempotency key.",
+    "No delivery is marked successful until the destination consumer acknowledges the event."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/workflow-outbox/workflow-outbox-crash-before-delivery/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/workflow-outbox/workflow-outbox-crash-before-delivery/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/workflow-outbox/workflow-outbox-crash-before-delivery/audit-event.json"
+  }
+}

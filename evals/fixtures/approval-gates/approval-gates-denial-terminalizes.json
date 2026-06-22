@@ -1,0 +1,37 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 3 fixture; not real customer, repository, provider, production telemetry, prompt, artifact body, or secret data.",
+  "case_id": "approval-gates-denial-terminalizes",
+  "category": "denial",
+  "track": "track-3-durable-execution",
+  "chaos_scenario": {
+    "postgres_required": true,
+    "approval_state": "denied"
+  },
+  "workflow_fixture": {
+    "workflow_id_ref": "fixture-ref:workflow:approval-gates-denial-terminalizes",
+    "postgres_required": true,
+    "provider_mode": "fixture",
+    "live_provider_calls": false,
+    "production_enablement": false,
+    "inputs": {
+      "decision": "denied",
+      "approver_role": "authorized_project_approver"
+    }
+  },
+  "expected_decision": "deny",
+  "expected_assertions": [
+    "An explicit denial moves the paused step and workflow to deterministic terminal states.",
+    "The workflow does not continue to later model, tool, budget, or outbox side effects after denial.",
+    "Denial audit evidence links the approver, role, policy version, and reason refs."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/approval-gates/approval-gates-denial-terminalizes/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/approval-gates/approval-gates-denial-terminalizes/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/approval-gates/approval-gates-denial-terminalizes/audit-event.json"
+  },
+  "expected_denial_reason": "approval_denied"
+}

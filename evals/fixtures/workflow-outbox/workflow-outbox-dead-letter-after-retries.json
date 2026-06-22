@@ -1,0 +1,37 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 3 fixture; not real customer, repository, provider, production telemetry, prompt, artifact body, or secret data.",
+  "case_id": "workflow-outbox-dead-letter-after-retries",
+  "category": "dead_letter",
+  "track": "track-3-durable-execution",
+  "chaos_scenario": {
+    "postgres_required": true,
+    "fault": "persistent_destination_failure"
+  },
+  "workflow_fixture": {
+    "workflow_id_ref": "fixture-ref:workflow:workflow-outbox-dead-letter-after-retries",
+    "postgres_required": true,
+    "provider_mode": "fixture",
+    "live_provider_calls": false,
+    "production_enablement": false,
+    "inputs": {
+      "destination_failure": "persistent",
+      "max_attempts_exhausted": true
+    }
+  },
+  "expected_decision": "deny",
+  "expected_assertions": [
+    "Repeated destination failures stop retrying after the configured exhaustion threshold.",
+    "The event is marked dead_lettered or manual_review with sanitized destination failure evidence.",
+    "Production delivery remains fail-closed until the dead-letter or manual-review item is resolved."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/workflow-outbox/workflow-outbox-dead-letter-after-retries/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/workflow-outbox/workflow-outbox-dead-letter-after-retries/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/workflow-outbox/workflow-outbox-dead-letter-after-retries/audit-event.json"
+  },
+  "expected_denial_reason": "outbox_delivery_exhausted"
+}

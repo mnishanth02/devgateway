@@ -10,6 +10,8 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:durable:postgres": "turbo run test:durable:postgres",
+    "test:durable:chaos": "turbo run test:durable:chaos",
     "build": "turbo run build",
     "eval:smoke": "turbo run eval:smoke",
     "db:check": "turbo run db:check",

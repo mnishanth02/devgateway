@@ -57,6 +57,7 @@ export interface BrokerPolicyContext extends ToolPolicyContext {
     readonly approvalArtifactRefs: readonly string[];
     readonly approvalBypassClaimPath?: string;
     readonly contextPresent: boolean;
+    readonly cancellation: CancellationAcknowledgement;
 }
 
 export interface BrokerServerOptions {
@@ -85,6 +86,15 @@ export interface ToolDiscoveryResponse {
     readonly registry_version: string;
     readonly tools: readonly PublicToolDefinition[];
     readonly visible_tool_count: number;
+    readonly cancellation: CancellationAcknowledgement;
+}
+
+export interface CancellationAcknowledgement {
+    readonly cancellation_requested: boolean;
+    readonly state: 'not_requested' | 'requested';
+    readonly request_id: string;
+    readonly trace_id: string;
+    readonly observed_at: string;
 }
 
 export type ToolCallDecision = 'allow' | 'deny';
@@ -240,6 +250,7 @@ export function buildToolDiscoveryResponse(
         registry_version: options.registryVersion,
         tools,
         visible_tool_count: tools.length,
+        cancellation: context.cancellation,
     };
 }
 
@@ -458,6 +469,7 @@ export function buildPolicyContext(
         traceId,
         approvalArtifactRefs: Object.freeze(approvalArtifactRefs),
         contextPresent,
+        cancellation: buildCancellationAcknowledgement(request, policySource, query, requestId, traceId),
         ...(actorId === undefined ? {} : { actorId }),
         ...(projectId === undefined ? {} : { projectId }),
         ...(dataClass === undefined ? {} : { dataClass }),
@@ -467,6 +479,32 @@ export function buildPolicyContext(
         ...(allowedArtifactNamespaces.length === 0 ? {} : { allowedArtifactNamespaces: Object.freeze(allowedArtifactNamespaces) }),
         ...(maxResultItems === undefined ? {} : { maxResultItems }),
         ...(approvalBypassClaimPath === undefined ? {} : { approvalBypassClaimPath }),
+    };
+}
+
+function buildCancellationAcknowledgement(
+    request: RequestEnvelope,
+    policySource: Record<string, unknown>,
+    query: URLSearchParams,
+    requestId: string,
+    traceId: string,
+): CancellationAcknowledgement {
+    const requested = truthyCancellationValue(firstUnknown([
+        readHeader(request.headers, 'x-devgateway-cancellation-requested'),
+        readHeader(request.headers, 'x-cancellation-requested'),
+        readHeader(request.headers, 'x-devgateway-cancel-requested'),
+        getUnknown(policySource, 'cancellationRequested'),
+        getUnknown(policySource, 'cancellation_requested'),
+        getUnknown(policySource, 'cancel_requested'),
+        query.get('cancellation_requested'),
+        query.get('cancel_requested'),
+    ]));
+    return {
+        cancellation_requested: requested,
+        state: requested ? 'requested' : 'not_requested',
+        request_id: requestId,
+        trace_id: traceId,
+        observed_at: new Date().toISOString(),
     };
 }
 
@@ -590,6 +628,7 @@ async function handleSingleMcpRequest(
             id,
             result: {
                 tools: listVisibleTools(context, options.registry).map(toMcpToolDefinition),
+                cancellation: context.cancellation,
             },
         };
     }
@@ -685,6 +724,7 @@ function finalizeToolCallResult(
                 result: result.data,
                 artifacts: sanitizedArtifacts,
                 metadata: sanitizedMetadata,
+                cancellation: policyContext.cancellation,
             },
         };
     }
@@ -710,6 +750,7 @@ function finalizeToolCallResult(
             tool_call_id: auditRecord.tool_call_id,
             trace_id: auditRecord.trace_id,
             request_id: auditRecord.request_id,
+            cancellation: policyContext.cancellation,
             error: toBrokerError(result.error, policyContext),
         },
     };
@@ -743,6 +784,7 @@ function deniedToolCall(options: {
             tool_call_id: auditRecord.tool_call_id,
             trace_id: auditRecord.trace_id,
             request_id: auditRecord.request_id,
+            cancellation: options.policyContext.cancellation,
             error: options.error,
         },
     };
@@ -871,6 +913,7 @@ function toMcpToolCallResult(body: unknown): Record<string, unknown> {
         request_id: resultBody.request_id,
         metadata: resultBody.metadata ?? {},
         artifacts: resultBody.artifacts ?? [],
+        cancellation: resultBody.cancellation,
     };
 }
 
@@ -1147,6 +1190,13 @@ function firstUnknown(values: readonly unknown[]): unknown {
         if (value !== undefined && value !== null && value !== '') return value;
     }
     return undefined;
+}
+
+function truthyCancellationValue(value: unknown): boolean {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value !== 'string') return false;
+    return ['1', 'true', 'yes', 'requested', 'cancel_requested', 'cancelling', 'canceling'].includes(value.trim().toLowerCase());
 }
 
 function stringList(values: readonly unknown[]): string[] {

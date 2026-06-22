@@ -1,0 +1,40 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 3 fixture; not real customer, repository, provider, production telemetry, prompt, artifact body, or secret data.",
+  "case_id": "approval-gates-unauthorized-self-model-deny",
+  "category": "authorization",
+  "track": "track-3-durable-execution",
+  "chaos_scenario": {
+    "postgres_required": true,
+    "fault": "untrusted_approval_source"
+  },
+  "workflow_fixture": {
+    "workflow_id_ref": "fixture-ref:workflow:approval-gates-unauthorized-self-model-deny",
+    "postgres_required": true,
+    "provider_mode": "fixture",
+    "live_provider_calls": false,
+    "production_enablement": false,
+    "inputs": {
+      "decision_sources": [
+        "self_approval",
+        "model_claim",
+        "missing_role"
+      ]
+    }
+  },
+  "expected_decision": "deny",
+  "expected_assertions": [
+    "Self-approval does not satisfy the required approval gate.",
+    "Model-supplied approval claims are ignored and cannot resume the workflow.",
+    "Missing or stale approver role evidence denies the decision fail-closed."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/approval-gates/approval-gates-unauthorized-self-model-deny/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/approval-gates/approval-gates-unauthorized-self-model-deny/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/approval-gates/approval-gates-unauthorized-self-model-deny/audit-event.json"
+  },
+  "expected_denial_reason": "approval_not_authorized"
+}

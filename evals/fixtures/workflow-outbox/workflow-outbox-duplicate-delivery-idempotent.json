@@ -1,0 +1,36 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 3 fixture; not real customer, repository, provider, production telemetry, prompt, artifact body, or secret data.",
+  "case_id": "workflow-outbox-duplicate-delivery-idempotent",
+  "category": "idempotent_delivery",
+  "track": "track-3-durable-execution",
+  "chaos_scenario": {
+    "postgres_required": true,
+    "fault": "duplicate_delivery"
+  },
+  "workflow_fixture": {
+    "workflow_id_ref": "fixture-ref:workflow:workflow-outbox-duplicate-delivery-idempotent",
+    "postgres_required": true,
+    "provider_mode": "fixture",
+    "live_provider_calls": false,
+    "production_enablement": false,
+    "inputs": {
+      "destination_kind": "audit",
+      "delivery_semantics": "at_least_once"
+    }
+  },
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "Duplicate outbox appends for the same destination and source event collapse to one delivery record.",
+    "Destination consumers treat repeated delivery attempts as idempotent replays.",
+    "Replay evidence records the idempotency key without duplicating audit, portal, trace, or eval effects."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/workflow-outbox/workflow-outbox-duplicate-delivery-idempotent/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/workflow-outbox/workflow-outbox-duplicate-delivery-idempotent/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/workflow-outbox/workflow-outbox-duplicate-delivery-idempotent/audit-event.json"
+  }
+}

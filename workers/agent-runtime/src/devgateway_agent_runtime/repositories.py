@@ -149,6 +149,33 @@ class ApprovalRepository(Protocol):
         """Return ``True`` if the workflow has any non-terminal (pending) approval request."""
         ...
 
+    def pause_step_for_approval(
+        self,
+        request: ApprovalRequest,
+        *,
+        lease: Lease,
+        trace_context: TraceContext,
+        resume_token: str | None = None,
+        now: datetime | None = None,
+    ) -> ApprovalRequest:
+        """Persist approval resume state, mark workflow/step waiting, and release the step lease."""
+        ...
+
+    def resume_approval_decision(
+        self,
+        decision: ApprovalDecision,
+        *,
+        trace_context: TraceContext,
+        resume_token: str | None = None,
+        now: datetime | None = None,
+    ) -> bool:
+        """Apply one terminal approval decision to a paused workflow exactly once."""
+        ...
+
+    def expire_due_approvals(self, *, now: datetime | None = None, limit: int = 100) -> int:
+        """Expire pending approvals past their TTL and drive terminal workflow/step policy."""
+        ...
+
 
 class OutboxRepository(Protocol):
     """Transactional outbox for reliable event delivery."""
@@ -167,6 +194,8 @@ class OutboxRepository(Protocol):
     def ack_outbox_event(self, outbox_id: str, *, lease: Lease) -> bool: ...
 
     def nack_outbox_event(self, outbox_id: str, *, lease: Lease) -> bool: ...
+
+    def outbox_backlog_summary(self, *, now: datetime | None = None) -> Mapping[str, object]: ...
 
 
 class CancellationRepository(Protocol):
@@ -204,6 +233,40 @@ class CancellationRepository(Protocol):
           (:attr:`CancellationAction.MANUAL_REVIEW`).
         - Already-terminal → no-op (:attr:`CancellationAction.NO_ACTION`).
         """
+        ...
+
+    def propagate_cancellations(self, *, now: datetime | None = None, limit: int = 100) -> Mapping[str, int]:
+        """Propagate active cancellations and return metadata-only counters."""
+        ...
+
+
+class BudgetReservationRepository(Protocol):
+    """Repository for durable budget reservation settlement and reconciliation."""
+
+    def reap_orphaned_budget_reservations(
+        self,
+        *,
+        now: datetime | None = None,
+        limit: int = 100,
+        approval_wait_ttl_seconds: float = 14_400.0,
+        abandoned_workflow_seconds: float = 86_400.0,
+    ) -> Mapping[str, int]:
+        """Release orphaned reservations once with workflow/audit/outbox evidence."""
+        ...
+
+    def settle_budget_reservation(
+        self,
+        reservation_id: str,
+        *,
+        actual_amount: float,
+        actual_input_tokens: int | None = None,
+        actual_output_tokens: int | None = None,
+        idempotency_key: str,
+        allow_retry_reuse: bool = False,
+        retry_attempt: int = 1,
+        now: datetime | None = None,
+    ) -> bool:
+        """Settle a held reservation exactly once; conflicting replay raises."""
         ...
 
 

@@ -45,7 +45,50 @@ export const LOCAL_BIFROST_HEALTH_PATH = '/health';
 export const LOCAL_PROVIDER_KEY_PLACEHOLDER = 'local-provider-key-placeholder';
 
 const commandNames = ['setup', 'dev', 'stop', 'status', 'reset', 'help'];
-const profileNames = ['all', 'backend', 'deps', 'frontend'];
+const profileNames = ['all', 'backend', 'deps', 'frontend', 'workers'];
+
+export const DURABLE_WORKER_REQUIRED_ENV = Object.freeze([
+  'OPERATIONAL_DATABASE_URL',
+  'REDIS_URL',
+  'S3_ENDPOINT',
+  'S3_BUCKET',
+  'S3_REGION',
+  'S3_ACCESS_KEY_ID',
+  'S3_SECRET_ACCESS_KEY',
+  'S3_FORCE_PATH_STYLE',
+  'BIFROST_BASE_URL',
+]);
+
+export const DURABLE_WORKER_PROFILES = Object.freeze([
+  {
+    name: 'runtime-service',
+    description: 'claims durable workflow steps, heartbeats leases, and writes opaque output refs',
+  },
+  {
+    name: 'lease-retry-sweeper',
+    description: 'recovers pre-side-effect expired leases and escalates ambiguous work',
+  },
+  {
+    name: 'cancellation-worker',
+    description: 'propagates queued/running cancellation requests through steps, approvals, delegations, and reservations',
+  },
+  {
+    name: 'approval-expiry-worker',
+    description: 'expires approval requests after risk-tier TTL and records fail-closed outcomes',
+  },
+  {
+    name: 'outbox-worker',
+    description: 'delivers workflow outbox events with lease fencing, retry, and dead-letter counters',
+  },
+  {
+    name: 'budget-reaper',
+    description: 'releases orphaned budget reservations for expired approvals, leases, and terminal workflows',
+  },
+  {
+    name: 'artifact-lifecycle-worker',
+    description: 'reconciles artifact retention, legal hold, deletion, checksum, and signed-access metadata',
+  },
+]);
 
 const serviceProfiles = Object.freeze({
   backend: [
@@ -194,6 +237,25 @@ EVAL_ARTIFACT_BUCKET=devgateway-local-artifacts
 EVAL_PROVIDER_MODE=fixture
 EVAL_SMOKE_ENABLED=true
 
+DURABLE_WORKERS_ENABLED=false
+WORKFLOW_WORKER_OWNER_ID=local-runtime-worker
+WORKFLOW_WORKER_IDLE_SLEEP_SECONDS=1
+WORKFLOW_WORKER_MAX_STEPS=10
+LEASE_SWEEPER_INTERVAL_SECONDS=30
+CANCELLATION_WORKER_BATCH_SIZE=100
+CANCELLATION_WORKER_IDLE_SLEEP_SECONDS=10
+APPROVAL_EXPIRY_WORKER_BATCH_SIZE=100
+APPROVAL_EXPIRY_WORKER_IDLE_SLEEP_SECONDS=30
+OUTBOX_WORKER_OWNER_ID=local-outbox-worker
+OUTBOX_WORKER_BATCH_SIZE=25
+OUTBOX_WORKER_LEASE_TTL_SECONDS=60
+BUDGET_REAPER_BATCH_SIZE=100
+BUDGET_REAPER_IDLE_SLEEP_SECONDS=30
+BUDGET_REAPER_APPROVAL_WAIT_TTL_SECONDS=14400
+BUDGET_REAPER_ABANDONED_WORKFLOW_SECONDS=86400
+ARTIFACT_LIFECYCLE_BATCH_SIZE=100
+ARTIFACT_LIFECYCLE_IDLE_SLEEP_SECONDS=300
+
 APP_ENCRYPTION_KEY_BASE64=local-32-byte-base64-key-placeholder
 CREDENTIAL_KEY_VERSION=local-v1
 CREDENTIAL_ROTATION_REQUIRED=false
@@ -338,6 +400,9 @@ export function validateBifrostRuntimeConfig(runtimeConfig) {
 }
 
 function normalizeCommand(rawCommand) {
+  if (rawCommand === '--help' || rawCommand === '-h') {
+    return 'help';
+  }
   if (!commandNames.includes(rawCommand)) {
     throw new Error(`Unknown command "${rawCommand}". Expected one of: ${commandNames.join(', ')}`);
   }
@@ -409,7 +474,7 @@ async function setup() {
     runCompose(['pull'], { optional: true });
   }
   runChecked('pnpm', ['workspace:validate']);
-  console.log('Local setup complete. Next: pnpm local:dev deps | backend | frontend | all');
+  console.log('Local setup complete. Next: pnpm local:dev deps | backend | frontend | workers | all');
 }
 
 async function dev(profile) {
@@ -421,6 +486,16 @@ async function dev(profile) {
     writeState({ ...readState(), composeProject });
     await ensureBifrostReadiness();
     await status('deps');
+    return;
+  }
+
+  if (profile === 'workers') {
+    ensureDockerAvailable({ required: true });
+    await ensureDependencyPorts();
+    runCompose(['up', '-d', '--remove-orphans']);
+    await ensureBifrostReadiness();
+    ensureDurableWorkerLocalConfig();
+    printDurableWorkerOptIn();
     return;
   }
 
@@ -499,6 +574,14 @@ async function status(profile) {
     if (!readiness.ok) {
       throw new Error(`Bifrost local readiness failed: ${readiness.issues.join('; ')}`);
     }
+    if (profile === 'workers') {
+      const workerReadiness = collectDurableWorkerLocalConfig();
+      printDurableWorkerConfigReadiness(workerReadiness);
+      if (!workerReadiness.ok) {
+        throw new Error(`Durable worker local readiness failed: ${workerReadiness.issues.join('; ')}`);
+      }
+      printDurableWorkerOptIn();
+    }
   }
 }
 
@@ -570,7 +653,7 @@ function profileMatches(requestedProfile, recordedProfile) {
 }
 
 function profileUsesDependencies(profile) {
-  return profile === 'all' || profile === 'deps' || profile === 'backend' || profile === 'frontend';
+  return profile === 'all' || profile === 'deps' || profile === 'backend' || profile === 'frontend' || profile === 'workers';
 }
 
 async function ensureBifrostReadiness() {
@@ -736,6 +819,70 @@ function printBifrostReadiness(readiness) {
   for (const check of readiness.checks) {
     console.log(`- ${check.name}: ${check.ok ? 'ok' : 'failed'} (${check.detail})`);
   }
+}
+
+function ensureDurableWorkerLocalConfig() {
+  const readiness = collectDurableWorkerLocalConfig();
+  printDurableWorkerConfigReadiness(readiness);
+  if (!readiness.ok) {
+    throw new Error(`Durable worker local readiness failed: ${readiness.issues.join('; ')}`);
+  }
+}
+
+function collectDurableWorkerLocalConfig() {
+  const env = readDotEnv(localEnvFile);
+  const issues = [];
+  for (const key of DURABLE_WORKER_REQUIRED_ENV) {
+    if (!env[key]) {
+      issues.push(`${key} is required before durable workers can be started locally`);
+    }
+  }
+  if (env.PRODUCTION_PROVISIONING_ENABLED !== 'false') {
+    issues.push('PRODUCTION_PROVISIONING_ENABLED must be false for local durable workers');
+  }
+  if (env.PRODUCTION_DEPLOY_APPROVAL_REQUIRED !== 'true') {
+    issues.push('PRODUCTION_DEPLOY_APPROVAL_REQUIRED must be true for local durable workers');
+  }
+  if (env.DURABLE_WORKERS_ENABLED !== undefined && env.DURABLE_WORKERS_ENABLED !== 'false') {
+    issues.push('DURABLE_WORKERS_ENABLED must remain false for the local launcher; start workers manually only');
+  }
+  if (env.RETRIEVAL_PRODUCTION_ENABLED !== undefined && env.RETRIEVAL_PRODUCTION_ENABLED !== 'false') {
+    issues.push('RETRIEVAL_PRODUCTION_ENABLED must remain false for local durable workers');
+  }
+  if (env.BIFROST_BREAK_GLASS_ENABLED !== undefined && env.BIFROST_BREAK_GLASS_ENABLED !== 'false') {
+    issues.push('BIFROST_BREAK_GLASS_ENABLED must remain false for local durable workers');
+  }
+  if (env.EVAL_PROVIDER_MODE !== undefined && env.EVAL_PROVIDER_MODE !== 'fixture') {
+    issues.push('EVAL_PROVIDER_MODE must remain fixture for local durable workers');
+  }
+  return {
+    ok: issues.length === 0,
+    issues,
+    checked: DURABLE_WORKER_REQUIRED_ENV,
+  };
+}
+
+function printDurableWorkerConfigReadiness(readiness) {
+  console.log('Durable worker config readiness:');
+  if (readiness.ok) {
+    console.log(`- required vars present: ${readiness.checked.join(', ')}`);
+    console.log('- production provisioning, break-glass, retrieval production mode, and live-provider evals remain disabled.');
+    return;
+  }
+  for (const issue of readiness.issues) {
+    console.log(`- failed: ${issue}`);
+  }
+}
+
+function printDurableWorkerOptIn() {
+  console.log('Durable workers are not auto-started by local:dev. Start them only when you intentionally need durable execution.');
+  console.log('Available worker profiles:');
+  for (const profile of DURABLE_WORKER_PROFILES) {
+    console.log(`- ${profile.name}: ${profile.description}`);
+  }
+  console.log('Runtime service opt-in command from the repository root:');
+  console.log('  Set-Location workers\\agent-runtime; $env:PYTHONPATH="src"; python -m devgateway_agent_runtime --mode service --owner-id local-runtime-worker --idle-sleep-seconds 1');
+  console.log('Operational worker profiles remain explicit/supervised; do not add Railway production start commands until their profile CLI and readiness checks are approved.');
 }
 
 function readLocalEnvForBifrost() {
@@ -941,15 +1088,16 @@ function printHelp() {
 
 Usage:
   pnpm local:setup
-  pnpm local:dev [deps|backend|frontend|all]
-  pnpm local:stop [deps|backend|frontend|all]
-  pnpm local:status [deps|backend|frontend|all]
-  pnpm local:reset [deps|backend|frontend|all] --yes
+  pnpm local:dev [deps|backend|frontend|workers|all]
+  pnpm local:stop [deps|backend|frontend|workers|all]
+  pnpm local:status [deps|backend|frontend|workers|all]
+  pnpm local:reset [deps|backend|frontend|workers|all] --yes
 
 Profiles:
   deps      Start or stop only dependency containers.
   backend   Start dependency containers and backend host hot-reload processes.
   frontend  Start dependency containers and frontend host hot-reload process.
+  workers   Start dependency containers, validate durable-worker config, and print explicit opt-in commands.
   all       Start dependencies plus backend and frontend processes.
 `);
 }

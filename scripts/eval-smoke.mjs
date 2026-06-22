@@ -32,6 +32,21 @@ const smokeSuites = [
     changeId: 'phase-2.10-agent-workflow'
   },
   {
+    dataset: 'evals/datasets/durable-workflow.v0.1.json',
+    suite: 'durable_workflow',
+    changeId: 'phase-10-track-3-durable-workflow'
+  },
+  {
+    dataset: 'evals/datasets/approval-gates.v0.1.json',
+    suite: 'approval_gates',
+    changeId: 'phase-10-track-3-approval-gates'
+  },
+  {
+    dataset: 'evals/datasets/workflow-outbox.v0.1.json',
+    suite: 'workflow_outbox',
+    changeId: 'phase-10-track-3-workflow-outbox'
+  },
+  {
     dataset: 'evals/datasets/tool-safety.v0.1.json',
     suite: 'tool_safety',
     changeId: 'phase-2.10-tool-safety'

@@ -1,0 +1,36 @@
+{
+  "fixture_version": "0.1.0",
+  "synthetic": true,
+  "live_external_calls": false,
+  "production_enablement": false,
+  "source_data_notice": "Synthetic inert Track 3 fixture; not real customer, repository, provider, production telemetry, prompt, artifact body, or secret data.",
+  "case_id": "durable-workflow-restart-after-db-commit",
+  "category": "process_restart",
+  "track": "track-3-durable-execution",
+  "chaos_scenario": {
+    "postgres_required": true,
+    "kill_point": "after_db_commit"
+  },
+  "workflow_fixture": {
+    "workflow_id_ref": "fixture-ref:workflow:durable-workflow-restart-after-db-commit",
+    "postgres_required": true,
+    "provider_mode": "fixture",
+    "live_provider_calls": false,
+    "production_enablement": false,
+    "inputs": {
+      "failure_point": "after_state_commit_before_next_claim",
+      "persisted_state": "step_completed"
+    }
+  },
+  "expected_decision": "pass",
+  "expected_assertions": [
+    "Committed state survives worker replacement and is not replayed as pending work.",
+    "The next pending step is selected using persisted ordering and durable workflow state.",
+    "Outbox references from the committed transition remain pending for separate delivery."
+  ],
+  "artifact_refs": {
+    "expected_gate_result": "artifacts/evals/durable-workflow/durable-workflow-restart-after-db-commit/gate-result.json",
+    "expected_trace_bundle": "artifacts/evals/durable-workflow/durable-workflow-restart-after-db-commit/trace.jsonl",
+    "expected_audit_event": "artifacts/evals/durable-workflow/durable-workflow-restart-after-db-commit/audit-event.json"
+  }
+}

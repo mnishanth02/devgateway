@@ -1426,7 +1426,7 @@ export const stepAttempt = pgTable(
     index('step_attempt_audit_event_id_idx').on(table.auditEventId),
     index('step_attempt_cost_event_id_idx').on(table.costEventId),
     check('step_attempt_state_check', sql`${table.state} IN ('queued', 'running', 'succeeded', 'failed', 'denied', 'cancel_requested', 'cancelled', 'timed_out')`),
-    check('step_attempt_replay_decision_check', sql`${table.replayDecision} IS NULL OR ${table.replayDecision} IN ('replay', 'skip', 'abort')`),
+    check('step_attempt_replay_decision_check', sql`${table.replayDecision} IS NULL OR ${table.replayDecision} IN ('replay', 'skip', 'abort', 'pre_side_effect', 'idempotent_pre_side_effect', 'ambiguous_post_side_effect', 'retry_scheduled', 'terminal_failure', 'manual_review')`),
     check('step_attempt_failure_class_check', sql`${table.failureClass} IS NULL OR ${table.failureClass} IN ('transient_timeout_before_accept', 'provider_request_id_returned_commit_failed', 'tool_adapter_transient', 'validation_failure', 'budget_denial', 'policy_denial', 'non_idempotent_unknown_side_effect', 'worker_crash_active_lease')`),
     check('step_attempt_production_enabled_false', sql`${table.productionEnabled} = false`),
   ],
